@@ -8,6 +8,8 @@ import { localToday } from "../lib/period";
 import { create } from "zustand";
 import { pluralRu } from "../lib/plural";
 import { changedFields, unchangedSince } from "../lib/pushQueue";
+import { zenExclusive } from "../lib/zenLock";
+import { pushHoldLeft } from "../lib/pushHold";
 import * as db from "../lib/db";
 import { fetchDiff, fetchTokenUserIds } from "../lib/zenmoney";
 import {
@@ -48,6 +50,7 @@ import {
   buildPlannedDeletions,
   detectConflicts,
   sendPush,
+  unifyPushTransactions,
   validateDrafts,
   type PushBuildResult,
 } from "../lib/zenmoneyPush";
@@ -798,7 +801,15 @@ interface ZenmoneyState {
    * and re-pull everything (useful after suspected corruption / renames /
    * for support).
    */
-  sync: (opts?: { force?: boolean }) => Promise<SyncResult>;
+  sync: (opts?: {
+    force?: boolean;
+    /**
+     * Не отправлять вслед правки в режиме «При синхронизации». Для служебных
+     * синхронизаций (перенос настроек): человек её не запускал, и уносить
+     * заодно его неотправленные правки было бы неожиданно.
+     */
+    skipPush?: boolean;
+  }) => Promise<SyncResult>;
 
   /** Persist the push mode + recompute `pushEnabled` derived flag. */
   setPushMode: (mode: PushMode) => Promise<void>;
@@ -1019,7 +1030,8 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     });
   },
 
-  sync: async (opts = {}) => {
+  // Синхронизация и отправка — по очереди, см. lib/zenLock.
+  sync: (opts = {}) => zenExclusive(async () => {
     const token = get().token;
     if (!token) {
       set({ status: "error", error: "Сначала подключите Дзен-мани на вкладке «Данные»" });
@@ -1181,14 +1193,23 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Guarded by there being anything to send (edits, deletions OR
       // locally-created drafts) so the common "nothing changed locally"
       // case stays a no-op.
-      if (get().pushMode === "on-sync" && hasPendingPush()) {
-        // Defer to next microtask so the sync's set() lands first and
-        // pushPendingEdits sees `status: "ok"` (its own guard).
-        queueMicrotask(() => {
+      if (get().pushMode === "on-sync" && !opts.skipPush && hasPendingPush()) {
+        // После синхронизации, а не внутри неё: отправка встаёт в ту же
+        // очередь (lib/zenLock) и ждёт, пока этот шаг закончится.
+        // Висит плашка с «Отменить» — ждём её, как в «Авто»: отменённое не
+        // должно успеть уйти в облако (см. lib/pushHold).
+        const firePush = () => {
+          const held = pushHoldLeft();
+          if (held > 0) {
+            setTimeout(firePush, Math.min(held, 500));
+            return;
+          }
+          if (get().pushMode !== "on-sync" || !hasPendingPush()) return;
           void get().pushPendingEdits().catch(() => {
             /* logged + surfaced inside pushPendingEdits */
           });
-        });
+        };
+        queueMicrotask(firePush);
       }
       return {
         count: mapped.transactions.length,
@@ -1223,7 +1244,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       throw e;
     }
-  },
+  }),
 
   setPushMode: async (mode) => {
     // Persist both the new mode key AND the legacy boolean so older
@@ -1253,7 +1274,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     set({ snapshotPolicy: policy });
   },
 
-  pushPendingEdits: async () => {
+  pushPendingEdits: () => zenExclusive(async () => {
     const { token, pushEnabled } = get();
     if (!token) {
       const msg = "Сначала подключите Дзен-мани на вкладке «Данные»";
@@ -1658,8 +1679,10 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       stage = "push-send";
       const response = await sendPush(
         token,
-        get().serverTimestamp,
-        toPush,
+        // Метка того кэша, в который вольётся ответ, — а не стора: разойдись
+        // они, изменения между двумя метками в кэш бы не попали.
+        cache.serverTimestamp,
+        [],
         [
           ...deletions,
           ...merchantDeletions,
@@ -1668,16 +1691,19 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           ...plannedDel,
           ...planPush.deletions,
         ],
-        [
-          ...resurrections.map((r) => r.tx),
-          ...recreates.map((r) => r.tx),
-          ...draftTxs,
-          // Operations re-pointed by a merge / category deletion. Whole rows
-          // rebuilt from cache, so they ride the raw-transaction channel.
-          ...cpMerge.transactions,
-          ...tagDel.transactions,
-          ...linkTxs,
-        ],
+        // Одна операция — одна запись: версии из разных очередей складываются,
+        // спорное поле решает правка человека (см. `unifyPushTransactions`).
+        unifyPushTransactions({
+          cache,
+          edits: toPush.map((i) => i.zen),
+          repoints: [...cpMerge.transactions, ...tagDel.transactions, ...linkTxs],
+          created: [...resurrections.map((r) => r.tx), ...recreates.map((r) => r.tx), ...draftTxs],
+          deletedIds: new Set(
+            deletions.filter((d) => d.object === "transaction").map((d) => String(d.id))
+          ),
+          tagReplacements: tagDel.replacements,
+          merchantSurvivors: cpMerge.survivors,
+        }),
         [...tagPush.tags, ...newCatTags],
         budgetPush.budgets,
         merchantUpserts,
@@ -2012,7 +2038,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       throw e;
     }
-  },
+  }),
 
   setAutoSync: async (enabled, value, unit) => {
     const v = Math.max(1, Math.floor(value));

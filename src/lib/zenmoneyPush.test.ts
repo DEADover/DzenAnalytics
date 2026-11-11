@@ -11,6 +11,7 @@ import {
   buildMerchantDeletions,
   buildMerchantMergePush,
   buildTagDeletionPush,
+  unifyPushTransactions,
   buildPlannedDeletions,
   detectConflicts,
   makeCategoryChecker,
@@ -1227,7 +1228,7 @@ describe("buildMerchantMergePush", () => {
   it("ignores a duplicate that's already gone from the cache", () => {
     const c = mergeCache([]);
     const out = buildMerchantMergePush([{ id: "ghost", survivorId: "keep" }], c, 1);
-    expect(out).toEqual({ transactions: [], deletions: [], skipped: [] });
+    expect(out).toEqual({ transactions: [], deletions: [], skipped: [], survivors: new Map() });
   });
 });
 
@@ -1325,7 +1326,7 @@ describe("buildTagDeletionPush", () => {
   it("ignores a category that's already gone from the cache", () => {
     const c = tagCache([]);
     const out = buildTagDeletionPush([{ id: "ghost", replacementId: null }], c, 1);
-    expect(out).toEqual({ transactions: [], deletions: [], skipped: [] });
+    expect(out).toEqual({ transactions: [], deletions: [], skipped: [], replacements: new Map() });
   });
 });
 
@@ -2134,5 +2135,121 @@ describe("makeCategoryChecker — ярлыки сервиса", () => {
     expect(ok("Без категории", null)).toBe(true);
     expect(ok("", null)).toBe(true);
     expect(ok("Нет такой", null)).toBe(false);
+  });
+});
+
+describe("unifyPushTransactions — одна операция, одна запись в запросе", () => {
+  const row = (over: Partial<ZenTransaction>): ZenTransaction =>
+    ({
+      id: "x",
+      changed: 100,
+      deleted: false,
+      comment: "было",
+      tag: ["cafe"],
+      merchant: "m-dup",
+      payee: "Кофейня",
+      ...over,
+    }) as ZenTransaction;
+  const cacheOf = (...rows: ZenTransaction[]) => ({ transactions: rows });
+  const none = {
+    edits: [],
+    repoints: [],
+    created: [],
+    deletedIds: new Set<string>(),
+    tagReplacements: new Map<string, string | null>(),
+    merchantSurvivors: new Map<string, string>(),
+  };
+
+  it("правка комментария и удаление категории той же операции — одна запись с обоими изменениями", () => {
+    const base = row({});
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(base),
+      edits: [row({ comment: "стало", changed: 200 })],
+      repoints: [row({ tag: ["misc"], changed: 201 })],
+      tagReplacements: new Map([["cafe", "misc"]]),
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ id: "x", comment: "стало", tag: ["misc"], changed: 201 });
+  });
+
+  it("спорное поле решает правка человека: категорию сменили, а её старую удалили с заменой", () => {
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(row({})),
+      edits: [row({ tag: ["home"], changed: 200 })],
+      repoints: [row({ tag: ["misc"], changed: 200 })],
+      tagReplacements: new Map([["cafe", "misc"]]),
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].tag).toEqual(["home"]);
+  });
+
+  it("правка ставит категорию, которую этот же запрос удаляет, — едет замена", () => {
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(row({ tag: ["home"] })),
+      edits: [row({ tag: ["cafe"], changed: 200 })],
+      tagReplacements: new Map([["cafe", "misc"]]),
+    });
+    expect(out[0].tag).toEqual(["misc"]);
+  });
+
+  it("слияние контрагентов и удаление категории на одной операции складываются", () => {
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(row({})),
+      repoints: [row({ merchant: "m-main", changed: 200 }), row({ tag: null, changed: 200 })],
+      tagReplacements: new Map([["cafe", null]]),
+      merchantSurvivors: new Map([["m-dup", "m-main"]]),
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ merchant: "m-main", tag: null });
+  });
+
+  it("черновик со ссылкой на удаляемую категорию и объединяемого контрагента — едет с заменами", () => {
+    const draft = row({ id: "draft-1", tag: ["cafe", "home"], merchant: "m-dup" });
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(),
+      created: [draft],
+      tagReplacements: new Map([["cafe", "home"]]),
+      merchantSurvivors: new Map([["m-dup", "m-main"]]),
+    });
+    expect(out).toEqual([{ ...draft, tag: ["home"], merchant: "m-main" }]);
+  });
+
+  it("метка изменения — от сборки запроса, даже если в кэше она новее", () => {
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(row({ changed: 999 })),
+      edits: [row({ comment: "стало", changed: 200 })],
+    });
+    expect(out[0].changed).toBe(200);
+  });
+
+  it("операция, которую этот же запрос удаляет, обновлением не едет", () => {
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(row({})),
+      edits: [row({ comment: "стало" })],
+      repoints: [row({ tag: ["misc"] })],
+      deletedIds: new Set(["x"]),
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("разные операции не трогают друг друга и идут как были", () => {
+    const a = row({ id: "a", comment: "a2", changed: 205 });
+    const b = row({ id: "b", tag: ["home"], changed: 206 });
+    const out = unifyPushTransactions({
+      ...none,
+      cache: cacheOf(row({ id: "a" }), row({ id: "b" })),
+      edits: [a],
+      repoints: [b],
+    });
+    expect(out.map((t) => t.id).sort()).toEqual(["a", "b"]);
+    expect(out.find((t) => t.id === "a")).toEqual(a);
+    expect(out.find((t) => t.id === "b")).toEqual(b);
   });
 });

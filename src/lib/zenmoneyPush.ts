@@ -1615,19 +1615,18 @@ export async function sendPush(
   // verify which fields actually landed in the request body. Disabled
   // automatically in production (Vite sets `import.meta.env.PROD`).
   if (!import.meta.env.PROD) {
-    console.groupCollapsed(
-      `[Zenmoney push] sending ${items.length} transaction(s)`
-    );
-    for (const item of items) {
-      console.log(item.id, {
-        payee: item.zen.payee,
-        merchant: item.zen.merchant,
-        comment: item.zen.comment,
-        date: item.zen.date,
-        outcome: item.zen.outcome,
-        income: item.zen.income,
-        tag: item.zen.tag,
-        changed: item.zen.changed,
+    const sent = payload.transaction ?? [];
+    console.groupCollapsed(`[Zenmoney push] sending ${sent.length} transaction(s)`);
+    for (const zen of sent) {
+      console.log(zen.id, {
+        payee: zen.payee,
+        merchant: zen.merchant,
+        comment: zen.comment,
+        date: zen.date,
+        outcome: zen.outcome,
+        income: zen.income,
+        tag: zen.tag,
+        changed: zen.changed,
       });
     }
     console.groupEnd();
@@ -1902,6 +1901,8 @@ export function buildMerchantMergePush(
   transactions: ZenTransaction[];
   deletions: ZenDeletion[];
   skipped: { id: string; reason: string }[];
+  /** Объединяемый контрагент → тот, в кого он вливается (прошедшие проверку). */
+  survivors: Map<string, string>;
 } {
   const byId = new Map(cache.merchants.map((m) => [m.id, m]));
   const transactions: ZenTransaction[] = [];
@@ -1937,7 +1938,7 @@ export function buildMerchantMergePush(
     }
   }
 
-  return { transactions, deletions, skipped };
+  return { transactions, deletions, skipped, survivors: valid };
 }
 
 /** A category the user removed, and what happens to its operations. */
@@ -1969,6 +1970,8 @@ export function buildTagDeletionPush(
   transactions: ZenTransaction[];
   deletions: ZenDeletion[];
   skipped: { id: string; reason: string }[];
+  /** Удаляемая категория → замена (или null — просто снять), прошедшие проверку. */
+  replacements: Map<string, string | null>;
 } {
   const byId = new Map(cache.tags.map((t) => [t.id, t]));
   const transactions: ZenTransaction[] = [];
@@ -2011,24 +2014,110 @@ export function buildTagDeletionPush(
     for (const t of cache.transactions) {
       if (t.deleted || !t.tag || t.tag.length === 0) continue;
       if (!t.tag.some((id) => valid.has(id))) continue;
-      const next: string[] = [];
-      for (const id of t.tag) {
-        if (!valid.has(id)) {
-          if (!next.includes(id)) next.push(id);
-          continue;
-        }
-        const replacement = valid.get(id)!;
-        if (replacement && !next.includes(replacement)) next.push(replacement);
-      }
       transactions.push({
         ...t,
-        tag: next.length > 0 ? next : null,
+        tag: replaceTags(t.tag, valid),
         changed: stampSeconds,
       });
     }
   }
 
-  return { transactions, deletions, skipped };
+  return { transactions, deletions, skipped, replacements: valid };
+}
+
+/**
+ * Заменить удаляемые категории в списке тегов операции: на замену или никак.
+ * Повторов не оставляет; пустой список — `null`, так Дзен-мани пишет «без
+ * категории».
+ */
+export function replaceTags(
+  tags: readonly string[] | null | undefined,
+  replacements: ReadonlyMap<string, string | null>
+): string[] | null {
+  if (!tags || tags.length === 0) return null;
+  const next: string[] = [];
+  for (const id of tags) {
+    if (!replacements.has(id)) {
+      if (!next.includes(id)) next.push(id);
+      continue;
+    }
+    const replacement = replacements.get(id);
+    if (replacement && !next.includes(replacement)) next.push(replacement);
+  }
+  return next.length > 0 ? next : null;
+}
+
+/**
+ * Одна операция — одна запись в запросе.
+ *
+ * Запрос собирается из нескольких очередей, и одна и та же операция может
+ * попасть в него дважды: человек поправил её категорию, а потом удалил другую
+ * её категорию с заменой; или объединил контрагентов и тут же правил операцию
+ * одного из них. Каждая очередь строит свою версию операции от записи в кэше,
+ * про чужую не зная, — и какая из двух победит на сервере, угадать нельзя.
+ *
+ * Здесь версии складываются в одну: от записи в кэше берётся всё, что изменила
+ * хотя бы одна очередь; спорное поле решает правка человека. Поверх результата
+ * ещё раз проходят замены удаляемых категорий и объединяемых контрагентов —
+ * иначе черновик или правка, ссылающиеся на них, уехали бы со ссылкой на
+ * запись, которую этот же запрос удаляет. Операция, которая в этом запросе
+ * удаляется, обновлением не едет вовсе.
+ */
+export function unifyPushTransactions(input: {
+  cache: Pick<ZenCache, "transactions">;
+  /** Правки человека — в споре за поле главные. */
+  edits: readonly ZenTransaction[];
+  /** Попутные перепривязки: слияние контрагентов, удаление категории, связь с планом. */
+  repoints: readonly ZenTransaction[];
+  /** Целые новые записи: черновики, пересозданные и возвращённые операции. */
+  created: readonly ZenTransaction[];
+  /** Операции, которые этот же запрос удаляет. */
+  deletedIds: ReadonlySet<string>;
+  tagReplacements: ReadonlyMap<string, string | null>;
+  merchantSurvivors: ReadonlyMap<string, string>;
+}): ZenTransaction[] {
+  const base = new Map(
+    input.cache.transactions.filter((t) => !t.deleted).map((t) => [String(t.id), t])
+  );
+  const out = new Map<string, ZenTransaction>();
+  const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+  for (const version of [...input.repoints, ...input.edits]) {
+    const id = String(version.id);
+    if (input.deletedIds.has(id)) continue;
+    const origin = base.get(id);
+    if (!origin) {
+      out.set(id, version);
+      continue;
+    }
+    const prev = out.get(id);
+    const merged: ZenTransaction = { ...(prev ?? origin) };
+    for (const key of Object.keys(version) as (keyof ZenTransaction)[]) {
+      if (key === "changed" || same(version[key], origin[key])) continue;
+      (merged as unknown as Record<string, unknown>)[key] = version[key];
+    }
+    // Метка — наша, от сборки запроса, а не из кэша: по ней сервер решает,
+    // чья версия новее.
+    merged.changed = Math.max(prev?.changed ?? 0, version.changed ?? 0);
+    out.set(id, merged);
+  }
+  // Новая запись — целое состояние операции, а не набор изменений.
+  for (const row of input.created) {
+    const id = String(row.id);
+    if (!input.deletedIds.has(id)) out.set(id, row);
+  }
+
+  const { tagReplacements, merchantSurvivors } = input;
+  return [...out.values()].map((t) => {
+    const retag = !!t.tag && t.tag.some((id) => tagReplacements.has(id));
+    const survivor = t.merchant ? merchantSurvivors.get(String(t.merchant)) : undefined;
+    if (!retag && !survivor) return t;
+    return {
+      ...t,
+      ...(retag ? { tag: replaceTags(t.tag, tagReplacements) } : {}),
+      ...(survivor ? { merchant: survivor } : {}),
+    };
+  });
 }
 
 /** A pending budget/plan change, queued to push back to Zenmoney «Планы». */

@@ -220,7 +220,8 @@ async function runSync(): Promise<void> {
     schedulePush();
     return;
   }
-  await z.sync().catch(() => {});
+  // Служебная синхронизация: неотправленные правки человека вслед не уносим.
+  await z.sync({ skipPush: true }).catch(() => {});
 }
 
 /* ─────────────────────────────  слияние с облаком  ───────────────────────────── */

@@ -46,6 +46,10 @@ export class FakeZen {
   pushStarts = 0;
   /** Задержка ответа на отправку, мс: чтобы успеть что-то сделать «по ходу». */
   pushDelayMs = 0;
+  /** Сколько скачиваний дошло до сервера — считая те, что ещё ждут ответа. */
+  pullStarts = 0;
+  /** Задержки ответов на скачивания, мс, по одной на запрос, по порядку. */
+  pullDelays: number[] = [];
   /** Операции, удалённые «на другом устройстве»: уедут со следующим скачиванием. */
   cloudDeletes: string[] = [];
   /** Подправить выдуманный аккаунт под тест — до подключения. */
@@ -154,6 +158,10 @@ export const test = base.extend<{ zen: FakeZen }>({
       if (ENTITY_KEYS.some((k) => (body[k]?.length ?? 0) > 0)) {
         zen.pushStarts += 1;
         if (zen.pushDelayMs > 0) await new Promise((r) => setTimeout(r, zen.pushDelayMs));
+      } else {
+        zen.pullStarts += 1;
+        const delay = zen.pullDelays.shift() ?? 0;
+        if (delay > 0) await new Promise((r) => setTimeout(r, delay));
       }
       return route.fulfill({
         status: 200,

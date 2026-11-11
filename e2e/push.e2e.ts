@@ -136,3 +136,35 @@ test("«Авто»: правка, сделанная пока шла отпра�
     });
   await expect.poll(shown).toBe("вторая");
 });
+
+test("отправка, запущенная во время синхронизации, ждёт её конца — правка не пропадает с экрана", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  await setPushMode(page, "manual");
+  const pullsBefore = zen.pullStarts;
+  zen.pullDelays = [2000];
+
+  // Синхронизация ушла и ждёт ответа облака…
+  await page.locator('button[title^="Синхронизация с Дзен-мани"]').click();
+  await expect.poll(() => zen.pullStarts).toBe(pullsBefore + 1);
+  // …а человек тем временем правит операцию и отправляет.
+  await setEdit(page, "tx-0003", { comment: "во время синхронизации" });
+  await page.evaluate(async () => {
+    type S = { useZenmoneyStore: { getState: () => { pushPendingEdits: () => Promise<unknown> } } };
+    const { useZenmoneyStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useZenmoneyStore");
+    void useZenmoneyStore.getState().pushPendingEdits().catch(() => {});
+  });
+
+  await expect.poll(() => zen.pushes.length, { timeout: 15_000 }).toBe(1);
+  expect(zen.pushes[0].transaction?.find((t) => t.id === "tx-0003")?.comment).toBe("во время синхронизации");
+  await expect.poll(async () => Object.keys(await pendingEdits(page)).length).toBe(0);
+  // Синхронизация не затёрла кэш отправки: в ленте то, что ввёл человек.
+  const shown = () =>
+    page.evaluate(async () => {
+      type S = { useDataStore: { getState: () => { transactions: { id: string; comment?: string | null }[] } } };
+      const { useDataStore } = await (window as unknown as { __store: (n: string) => Promise<S> }).__store("useDataStore");
+      return useDataStore.getState().transactions.find((t) => t.id === "tx-0003")?.comment;
+    });
+  await expect.poll(shown).toBe("во время синхронизации");
+  await page.waitForTimeout(2500);
+  expect(await shown()).toBe("во время синхронизации");
+});

@@ -252,3 +252,22 @@ test("удалил → отменил → операцию удалили в Д�
   // В запросе — только наша правка: удалённая в облаке операция не воскресла.
   expect(zen.pushes[0].transaction?.map((t) => t.id)).toEqual(["tx-0003"]);
 });
+
+test("«При синхронизации» тоже ждёт плашку: отменённое удаление не уходит", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  await setPushMode(page, "on-sync");
+  const deletions = () => zen.pushes.reduce((n, p) => n + (p.deletion?.length ?? 0), 0);
+  const sync = page.locator('button[title^="Синхронизация с Дзен-мани"]');
+
+  await page.locator(".op-row").first().getByRole("button", { name: "Удалить операцию" }).click();
+  await expect(toastEl(page)).toContainText("Операция удалена");
+  const pulls = zen.pulls;
+  await sync.click();
+  await expect.poll(() => zen.pulls).toBeGreaterThan(pulls);
+  await page.waitForTimeout(1500);
+  expect(deletions()).toBe(0);
+  // Передумали — удаление в облако так и не попало.
+  await toastEl(page).getByRole("button", { name: "Отменить" }).first().click();
+  await page.waitForTimeout(2500);
+  expect(deletions()).toBe(0);
+});
