@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
+import { FormField } from "./FormField";
 import { AlertTriangle, BadgeCheck, BadgePlus, Check, X } from "lucide-react";
 import { Combobox } from "./Combobox";
 import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
@@ -87,14 +88,14 @@ export function ImportRowEditor({
       </div>
 
       <div className={isTransfer ? "grid grid-cols-4 gap-3" : "grid grid-cols-3 gap-3"}>
-        <Field label="Дата">
+        <FormField label="Дата">
           <DateField
             value={draft.date}
             onChange={(e) => set({ date: e.target.value })}
             className="input text-sm w-full"
           />
-        </Field>
-        <Field label="Время">
+        </FormField>
+        <FormField label="Время">
           <input
             type="time"
             value={draft.time}
@@ -102,8 +103,8 @@ export function ImportRowEditor({
             aria-label="Время операции"
             className="input text-sm w-full"
           />
-        </Field>
-        <Field label="Сумма">
+        </FormField>
+        <FormField label="Сумма">
           <input
             value={amountText}
             onChange={(e) => {
@@ -114,9 +115,9 @@ export function ImportRowEditor({
             aria-label="Сумма"
             className="input text-sm w-full font-mono tabular-nums"
           />
-        </Field>
+        </FormField>
         {isTransfer && (
-          <Field label="Сумма зачисления">
+          <FormField label="Сумма зачисления">
             <input
               value={incomeText}
               onChange={(e) => {
@@ -128,13 +129,13 @@ export function ImportRowEditor({
               aria-label="Сумма зачисления"
               className="input text-sm w-full font-mono tabular-nums"
             />
-          </Field>
+          </FormField>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         {isTransfer ? (
-          <Field label="Счёт списания">
+          <FormField label="Счёт списания">
             <Combobox
               value={draft.outAccount}
               options={accounts}
@@ -144,9 +145,9 @@ export function ImportRowEditor({
               portal
               placeholder="Откуда"
             />
-          </Field>
+          </FormField>
         ) : (
-          <Field label="Категория">
+          <FormField label="Категория">
             <CategoryCascadePicker
               category={pickCategory}
               subcategory={pickSub}
@@ -159,9 +160,9 @@ export function ImportRowEditor({
                 })
               }
             />
-          </Field>
+          </FormField>
         )}
-        <Field label={toAccount ? "Счёт зачисления" : "Счёт списания"}>
+        <FormField label={toAccount ? "Счёт зачисления" : "Счёт списания"}>
           <Combobox
             value={toAccount ? draft.inAccount : draft.outAccount}
             options={accounts}
@@ -171,20 +172,20 @@ export function ImportRowEditor({
             portal
             placeholder="Выберите счёт"
           />
-        </Field>
+        </FormField>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field
+        <FormField
           label="Контрагент"
-          note={
+          after={
             payeeStatus(draft.payee) === "existing" ? (
-              <span className="inline-flex items-center gap-1 text-income normal-case tracking-normal">
+              <span className="inline-flex items-center gap-1 text-[11px] text-income normal-case tracking-normal truncate">
                 <BadgeCheck className="w-3.5 h-3.5" />
                 Есть в справочнике
               </span>
             ) : payeeStatus(draft.payee) === "new" ? (
-              <span className="inline-flex items-center gap-1 text-accent normal-case tracking-normal">
+              <span className="inline-flex items-center gap-1 text-[11px] text-accent normal-case tracking-normal truncate">
                 <BadgePlus className="w-3.5 h-3.5" />
                 Новый — заведём в справочнике
               </span>
@@ -201,15 +202,15 @@ export function ImportRowEditor({
             portal
             placeholder="Необязательно"
           />
-        </Field>
-        <Field label="Комментарий">
+        </FormField>
+        <FormField label="Комментарий">
           <input
             value={draft.comment}
             onChange={(e) => set({ comment: e.target.value })}
             aria-label="Комментарий"
             className="input text-sm w-full"
           />
-        </Field>
+        </FormField>
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -239,27 +240,6 @@ export function ImportRowEditor({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  note,
-  children,
-}: {
-  label: string;
-  /** Пометка справа от ярлыка — состояние поля, а не его подпись. */
-  note?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-1 min-w-0">
-        <div className="label">{label}</div>
-        {note && <div className="text-[11px] truncate">{note}</div>}
-      </div>
-      {children}
     </div>
   );
 }

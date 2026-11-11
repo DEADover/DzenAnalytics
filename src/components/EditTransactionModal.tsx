@@ -1,6 +1,6 @@
 import { localToday } from "../lib/period";
-import clsx from "clsx";
-import { Badge } from "./Badge";
+import { FormField } from "./FormField";
+import { useCategoryNodes } from "../hooks/useCategoryNodes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "./Select";
 import { ChevronsRight, Pencil, Plus, Save, X, TrendingUp, TrendingDown, ArrowLeftRight, Undo2, Trash2, Copy, Scissors, Repeat, HandCoins, BadgeCheck, BadgePlus, BadgeX, Check, ListPlus, ArrowUpToLine, Wand2 } from "lucide-react";
@@ -27,13 +27,11 @@ import {
 } from "../lib/zenmoneyPush";
 import { createCounterpartyMinter } from "../lib/counterparties";
 import { Combobox, type ComboboxGroup } from "./Combobox";
-import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
-import { buildCategoryNodes } from "../lib/categoryNodes";
+import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { Tooltip } from "./Tooltip";
 import { Segmented } from "./Segmented";
 import { validateOperation } from "../lib/operationValidation";
 import { DateField } from "./DateField";
-import type { ZenTag } from "../lib/zenmoney";
 import { HashtagTextarea } from "./HashtagTextarea";
 import { CategoryDot } from "./CategoryDot";
 import { useTagModeStore } from "../store/useTagModeStore";
@@ -284,77 +282,8 @@ export function EditTransactionModal({
     if (!metaLoaded) hydrateMeta();
   }, [metaLoaded, hydrateMeta]);
 
-  // Build the category list shown to the user. Priority:
-  //   1. If Zenmoney `categoryMeta` is populated (API mode), filter by the
-  //      tag's declared `showIncome` / `showOutcome` flags — that's the
-  //      canonical "which categories belong to this side" answer.
-  //   2. Otherwise (CSV mode, no meta), fall back to the heuristic that
-  //      inspects observed transactions of the matching kind.
-  // Subcategories always come from observed data — Zenmoney's tag hierarchy
-  // isn't fully exposed here, so the heuristic is the best we can do.
-  const { categoryOptions, subcatByCategory } = useMemo(() => {
-    const subByCat = new Map<string, Set<string>>();
-    for (const t of allTransactions) {
-      if (!t.category || !t.subcategory) continue;
-      let bucket = subByCat.get(t.category);
-      if (!bucket) {
-        bucket = new Set<string>();
-        subByCat.set(t.category, bucket);
-      }
-      bucket.add(t.subcategory);
-    }
-
-    // 1) API-flagged categories first.
-    const metaKeys = Object.keys(categoryMeta);
-    const hasFlags = metaKeys.some(
-      (k) =>
-        categoryMeta[k]?.showIncome !== undefined ||
-        categoryMeta[k]?.showOutcome !== undefined
-    );
-    if (hasFlags && kind !== "transfer") {
-      const flagField = kind === "income" ? "showIncome" : "showOutcome";
-      const cats = metaKeys.filter((name) => categoryMeta[name]?.[flagField]);
-      return {
-        categoryOptions: cats.sort((a, b) => a.localeCompare(b, "ru")),
-        subcatByCategory: subByCat,
-      };
-    }
-
-    // 2) Fallback — derive from observed transactions of this kind.
-    const cats = new Set<string>();
-    for (const t of allTransactions) {
-      if (kind !== "transfer" && t.kind !== kind) continue;
-      if (!t.category) continue;
-      cats.add(t.category);
-    }
-    return {
-      categoryOptions: Array.from(cats).sort((a, b) => a.localeCompare(b, "ru")),
-      subcatByCategory: subByCat,
-    };
-  }, [allTransactions, kind, categoryMeta]);
-
-  // Raw Zenmoney tags — the only place the real parent→child hierarchy lives
-  // (categoryMeta is keyed by title and flattens it, which is why sub-tags
-  // currently leak into the first level). Loaded once for the cascade picker.
-  const [cacheTags, setCacheTags] = useState<ZenTag[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    getZenCache().then((c) => {
-      if (!cancelled) setCacheTags(c?.tags ?? null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Top-level categories (this kind only) each with their sub-categories, for
-  // the single cascade field. Hierarchy comes from the raw tags (authoritative)
-  // unioned with sub-categories observed in the data; child tags that leaked
-  // into `categoryOptions` are dropped from the first level.
-  const categoryNodes = useMemo<CategoryNode[]>(
-    () => buildCategoryNodes(categoryOptions, subcatByCategory, cacheTags),
-    [categoryOptions, subcatByCategory, cacheTags]
-  );
+  // Дерево категорий для поля — общий хук (то же в окне разделения).
+  const categoryNodes = useCategoryNodes(kind);
 
   // "Получатель" suggestions, served as two distinct groups so the
   // user can tell at a glance which bucket a suggestion comes from:
@@ -1224,7 +1153,7 @@ export function EditTransactionModal({
         {/* Kind switcher — 4-way pill toggle. "Возврат" is a money-back
             flow on an expense category; it inflows the account but
             shrinks the category's spend rather than adding to income. */}
-        <Field label="Тип операции">
+        <FormField label="Тип операции">
           {/* Общий `Segmented`: цвет выбранного типа — тот же, что у сумм
               этого типа в таблицах. Во всю ширину, варианты делят её поровну. */}
           <Segmented
@@ -1258,11 +1187,11 @@ export function EditTransactionModal({
               { value: "debt", label: "Долг", icon: HandCoins, tone: "warn" },
             ]}
           />
-        </Field>
+        </FormField>
         {/* Date needs room for «дд.мм.гггг» + the calendar icon; time only
             holds «чч:мм», so give the date the wider column. */}
         <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
-          <Field
+          <FormField
             label="Дата"
             attention={
               futurePlan
@@ -1276,15 +1205,15 @@ export function EditTransactionModal({
               onChange={(e) => setDate(e.target.value)}
               className="input text-sm w-full"
             />
-          </Field>
-          <Field label="Время">
+          </FormField>
+          <FormField label="Время">
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
               className="input text-sm w-full"
             />
-          </Field>
+          </FormField>
         </div>
         {/* Category / Subcategory — not shown for transfers: a transfer is
             just money moving between the user's own accounts, it has no
@@ -1292,7 +1221,7 @@ export function EditTransactionModal({
         {kind !== "transfer" && (
           // Single full-width field: top level lists only real categories;
           // a category's sub-categories open to the right (issue #12).
-          <Field
+          <FormField
             label="Категория"
             attention={needCategory ? { text: "Нужно выбрать", title: "У перевода категории не было", required: true } : undefined}
           >
@@ -1305,13 +1234,13 @@ export function EditTransactionModal({
                 setSubcategory(sub);
               }}
             />
-          </Field>
+          </FormField>
         )}
         {/* Теги-категории (#69): вторая и следующие категории операции. Поле
             есть только в этом режиме — при хэштегах теги пишут прямо в
             комментарии, и второе поле для них было бы лишним. */}
         {tagMode === "categories" && kind !== "transfer" && !isDebt && (
-          <Field label="Теги">
+          <FormField label="Теги">
             <div className="space-y-2">
               {extras.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
@@ -1369,13 +1298,13 @@ export function EditTransactionModal({
                 }}
               />
             </div>
-          </Field>
+          </FormField>
         )}
         {/* «Долг»: direction + the real account. The debt account «Долги»
             is implicit (Zenmoney keeps one per user). */}
         {isDebt && (
           <>
-            <Field label="Операция с долгом">
+            <FormField label="Операция с долгом">
               {/* Тот же `Segmented`, что у «Типа операции» строкой выше: два
                   переключателя подряд обязаны выглядеть одинаково. */}
               <Segmented
@@ -1399,8 +1328,8 @@ export function EditTransactionModal({
                   },
                 ]}
               />
-            </Field>
-            <Field label={debtOutgoing ? "С какого счёта" : "На какой счёт"}>
+            </FormField>
+            <FormField label={debtOutgoing ? "С какого счёта" : "На какой счёт"}>
               <Combobox
                 value={realAcc}
                 options={accountOptions}
@@ -1412,7 +1341,7 @@ export function EditTransactionModal({
                 placeholder="Реальный счёт"
                 maxHeight={DROPDOWN_MAX}
               />
-            </Field>
+            </FormField>
           </>
         )}
         {/* Account(s): one field for income/expense, two for transfer.
@@ -1420,7 +1349,7 @@ export function EditTransactionModal({
             identifying attribute of a transaction after the category. */}
         {!isDebt && kind === "transfer" ? (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Со счёта">
+            <FormField label="Со счёта">
               <Combobox
                 value={outAcc}
                 options={accountOptions}
@@ -1432,8 +1361,8 @@ export function EditTransactionModal({
                 placeholder="Источник"
                 maxHeight={DROPDOWN_MAX}
               />
-            </Field>
-            <Field label="На счёт">
+            </FormField>
+            <FormField label="На счёт">
               <Combobox
                 value={inAcc}
                 options={accountOptions}
@@ -1445,7 +1374,7 @@ export function EditTransactionModal({
                 placeholder="Получатель"
                 maxHeight={DROPDOWN_MAX}
               />
-            </Field>
+            </FormField>
           </div>
         ) : null}
         {/* Счёт, сумма и валюта — одним рядом: «откуда, сколько и в чём».
@@ -1466,7 +1395,7 @@ export function EditTransactionModal({
         >
           {!isDebt && kind !== "transfer" && (
             <div className="col-span-2 sm:col-span-1 min-w-0">
-              <Field label="Счёт">
+              <FormField label="Счёт">
                 <Combobox
                   value={account}
                   options={accountOptions}
@@ -1478,12 +1407,12 @@ export function EditTransactionModal({
                   placeholder="Выберите счёт"
                   maxHeight={DROPDOWN_MAX}
                 />
-              </Field>
+              </FormField>
             </div>
           )}
-          <Field
+          <FormField
             label="Сумма"
-            labelAfter={
+            after={
               isForeignCurrency && fxTooltip ? (
                 // Общий значок с пояснением: открывается и касанием, а не только
                 // наведением — своя подсказка по `group-hover` на телефоне не
@@ -1506,8 +1435,8 @@ export function EditTransactionModal({
               aria-label="Сумма"
               className="input text-sm w-full font-mono tabular-nums"
             />
-          </Field>
-          <Field label="Валюта">
+          </FormField>
+          <FormField label="Валюта">
             <Select
               value={currency}
               onChange={(v) => setCurrency(v)}
@@ -1518,13 +1447,13 @@ export function EditTransactionModal({
               ariaLabel="Валюта"
               portal
             />
-          </Field>
+          </FormField>
         </div>
         {/* Cross-currency transfer: the destination leg holds a different
             sum in its own currency. Pre-filled from the synced FX rate, but
             the user can override it (they may have exchanged at another rate). */}
         {isCrossCurrencyTransfer && (
-          <Field label={`Получено (${inAccCurrency})`}>
+          <FormField label={`Получено (${inAccCurrency})`}>
             <ExprAmountInput
               value={inAmountValue}
               onChange={(v) => {
@@ -1552,7 +1481,7 @@ export function EditTransactionModal({
                 </Tooltip>
               )}
             </div>
-          </Field>
+          </FormField>
         )}
         {!isCreate && isCrossCurrencyMove && (
           <p className="text-xs text-muted -mt-1">
@@ -1567,7 +1496,7 @@ export function EditTransactionModal({
             income account, surfaced above in its own field). */}
         {(kind !== "transfer" || isDebt) && (
           <div className={tx.payeeRaw ? "grid grid-cols-2 gap-3 items-start" : ""}>
-            <Field
+            <FormField
               label={
                 isDebt
                   ? "Контрагент"
@@ -1576,7 +1505,7 @@ export function EditTransactionModal({
                     : "Место платежа"
               }
               attention={needPayee ? { text: "Можно указать", title: "У перевода места платежа не было" } : undefined}
-              labelAfter={
+              after={
                 // Состояние справочника рядом с ярлыком. ✓ — запись есть, и
                 // операция сохранится СВЯЗЬЮ с ней. Плюс — записи нет, но мы
                 // заведём её вместе с операцией (только при СОЗДАНии: правка
@@ -1624,13 +1553,13 @@ export function EditTransactionModal({
                 placeholder="Введите или выберите из списка"
                 maxHeight={DROPDOWN_MAX}
               />
-            </Field>
+            </FormField>
             {/* Read-only «as printed by the bank» field — the immutable
                 `payeeRaw` (originalPayee from the API). Sits beside the
                 editable counterparty so the source text stays visible
                 without taking its own line. */}
             {tx.payeeRaw && (
-              <Field label="В выписке">
+              <FormField label="В выписке">
                 <input
                   type="text"
                   value={tx.payeeRaw}
@@ -1640,11 +1569,11 @@ export function EditTransactionModal({
                   aria-label="Текст из банковской выписки (не редактируется)"
                   className="input text-sm w-full text-muted bg-panel2/60 cursor-default"
                 />
-              </Field>
+              </FormField>
             )}
           </div>
         )}
-        <Field
+        <FormField
           label="Комментарий"
           // Grows to fill the leftover modal height so the comment ends at the
           // same bottom edge for every operation type.
@@ -1666,7 +1595,7 @@ export function EditTransactionModal({
               category: subcategory ? `${category} / ${subcategory}` : category,
             }}
           />
-        </Field>
+        </FormField>
       </ModalBody>
       {error ? (
         <div className="shrink-0 px-5 pt-2 pb-1 text-xs text-expense">{error}</div>
@@ -1805,42 +1734,3 @@ export function EditTransactionModal({
   );
 }
 
-function Field({
-  label,
-  labelAfter,
-  attention,
-  className,
-  children,
-}: {
-  label: string;
-  /** Поле стоит заполнить (например, после смены типа операции): пилюля в
-   *  строке ярлыка — высота поля не меняется. Обязательное (`required`) —
-   *  ещё и рамка акцентом, а пилюля сплошная: светлая слилась бы с рамкой.
-   *  Необязательное — только светлая пилюля, поле как обычно. */
-  attention?: { text: string; title?: string; required?: boolean };
-  /** Optional inline element rendered right after the label (e.g. a
-   *  small status badge), sharing the label's baseline. */
-  labelAfter?: React.ReactNode;
-  /** Extra classes on the field wrapper (e.g. `flex-1 flex flex-col` to let a
-   *  textarea grow to fill remaining modal height). */
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={clsx(className, attention?.required && "field-attention")}>
-      <div className="flex items-center gap-1.5 mb-1">
-        <label className="label">{label}</label>
-        {/* Значок в ярлыке (например, «?» с курсом у суммы в чужой валюте) — кнопка
-            24 px, выше самой строки ярлыка. Без отрицательного отступа она
-            раздувала строку, и поле уезжало ниже соседних в том же ряду. */}
-        {labelAfter && <span className="flex items-center -my-1">{labelAfter}</span>}
-        {attention && (
-          <Badge size="xs" tone="accent" solid={attention.required} title={attention.title}>
-            {attention.text}
-          </Badge>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}

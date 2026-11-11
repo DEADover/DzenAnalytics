@@ -1,4 +1,5 @@
 import { localToday } from "../lib/period";
+import { FormField } from "../components/FormField";
 import { useEffect, useMemo, useState } from "react";
 import {
   Target,
@@ -86,7 +87,6 @@ interface Money {
   rates: CurrencyRates;
   cbr: RubRates;
 }
-
 
 /** One forecast: months left at a given monthly pace, and the finish date. */
 interface Forecast {
@@ -453,36 +453,6 @@ export function GoalsPage() {
   );
 }
 
-/** Label + control wrapper — one consistent field shape across the forms. */
-function Field({
-  label,
-  hint,
-  className,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`min-w-0 ${className ?? ""}`}>
-      {/* Smaller, single-line label (`whitespace-nowrap`) so even a long one like
-          «Ежемесячные отчисления» stays on ONE row — every input in a row then
-          starts at the same y, with a tight, uniform gap to its label. */}
-      <div className="label mb-1.5 flex items-center gap-1 whitespace-nowrap">
-        <span>{label}</span>
-        {hint && (
-          <Tooltip content={hint}>
-            <span className="text-muted/70 cursor-help normal-case tracking-normal">ⓘ</span>
-          </Tooltip>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 /**
  * Источники цели ↔ выбор в `MultiSelect`. У списка соглашение фильтров:
  * пусто = все, {FILTER_NONE} = ничего. У цели «ничего» — ручная сумма, а «все»
@@ -553,7 +523,7 @@ function GoalForm({
         stagger ? "goal-edit-fields" : ""
       }`}
     >
-      <Field label="Название">
+      <FormField label="Название">
         <input
           placeholder="Например, Машина"
           value={name}
@@ -561,8 +531,8 @@ function GoalForm({
           className="input text-sm"
           autoFocus={autoFocus}
         />
-      </Field>
-      <Field label="Сумма цели">
+      </FormField>
+      <FormField label="Сумма цели">
         <input
           type="number"
           inputMode="decimal"
@@ -571,8 +541,8 @@ function GoalForm({
           onChange={(e) => setTarget(e.target.value)}
           className="input text-sm tabular-nums"
         />
-      </Field>
-      <Field
+      </FormField>
+      <FormField
         label="Источники прогресса"
         hint="Откуда брать текущий прогресс. Ничего не выбрано — «Сумма вручную»: накопленное вводите сами в поле рядом. Выберите один или несколько счетов — прогресс сложится из их балансов и будет обновляться на каждой синхронизации. Счета в другой валюте пересчитываются в базовую по курсу ЦБ на сегодня."
       >
@@ -590,17 +560,17 @@ function GoalForm({
           noneSummary="Сумма вручную"
           namesInSummary
         />
-      </Field>
+      </FormField>
       {sources.length > 0 ? (
-        <Field label="Уже накоплено">
+        <FormField label="Уже накоплено">
           <div className="input text-sm flex items-center text-muted bg-panel2/60 cursor-not-allowed tabular-nums">
             {balanceOf(sources)?.bound
               ? formatMoney(balanceOf(sources)!.current, base)
               : "По балансу счетов"}
           </div>
-        </Field>
+        </FormField>
       ) : (
-        <Field label="Уже накоплено" hint="Необязательно">
+        <FormField label="Уже накоплено" hint="Необязательно">
           <input
             type="number"
             inputMode="decimal"
@@ -609,9 +579,9 @@ function GoalForm({
             onChange={(e) => setCurrent(e.target.value)}
             className="input text-sm tabular-nums"
           />
-        </Field>
+        </FormField>
       )}
-      <Field
+      <FormField
         label="Ежемесячные отчисления"
         hint="Сколько планируете откладывать на эту цель в месяц. Если задать — построим отдельный прогноз достижения именно по этим отчислениям, независимо от общего темпа сбережений."
       >
@@ -623,15 +593,15 @@ function GoalForm({
           onChange={(e) => setMonthly(e.target.value)}
           className="input text-sm tabular-nums"
         />
-      </Field>
-      <Field label="Срок" hint="Необязательно">
+      </FormField>
+      <FormField label="Срок" hint="Необязательно">
         <DateField
           placeholder="дд.мм.гггг"
           value={deadline}
           onChange={(e) => setDeadline(e.target.value)}
           className="input text-sm"
         />
-      </Field>
+      </FormField>
     </div>
   );
 }
