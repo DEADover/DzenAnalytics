@@ -18,6 +18,7 @@ import { getBrandTitlesFromCache } from "../store/useZenmoneyStore";
 import { toast } from "../store/useToastStore";
 import { deleteWithUndo, editUndo } from "../lib/undoable";
 import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
+import { getZenCache } from "../lib/zenCacheMemo";
 import {
   buildDraftTransaction,
   merchantKey,
@@ -256,7 +257,7 @@ export function EditTransactionModal({
   );
   const [debtAccountTitle, setDebtAccountTitle] = useState<string | null>(null);
   useEffect(() => {
-    loadZenCache().then((c) => {
+    getZenCache().then((c) => {
       if (!c) return;
       const d =
         c.accounts.find((a) => DEBT_ACCOUNT_TYPES.has(a.type) && !a.archive) ??
@@ -338,7 +339,7 @@ export function EditTransactionModal({
   const [cacheTags, setCacheTags] = useState<ZenTag[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    loadZenCache().then((c) => {
+    getZenCache().then((c) => {
       if (!cancelled) setCacheTags(c?.tags ?? null);
     });
     return () => {

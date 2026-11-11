@@ -27,6 +27,7 @@ import {
   loadZenCache,
   saveZenCache,
   clearZenCache,
+  onZenCacheWrite,
   cacheToDiffResponse,
   forceFetchFor,
   applyDiffWithPlans,
@@ -107,7 +108,7 @@ import {
 } from "../lib/zenBudgets";
 import { formatNum } from "../lib/format";
 import { budgetCellKey } from "../lib/budgets";
-import { getZenCache, invalidateZenCache } from "../lib/zenCacheMemo";
+import { getZenCache } from "../lib/zenCacheMemo";
 import { useReportPeriodStore } from "./useReportPeriodStore";
 import { useCategoryRulesStore } from "./useCategoryRulesStore";
 import { useCloudSettingsStore } from "./useCloudSettingsStore";
@@ -363,6 +364,8 @@ export function invalidateLiveAccounts(): void {
 // Сменилось, чьё видно, — список счетов из кэша собирается заново (раньше
 // операций: см. `onMembersVisibilityChange`).
 onMembersVisibilityChange(invalidateLiveAccounts, 0);
+// Любая запись кэша в этой вкладке (синхронизация, отправка, отключение).
+onZenCacheWrite(invalidateLiveAccounts);
 
 export function getLiveAccountsFromCache(): Promise<LiveAccount[] | null> {
   if (liveAccountsMemo !== undefined && !liveAccountsStale) {
@@ -1202,8 +1205,6 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       });
       stage = "save";
       await saveZenCache(nextCache);
-      invalidateLiveAccounts();
-      invalidateZenCache();
       stage = "apply";
       useReportPeriodStore.getState().adoptZenDay(nextCache.user?.[0]?.monthStartDay);
       // Правила — вслед за справочниками: переименованная категория, счёт или
@@ -1402,8 +1403,6 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           rewindOnError: true,
         });
         await saveZenCache(cache);
-        invalidateZenCache();
-        invalidateLiveAccounts();
         set({ serverTimestamp: cache.serverTimestamp });
         await db.saveJSON(TIMESTAMP_KEY, cache.serverTimestamp);
       } catch {
@@ -1824,8 +1823,6 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         { rewindOnError: true }
       );
       await saveZenCache(nextCache);
-      invalidateLiveAccounts();
-      invalidateZenCache();
 
       // Prune snapshots that are no longer needed:
       //   • the resurrected `oldId`s — re-created under a new id, so the

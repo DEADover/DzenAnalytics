@@ -285,7 +285,7 @@ async function loadDraftRows(
 ): Promise<Transaction[]> {
   const drafts = await loadDrafts();
   if (Object.keys(drafts).length === 0) return [];
-  const cache = await loadZenCache();
+  const cache = await getZenCache();
   const seen = new Set(existing.map((t) => t.id));
   const hist = useDataStore.getState().histDayRates;
   return draftsToTransactions(drafts, cache)
@@ -377,7 +377,7 @@ async function autoApplyToNew(
 
   // Справочники Дзен-мани — из кэша: без них правило может записать категорию,
   // которой в облаке нет, и правка навсегда зависнет неотправленной.
-  const cache = await loadZenCache();
+  const cache = await getZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
   const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
@@ -434,7 +434,7 @@ async function runScheduledRules(raw: Transaction[]): Promise<void> {
   const pending = due.filter((r) => isDue(r.schedule, runs[r.id]?.at, now));
   if (pending.length === 0) return;
 
-  const cache = await loadZenCache();
+  const cache = await getZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
   const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
@@ -494,7 +494,7 @@ async function runRuleNow(ruleId: string): Promise<number> {
   if (!rule || raw.length === 0) return 0;
 
   await ensureEditsLoaded();
-  const cache = await loadZenCache();
+  const cache = await getZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
   const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants
@@ -559,7 +559,7 @@ async function applyRulesNow(ruleIds: readonly string[]): Promise<number> {
   if (rules.length === 0) return 0;
 
   await ensureEditsLoaded();
-  const cache = await loadZenCache();
+  const cache = await getZenCache();
   const categoryOk = cache?.tags ? makeCategoryChecker(cache.tags) : null;
   const kindChecks = cache ? makeKindChecks(cache) : null;
   const payeeOk = cache?.merchants

@@ -8,7 +8,7 @@
 // отправленные черновики, поэтому числа совпадают с длиной списка внутри.
 
 import { useEffect, useMemo, useState } from "react";
-import { loadZenCache } from "../lib/zenmoneyCache";
+import { getZenCache } from "../lib/zenCacheMemo";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
@@ -34,7 +34,7 @@ export function useDictionaryCounts(): DictionaryCounts {
 
   useEffect(() => {
     let alive = true;
-    void loadZenCache().then((cache) => {
+    void getZenCache().then((cache) => {
       if (!alive) return;
       setCached(
         cache ? { tags: cache.tags.length, merchants: cache.merchants.length } : null
@@ -69,7 +69,7 @@ export function useCounterpartyTitles(): Set<string> {
 
   useEffect(() => {
     let alive = true;
-    void loadZenCache().then((cache) => {
+    void getZenCache().then((cache) => {
       if (!alive) return;
       setTitles(new Map((cache?.merchants ?? []).map((m) => [m.id, m.title])));
     });
@@ -103,7 +103,7 @@ export function useLiveCategoryPaths(): Set<string> | null {
 
   useEffect(() => {
     let alive = true;
-    void loadZenCache().then((cache) => {
+    void getZenCache().then((cache) => {
       if (alive) setTags(cache ? cache.tags : null);
     });
     return () => {

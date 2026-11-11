@@ -12,7 +12,7 @@
  * дальше.
  */
 
-import { loadZenCache, type ZenCache } from "./zenmoneyCache";
+import { loadZenCache, onZenCacheWrite, type ZenCache } from "./zenmoneyCache";
 
 let memo: ZenCache | null | undefined;
 let stale = false;
@@ -42,6 +42,10 @@ export function invalidateZenCache(): void {
   inFlight = null;
   if (memo !== undefined) void getZenCache();
 }
+
+// Любая запись кэша в этой вкладке; чужие вкладки сбрасывают его через
+// `lib/crossTab`.
+onZenCacheWrite(invalidateZenCache);
 
 export function getZenCache(): Promise<ZenCache | null> {
   if (memo !== undefined && !stale) return Promise.resolve(memo);

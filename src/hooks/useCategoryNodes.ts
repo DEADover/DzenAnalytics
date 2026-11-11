@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CategoryNode } from "../components/CategoryCascadePicker";
 import { buildCategoryNodes } from "../lib/categoryNodes";
-import { loadZenCache } from "../lib/zenmoneyCache";
+import { getZenCache } from "../lib/zenCacheMemo";
 import type { ZenTag } from "../lib/zenmoney";
 import { useDataStore } from "../store/useDataStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -25,7 +25,7 @@ export function useZenTags(): ZenTag[] | null {
   const [cacheTags, setCacheTags] = useState<ZenTag[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    loadZenCache().then((c) => {
+    getZenCache().then((c) => {
       if (!cancelled) setCacheTags(c?.tags ?? null);
     });
     return () => {

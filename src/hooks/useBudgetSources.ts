@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { BudgetMonthSources } from "../lib/budgetMonth";
 import { plannedOps, type PlannedOp } from "../lib/plannedOps";
 import { plannedPlans } from "../lib/plannedPlans";
-import { loadZenCache } from "../lib/zenmoneyCache";
+import { getZenCache } from "../lib/zenCacheMemo";
 import { useBudgetSettingsStore } from "../store/useBudgetSettingsStore";
 import { useBudgetsStore } from "../store/useBudgetsStore";
 import { useDataStore } from "../store/useDataStore";
@@ -55,7 +55,7 @@ export function useBudgetSources(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    loadZenCache().then((c) => {
+    getZenCache().then((c) => {
       if (!alive) return;
       setZenPlanned(plannedOps(c, rates));
       setZenPlannedAll(plannedOps(c, rates, { withProcessed: true, histRate: (d, code) => histDayRates[d]?.[code] ?? null }));

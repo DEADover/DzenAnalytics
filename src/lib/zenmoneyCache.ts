@@ -300,12 +300,30 @@ export async function loadZenCache(): Promise<ZenCache | null> {
   return db.loadJSON<ZenCache>(CACHE_KEY);
 }
 
+const writeListeners = new Set<() => void>();
+
+/**
+ * Подписка на запись кэша в этой вкладке. Через неё общий прочитанный кэш
+ * (`lib/zenCacheMemo`) узнаёт, что устарел, — при любой записи, а не только
+ * там, где вызывающий не забыл об этом сказать.
+ */
+export function onZenCacheWrite(listener: () => void): () => void {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
+}
+
+function announceCacheWrite(): void {
+  for (const listener of writeListeners) listener();
+}
+
 export async function saveZenCache(cache: ZenCache): Promise<void> {
   await db.saveJSON(CACHE_KEY, cache);
+  announceCacheWrite();
 }
 
 export async function clearZenCache(): Promise<void> {
   await db.saveJSON(CACHE_KEY, null);
+  announceCacheWrite();
 }
 
 function dedupBy<T, K>(arr: T[], key: (t: T) => K): T[] {

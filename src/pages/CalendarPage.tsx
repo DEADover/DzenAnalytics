@@ -12,7 +12,8 @@ import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { dailyExpenseMap, transferTotals, type DayCell } from "../lib/aggregations";
-import { loadZenCache, type ZenCache } from "../lib/zenmoneyCache";
+import type { ZenCache } from "../lib/zenmoneyCache";
+import { getZenCache } from "../lib/zenCacheMemo";
 import clsx from "clsx";
 import { plannedOps, plannedBreakdown } from "../lib/plannedOps";
 import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
@@ -117,7 +118,7 @@ export function CalendarPage() {
   const [zenCache, setZenCache] = useState<ZenCache | null>(null);
   useEffect(() => {
     let cancelled = false;
-    loadZenCache().then((c) => {
+    getZenCache().then((c) => {
       if (!cancelled) setZenCache(c);
     });
     return () => {

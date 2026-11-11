@@ -45,6 +45,7 @@ for (const width of [1440, 768]) {
     expect(await rowTops()).toBe(rowsBefore);
 
     // Дальнейший набор подсказку не открывает — выбор уже сделан.
+    const nEverywhere = await payees.count();
     await field.press("End");
     await field.pressSequentially("а");
     await expect(list).toBeHidden();
@@ -52,7 +53,8 @@ for (const width of [1440, 768]) {
     // Список после стирания должен улечься: пока он перестраивается, страница
     // сдвигается, и только что открытая подсказка честно закрывается как
     // уехавшая от поля. Человек так быстро метку не нажмёт.
-    await expect.poll(() => payees.count()).toBeGreaterThan(nFilter);
+    // Лента догоняет поле отложенно — ждём ровно прежний список.
+    await expect(payees).toHaveCount(nEverywhere);
     await page.waitForTimeout(150);
 
     // Метка открывает подсказку; клик «В фильтре» — обратно.
