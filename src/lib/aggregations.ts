@@ -1,4 +1,5 @@
 import { incomeLegBase } from "./legAmount";
+import { median } from "./stats";
 import type { Transaction } from "../types";
 import { ymKey, ymdKey } from "./format";
 import { periodKey } from "./period";
@@ -1298,12 +1299,6 @@ export function buildScenarioForecast(
   if (months.length === 0) return [];
 
   const cMonth = (ym: string): number => Number(ym.slice(5, 7)); // 1..12
-  const median = (arr: number[]): number => {
-    if (arr.length === 0) return 0;
-    const s = [...arr].sort((a, b) => a - b);
-    const m = Math.floor(s.length / 2);
-    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-  };
   const std = (arr: number[], mean: number): number =>
     arr.length
       ? Math.sqrt(arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length)

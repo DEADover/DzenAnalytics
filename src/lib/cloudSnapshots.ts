@@ -20,6 +20,7 @@
  * roll off automatically so IndexedDB doesn't bloat unboundedly.
  */
 
+import { downloadBlob } from "./downloadBlob";
 import { retryTransient } from "./zenRetry";
 import * as db from "./db";
 import type {
@@ -307,13 +308,8 @@ export async function downloadSnapshot(id: string): Promise<void> {
   const blob = gz
     ? new Blob([gz as BlobPart], { type: "application/gzip" })
     : new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
   const base = `dzenanalytics-cloud-snapshot-${snap.id.replace(/[:.]/g, "-")}`;
-  a.download = gz ? `${base}.json.gz` : `${base}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, gz ? `${base}.json.gz` : `${base}.json`);
 }
 
 /**

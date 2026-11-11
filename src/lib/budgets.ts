@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { median } from "./stats";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import { ALL_ACCOUNTS, budgetHits, type BudgetScope } from "./budgetScope";
 import { periodRange, shiftDays, spanDays, toIsoDate } from "./period";
@@ -331,11 +332,7 @@ export function forecastFor(
   const vals: number[] = [];
   for (let i = 1; i <= lookback; i++)
     vals.push(factFor(line, txs, addMonths(ym, -i), scope, undefined, monthStartDay));
-  vals.sort((a, b) => a - b);
-  const mid = Math.floor(vals.length / 2);
-  const median =
-    vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
-  const rounded = Math.round(median / 100) * 100;
+  const rounded = Math.round(median(vals) / 100) * 100;
   return rounded >= 100 ? rounded : 0;
 }
 

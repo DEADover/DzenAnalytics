@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { median } from "./stats";
 import { groupByMonth } from "./aggregations";
 import { currentPeriod, periodKey, periodRange, shiftPeriod, spanDays } from "./period";
 
@@ -74,12 +75,6 @@ function cutMonth(lastDate: string, monthStartDay: number): string | null {
   return gap > CUT_GAP_DAYS ? ym : null;
 }
 
-function median(xs: number[]): number {
-  if (xs.length === 0) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 

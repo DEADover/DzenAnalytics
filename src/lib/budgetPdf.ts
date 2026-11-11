@@ -12,6 +12,7 @@
  * ради кириллицы и повторять всю раскладку вручную.
  */
 
+import { downloadBlob } from "./downloadBlob";
 import { A4_LANDSCAPE, A4_PORTRAIT, buildPdf, jpegFromDataUrl, type PdfPage } from "./pdf";
 
 /**
@@ -35,15 +36,7 @@ const SCALE = 2;
 const EXPORT_CLASS = "print-export";
 
 function downloadBytes(bytes: Uint8Array, fileName: string): void {
-  const blob = new Blob([bytes as unknown as BlobPart], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), fileName);
 }
 
 /**

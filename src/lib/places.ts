@@ -11,6 +11,7 @@
  * считаются и средний чек не занижают.
  */
 
+import { median } from "./stats";
 import type { Transaction } from "../types";
 import { counterpartyOf } from "./yearReview";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
@@ -210,11 +211,6 @@ function weekdayMon(iso: string): number {
   return (new Date(y, m - 1, d).getDay() + 6) % 7;
 }
 
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = s.length >> 1;
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
 
 /**
  * Досье места за всю историю — для карточки справа от списка.

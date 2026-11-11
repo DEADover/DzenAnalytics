@@ -33,7 +33,7 @@ import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { Checkbox } from "../components/Checkbox";
 import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "../components/operations/OperationCells";
-import { TONE_CLASS } from "../components/table/tableKit";
+import { downloadCsv, TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MakeRecurringModal } from "../components/operations/MakeRecurringModal";
 import { MergeSelectionAction } from "../components/operations/MergeSelectionAction";
@@ -586,13 +586,7 @@ export function TransactionsPage() {
         ].join(";")
       ),
     ];
-    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "dzenanalytics_операции.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv("dzenanalytics_операции.csv", lines.join("\n"));
   }
 
   if (transactions.length === 0) return <EmptyState />;

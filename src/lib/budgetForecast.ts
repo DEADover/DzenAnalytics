@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { median } from "./stats";
 import { addMonths, plannedFor, type BudgetKind, type BudgetLine } from "./budgets";
 import { ALL_ACCOUNTS, budgetHit, type BudgetScope } from "./budgetScope";
 import { periodKey } from "./period";
@@ -244,8 +245,3 @@ function sum(xs: number[]): number {
   return s;
 }
 
-function median(xs: number[]): number {
-  const v = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(v.length / 2);
-  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
-}

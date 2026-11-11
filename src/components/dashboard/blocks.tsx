@@ -15,6 +15,7 @@
  *     запрещены и недоступны с тача.
  */
 
+import { median } from "../../lib/stats";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { clickedRow } from "../../lib/chartClick";
 import { pluralRu } from "../../lib/plural";
@@ -1385,12 +1386,8 @@ export function ActivityHeat({
   const opsCount = past.reduce((a, iso) => a + (m.dayMap.get(iso)?.count ?? 0), 0);
   // «Обычный день» — медиана по дням, где траты были. Среднее задирает один
   // крупный день, и «в среднем 10 437 ₽» перестаёт описывать обычный день.
-  const spentDays = past.map(spendOn).filter((v) => v > 0).sort((a, b) => a - b);
-  const medianDay = spentDays.length
-    ? spentDays.length % 2 === 0
-      ? (spentDays[spentDays.length / 2 - 1] + spentDays[spentDays.length / 2]) / 2
-      : spentDays[(spentDays.length - 1) / 2]
-    : 0;
+  const spentDays = past.map(spendOn).filter((v) => v > 0);
+  const medianDay = median(spentDays);
   const topDays = [...past]
     .filter((iso) => spendOn(iso) > 0)
     .sort((a, b) => spendOn(b) - spendOn(a))

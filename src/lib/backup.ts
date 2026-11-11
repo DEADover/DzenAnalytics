@@ -6,6 +6,7 @@
 // raw entity cache are intentionally NOT exported — those should never leave
 // the device unencrypted.
 
+import { downloadBlob } from "./downloadBlob";
 import * as db from "./db";
 import { compressText } from "./snapshotFile";
 
@@ -416,15 +417,7 @@ export async function downloadBackup(tag?: string): Promise<{
   const blob = gz
     ? new Blob([gz as BlobPart], { type: "application/gzip" })
     : new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
   const fileName = backupFileName(new Date(), tag, gz != null);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Release the blob URL after the click had a chance to take effect.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadBlob(blob, fileName);
   return { size: gz ? gz.byteLength : new Blob([json]).size, fileName };
 }

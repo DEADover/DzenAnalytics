@@ -10,6 +10,7 @@
  *
  * Модуль без React: логику сортировки и выгрузки можно проверить тестами.
  */
+import { downloadBlob } from "../../lib/downloadBlob";
 import { toIsoDate } from "../../lib/period";
 import clsx from "clsx";
 
@@ -233,11 +234,5 @@ export function csvFileName(name: string | undefined, date: Date = new Date()): 
 
 /** Скачать CSV. BOM в начале — чтобы Excel не принял UTF-8 за cp1251. */
 export function downloadCsv(fileName: string, text: string): void {
-  const blob = new Blob(["\uFEFF" + text], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob(["\uFEFF" + text], { type: "text/csv;charset=utf-8" }), fileName);
 }
