@@ -14,7 +14,7 @@ let dbPromise: Promise<IDBPDatabase> | null = null;
  */
 function getDB(): Promise<IDBPDatabase> {
   if (!dbPromise) {
-    dbPromise = openDB(dbNameFor(activeProfileId()), DB_VERSION, {
+    const opening: Promise<IDBPDatabase> = openDB(dbNameFor(activeProfileId()), DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("transactions")) {
           db.createObjectStore("transactions", { keyPath: "id" });
@@ -23,6 +23,24 @@ function getDB(): Promise<IDBPDatabase> {
           db.createObjectStore("meta");
         }
       },
+      // Другая вкладка открыла базу новой версии и ждёт нас: закрываем своё
+      // соединение, иначе её обновление зависло бы, пока мы открыты. Следующее
+      // обращение откроет базу заново — уже обновлённую.
+      blocking(_current, _blocked, event) {
+        (event.target as IDBDatabase | null)?.close();
+        if (dbPromise === opening) dbPromise = null;
+      },
+      // Браузер закрыл соединение сам (чистка места, сбой диска): прежнее
+      // обещание теперь отдаёт мёртвую базу — открываем заново при обращении.
+      terminated() {
+        if (dbPromise === opening) dbPromise = null;
+      },
+    });
+    dbPromise = opening;
+    // Открыть не удалось — не держим отказ до перезагрузки страницы: следующее
+    // обращение попробует ещё раз.
+    opening.catch(() => {
+      if (dbPromise === opening) dbPromise = null;
     });
   }
   return dbPromise;
@@ -31,9 +49,34 @@ function getDB(): Promise<IDBPDatabase> {
 export async function saveTransactions(txs: Transaction[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("transactions", "readwrite");
-  await tx.store.clear();
-  for (const t of txs) await tx.store.put(t);
-  await tx.done;
+  // Не ждём каждую запись по очереди: на двадцати тысячах операций это
+  // двадцать тысяч остановок. Пишем подряд и ждём транзакцию целиком — она
+  // же откатит всё, если хоть одна запись не прошла.
+  await Promise.all([tx.store.clear(), ...txs.map((t) => tx.store.put(t)), tx.done]);
+}
+
+/**
+ * Записать целый набор данных одной транзакцией: операции и ключи настроек.
+ *
+ * Для восстановления из бэкапа. По одному ключу за транзакцию сбой посреди
+ * (закрыли вкладку, кончилось место) оставлял смесь старого и нового: операции
+ * из бэкапа, а правки и правила — прежние. Здесь либо записано всё, либо
+ * ничего.
+ */
+export async function writeAll(data: {
+  transactions?: Transaction[];
+  meta: Record<string, unknown>;
+}): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(["transactions", "meta"], "readwrite");
+  const ops: Promise<unknown>[] = [];
+  if (data.transactions) {
+    const store = tx.objectStore("transactions");
+    ops.push(store.clear(), ...data.transactions.map((t) => store.put(t)));
+  }
+  const meta = tx.objectStore("meta");
+  for (const [key, value] of Object.entries(data.meta)) ops.push(meta.put(value, key));
+  await Promise.all([...ops, tx.done]);
 }
 
 export async function loadTransactions(): Promise<Transaction[]> {

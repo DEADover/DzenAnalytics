@@ -20,6 +20,7 @@
  * roll off automatically so IndexedDB doesn't bloat unboundedly.
  */
 
+import { retryTransient } from "./zenRetry";
 import * as db from "./db";
 import type {
   ZenAccount,
@@ -866,7 +867,13 @@ export async function restoreSnapshotToCloud(
     }
     devLog("zen-restore", subMsg);
     try {
-      const resp = await pushDiff(token, lastServerTs || 0, payload);
+      const resp = await retryTransient(() => pushDiff(token, lastServerTs || 0, payload), {
+        onRetry: (n, e) =>
+          devLog(
+            "zen-restore",
+            `phase A.${label}: повтор ${n} после сбоя (${e instanceof Error ? e.message : String(e)})`
+          ),
+      });
       onSuccess(resp);
       lastServerTs = resp.serverTimestamp;
       chunkCount++;
@@ -1063,7 +1070,15 @@ export async function restoreSnapshotToCloud(
     });
     let response: ZenDiffResponse;
     try {
-      response = await pushDiff(token, lastServerTs, payload);
+      // Заминка сети не должна обрывать перенос на середине: тот же запрос с
+      // теми же id можно отправить ещё раз (см. lib/zenRetry).
+      response = await retryTransient(() => pushDiff(token, lastServerTs, payload), {
+        onRetry: (n, e) =>
+          devLog(
+            "zen-restore",
+            `phase B chunk ${chunkCount}: повтор ${n} после сбоя (${e instanceof Error ? e.message : String(e)})`
+          ),
+      });
     } catch (e) {
       const totalPushed =
         accepted.transactions.visible + accepted.transactions.hidden;

@@ -33,6 +33,16 @@ vi.mock("./db", () => ({
   saveImportMeta: async (v: unknown) => {
     importMeta = v;
   },
+  // Восстановление пишет всё одной транзакцией; курсы и сведения об импорте
+  // в базе лежат под ключами `rates` и `import`.
+  writeAll: async (data: { transactions?: unknown[]; meta: Record<string, unknown> }) => {
+    if (data.transactions) transactions = data.transactions;
+    for (const [k, v] of Object.entries(data.meta)) {
+      if (k === "rates") rates = v;
+      else if (k === "import") importMeta = v;
+      else meta.set(k, v);
+    }
+  },
 }));
 
 import {

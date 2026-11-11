@@ -251,18 +251,24 @@ export function safePushModeOnRestore(mode: unknown): "off" | "manual" {
 export async function restoreBackupPayload(
   dump: Record<string, unknown>
 ): Promise<void> {
-  if (dump.transactions) await db.saveTransactions(dump.transactions as never);
-  if (dump.rates) await db.saveRates(dump.rates as never);
-  if (dump.importMeta) await db.saveImportMeta(dump.importMeta as never);
+  // Всё одной транзакцией (см. `db.writeAll`): оборвись запись посреди —
+  // остаётся прежнее состояние целиком, а не смесь бэкапа с тем, что было.
+  const meta: Record<string, unknown> = {};
+  if (dump.rates) meta.rates = dump.rates;
+  if (dump.importMeta) meta.import = dump.importMeta;
   for (const k of BACKUP_META_KEYS) {
-    if (dump[k] !== undefined) await db.saveJSON(k, dump[k]);
+    if (dump[k] !== undefined) meta[k] = dump[k];
   }
   // Отправку в Дзен-мани восстанавливаем ПОНИЖЕННОЙ — см. `safePushModeOnRestore`.
   if (dump.zenmoneyPushMode !== undefined) {
     const mode = safePushModeOnRestore(dump.zenmoneyPushMode);
-    await db.saveJSON("zenmoneyPushMode", mode);
-    await db.saveJSON("zenmoneyPushEnabled", mode !== "off");
+    meta.zenmoneyPushMode = mode;
+    meta.zenmoneyPushEnabled = mode !== "off";
   }
+  await db.writeAll({
+    transactions: dump.transactions ? (dump.transactions as never) : undefined,
+    meta,
+  });
   // Раздела `local` нет у бэкапов версии 2 и старше — тогда просто нечего
   // восстанавливать, тема останется текущей.
   const local = dump.local;
