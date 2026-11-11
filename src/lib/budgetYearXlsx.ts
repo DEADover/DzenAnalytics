@@ -13,6 +13,7 @@
  * (см. `xlsxCharts`), потому что писатель диаграмм не умеет.
  */
 
+import { MONTHS, MONTHS_SHORT } from "./months";
 import { addRowOutline, type XlsxNumberStyle } from "./categoryReportXlsx";
 import { pluralRu } from "./plural";
 import {
@@ -151,22 +152,9 @@ const D = {
   prevMonthYear: 47,
 } as const;
 
-const MONTH_NAMES = [
-  "Январь",
-  "Февраль",
-  "Март",
-  "Апрель",
-  "Май",
-  "Июнь",
-  "Июль",
-  "Август",
-  "Сентябрь",
-  "Октябрь",
-  "Ноябрь",
-  "Декабрь",
-];
+const MONTH_NAMES = MONTHS;
 
-const MONTH_SHORT = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const MONTH_SHORT = MONTHS_SHORT.map((s) => s.toLowerCase());
 
 /** Ячейка «Дашборда» с номером выбранного месяца — от неё зависит весь отчёт. */
 const MONTH_CELL = "Дашборд!$P$2";

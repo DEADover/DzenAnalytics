@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { WEEKDAYS_BY_JS_DAY } from "./weekdays";
 import type { LucideIcon } from "lucide-react";
 import { CalendarRange, Receipt, ShoppingBag, SplitSquareHorizontal, Sun } from "lucide-react";
 import type { DigestObservation } from "./digestObservations";
@@ -17,8 +18,6 @@ export interface ObservationTile {
   text: string;
   viz?: ReactNode;
 }
-
-const WEEK_FULL = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
 /** Во сколько раз — «в 1,8 раза», без лишних нулей. */
 function times(x: number): string {
@@ -77,7 +76,7 @@ export function describeObservation(
       return {
         icon: CalendarRange,
         label: "Самый дорогой день недели",
-        value: WEEK_FULL[o.weekday],
+        value: WEEKDAYS_BY_JS_DAY[o.weekday],
         tone: "neutral",
         text:
           o.ratio >= 1.1

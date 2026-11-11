@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { WEEKDAYS_SHORT } from "../lib/weekdays";
 import { createPortal } from "react-dom";
 import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
@@ -18,7 +19,7 @@ import { applyDateMaskKey, parseTypedDate } from "../lib/dateInput";
  * (`onChange={(e) => …e.target.value}`) work unchanged.
  */
 
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const WEEKDAYS = WEEKDAYS_SHORT;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 

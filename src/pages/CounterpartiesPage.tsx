@@ -1,3 +1,4 @@
+import { WEEKDAYS_SHORT, WEEKDAYS as WEEKDAYS_FULL_LIST, WEEKDAYS_DATIVE } from "../lib/weekdays";
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import {
@@ -69,10 +70,10 @@ const COL = { total: "10rem", visits: "7.5rem", avg: "9rem", change: "10.75rem" 
 
 type Metric = "expense" | "visits" | "avgCheck";
 const METRIC_LABEL: Record<Metric, string> = { expense: "Потрачено", visits: "Операций", avgCheck: "Средний чек" };
-const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const WEEKDAY_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+const WEEKDAY_SHORT = WEEKDAYS_SHORT;
+const WEEKDAY_FULL = WEEKDAYS_FULL_LIST;
 
-const WEEKDAYS = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"];
+const WEEKDAYS = WEEKDAYS_DATIVE;
 
 /** Значение столбика для подсказки: сумма, операции или чек — и число операций рядом. */
 function metricText(v: { expense: number; visits: number; avgCheck: number }, metric: Metric, base: string): string {

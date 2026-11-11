@@ -9,6 +9,7 @@
  * на все дни периода, а не на дни, когда что-то покупалось.
  */
 
+import { MONTHS_SHORT_GEN, MONTHS_GEN } from "./months";
 import { txAccountKey, txInKey, txOutKey } from "./accountKey";
 import { periodKey, periodRange } from "./period";
 import { monthLabel } from "./format";
@@ -200,16 +201,10 @@ function nextBucket(key: string, granularity: Granularity, monthStartDay: number
   return iso(d);
 }
 
-const MONTHS_SHORT = [
-  "янв", "фев", "мар", "апр", "мая", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек",
-];
+const MONTHS_SHORT = MONTHS_SHORT_GEN;
 
 /** Родительный падеж — для полной даты «1 февраля 2026». */
-const MONTHS_GENITIVE = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
+const MONTHS_GENITIVE = MONTHS_GEN;
 
 
 function bucketLabels(

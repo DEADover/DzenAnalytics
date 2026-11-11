@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { MONTHS_SHORT } from "../../lib/months";
 import clsx from "clsx";
 import logoDa from "../../assets/logo-da.png";
 import type { PeriodReport } from "../../hooks/usePeriodReport";
@@ -25,7 +26,7 @@ import { reportCompareNote, reportDatesNote, reportHeadline } from "../../lib/pe
  * пустоту: у месяца по дням таблицы по месяцам нет, и лист с ней пустовал.
  */
 
-const SHORT_MONTHS = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+const SHORT_MONTHS = MONTHS_SHORT;
 /** Промежуток между блоками на листе — как `gap` у `.pr-page`. */
 const SECTION_GAP = 22;
 /** Ширина содержимого листа: 794 минус поля по 48. */

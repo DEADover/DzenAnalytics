@@ -1,3 +1,4 @@
+import { WEEKDAYS_SHORT } from "../lib/weekdays";
 import { useMemo, useState } from "react";
 import { periodKey } from "../lib/period";
 import {
@@ -454,7 +455,7 @@ function HourOfWeekHeatmap({
   }
 
   const dowOrder = [1, 2, 3, 4, 5, 6, 0];
-  const dowNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const dowNames = WEEKDAYS_SHORT;
 
   return (
     <div className="card-tray card-pad flex flex-col">

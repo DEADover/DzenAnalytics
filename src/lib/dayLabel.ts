@@ -3,19 +3,10 @@
  * сентября», «12 сентября», «3 марта 2025» — и день недели отдельно.
  */
 
-const WEEKDAYS = [
-  "воскресенье",
-  "понедельник",
-  "вторник",
-  "среда",
-  "четверг",
-  "пятница",
-  "суббота",
-];
-const MONTHS_GEN = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
+import { MONTHS_GEN } from "./months";
+import { WEEKDAYS_BY_JS_DAY } from "./weekdays";
+
+const WEEKDAYS = WEEKDAYS_BY_JS_DAY.map((s) => s.toLowerCase());
 
 export function formatDayHeader(ymd: string): { label: string; weekday: string } {
   const d = new Date(ymd);

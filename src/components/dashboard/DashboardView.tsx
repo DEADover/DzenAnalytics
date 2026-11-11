@@ -16,6 +16,7 @@
  * знать ни про хранилища, ни про то, как открывается drawer.
  */
 
+import { MONTHS_IN } from "../../lib/months";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { CtaLink } from "../CtaLink";
@@ -619,10 +620,6 @@ function HeroSplit({ m, pill }: { m: DashboardModel; pill: ReactNode }) {
 }
 
 /** Месяцы в предложном падеже: «в январе», «в марте», «в августе». */
-const MONTHS_IN = [
-  "январе", "феврале", "марте", "апреле", "мае", "июне",
-  "июле", "августе", "сентябре", "октябре", "ноябре", "декабре",
-] as const;
 
 export function DashboardView() {
   const m = useDashboardModel();

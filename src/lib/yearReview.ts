@@ -1,3 +1,4 @@
+import { WEEKDAYS, WEEKDAYS_DATIVE } from "./weekdays";
 import type { Transaction } from "../types";
 import { groupByMonth, groupByCategory } from "./aggregations";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
@@ -126,18 +127,10 @@ const TOP_SIZE = 10;
 
 // Полностью: в «Годе в цифрах» день стоит строкой списка, места под имя хватает,
 // а «Чт» и «Пт» читались хуже, чем «Четверг» и «Пятница».
-const WEEKDAY_RU = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+const WEEKDAY_RU = WEEKDAYS;
 
 /** Дательный падеж множественного числа: «тратили по субботам». */
-const WEEKDAY_RU_DATIVE = [
-  "понедельникам",
-  "вторникам",
-  "средам",
-  "четвергам",
-  "пятницам",
-  "субботам",
-  "воскресеньям",
-];
+const WEEKDAY_RU_DATIVE = WEEKDAYS_DATIVE;
 
 /** Попала ли дата в отрезок, обе границы включительно. */
 function inRange(dateStr: string, range: DayRange): boolean {

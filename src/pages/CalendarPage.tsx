@@ -1,3 +1,5 @@
+import { MONTHS } from "../lib/months";
+import { WEEKDAYS_SHORT } from "../lib/weekdays";
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -37,11 +39,7 @@ import { SectionControls } from "../components/SectionControls";
 import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
 import { accountKeyOf } from "../lib/accountKey";
 
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const MONTHS = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-];
+const WEEKDAYS = WEEKDAYS_SHORT;
 
 const EXPENSE_PALETTE = [
   "rgb(var(--c-panel2))",

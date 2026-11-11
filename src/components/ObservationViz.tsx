@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { WEEKDAYS_SHORT_BY_JS_DAY } from "../lib/weekdays";
 import { formatMoney } from "../lib/format";
 
 /** Две полосы друг под другом: длина — доля от большей, большая — акцентом. */
@@ -23,7 +24,7 @@ export function Pair({ a, b, base }: { a: { label: string; value: number }; b: {
 }
 
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const WEEK_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const WEEK_SHORT = WEEKDAYS_SHORT_BY_JS_DAY;
 
 export function WeekBars({ byWeekday, best }: { byWeekday: number[]; best: number }) {
   const max = Math.max(...byWeekday, 1);

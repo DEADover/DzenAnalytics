@@ -1,3 +1,4 @@
+import { WEEKDAYS_SHORT_BY_JS_DAY } from "../lib/weekdays";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CounterpartyName, CounterpartyNoteMark } from "../components/CounterpartyNote";
@@ -660,7 +661,7 @@ function DaysChart({
   );
 }
 
-const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const WEEKDAYS = WEEKDAYS_SHORT_BY_JS_DAY;
 
 function dayLabel(iso: string, week: boolean): string {
   const [y, m, d] = iso.split("-").map(Number);

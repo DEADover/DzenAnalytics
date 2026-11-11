@@ -1,3 +1,4 @@
+import { MONTHS, MONTHS_GEN } from "./months";
 import type { Transaction } from "../types";
 import { groupByCategory } from "./aggregations";
 import { counterpartyOf } from "./yearReview";
@@ -82,20 +83,7 @@ const TYPICAL_PERIODS = 6;
 /** Сколько строк в «Где тратили» и «Новое». */
 const PAYEES_TOP = 5;
 
-const RU_MONTHS = [
-  "Январь",
-  "Февраль",
-  "Март",
-  "Апрель",
-  "Май",
-  "Июнь",
-  "Июль",
-  "Август",
-  "Сентябрь",
-  "Октябрь",
-  "Ноябрь",
-  "Декабрь",
-];
+const RU_MONTHS = MONTHS;
 
 const RU_MONTHS_SHORT = [
   // Родительный падеж: «3 мая», а не «3 май». Остальные — сокращения.
@@ -580,10 +568,6 @@ function attachTypical(entries: DigestEntry[], sorted: Transaction[]): void {
   });
 }
 
-const MONTHS_GEN = [
-  "января", "февраля", "марта", "апреля", "мая", "июня",
-  "июля", "августа", "сентября", "октября", "ноября", "декабря",
-];
 
 /**
  * «Август 2026» или «неделю 14–20 сентября 2026» — для заголовка «Главное за …».

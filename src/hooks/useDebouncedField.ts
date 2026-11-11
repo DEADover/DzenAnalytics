@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * Поле ввода, которое пишет в общее состояние не на каждую букву, а через
@@ -19,14 +19,14 @@ export function useDebouncedField(
   const pending = useRef<{ timer: ReturnType<typeof setTimeout>; v: string } | null>(null);
   /** Что поле записало само — его эхо снаружи не считается чужой правкой. */
   const sent = useRef(value);
+  const commitTo = useRef(commit);
+  useLayoutEffect(() => {
+    commitTo.current = commit;
+  });
   const commitRef = useRef((v: string) => {
     sent.current = v;
-    commit(v);
+    commitTo.current(v);
   });
-  commitRef.current = (v: string) => {
-    sent.current = v;
-    commit(v);
-  };
 
   // Значение поменяли снаружи — показываем его, отложенная запись отменяется.
   useEffect(() => {

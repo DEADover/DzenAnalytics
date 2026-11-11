@@ -15,6 +15,8 @@
  *     запрещены и недоступны с тача.
  */
 
+import { MONTHS_SHORT_GEN } from "../../lib/months";
+import { WEEKDAYS_SHORT } from "../../lib/weekdays";
 import { median } from "../../lib/stats";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { clickedRow } from "../../lib/chartClick";
@@ -77,11 +79,10 @@ import {
   type CapitalPoint,
 } from "../../lib/capital";
 
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const WEEKDAYS = WEEKDAYS_SHORT;
 
 /** «19 авг» — в узкой колонке полное название месяца переносит строку. */
-const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек"];
+const MONTHS_SHORT = MONTHS_SHORT_GEN;
 import type { DashboardAccount, DashboardModel } from "../../hooks/useDashboardModel";
 import type { FreeMoneyModel } from "../../hooks/useFreeMoney";
 import type { BalanceMode, PlanLeft } from "../../lib/freeMoney";

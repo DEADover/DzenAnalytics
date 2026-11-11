@@ -1,4 +1,6 @@
 import { incomeLegBase } from "./legAmount";
+import { WEEKDAYS_BY_JS_DAY, WEEKDAYS_SHORT_BY_JS_DAY } from "./weekdays";
+import { MONTHS_SHORT } from "./months";
 import { median } from "./stats";
 import type { Transaction } from "../types";
 import { ymKey, ymdKey } from "./format";
@@ -1445,7 +1447,7 @@ export function yearOverYearMonthly(
   year: number,
   kind: "expense" | "income" = "expense"
 ): YoYPoint[] {
-  const months = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"];
+  const months = MONTHS_SHORT;
   const totals = new Map<string, number>();
   for (const t of txs) {
     // Expense YoY nets refunds out of the same month they belong to;
@@ -2620,8 +2622,8 @@ export interface DayOfWeekStat {
   avg: number;
 }
 
-const DOW_NAMES = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
-const DOW_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const DOW_NAMES = WEEKDAYS_BY_JS_DAY;
+const DOW_SHORT = WEEKDAYS_SHORT_BY_JS_DAY;
 
 export function statsByDayOfWeek(
   txs: Transaction[],

@@ -16,6 +16,7 @@
  * задаются руками, а считаются из операций: иначе история остатков на
  * «Счетах» не сошлась бы с текущими.
  */
+import { MONTHS } from "../months";
 import type {
   ZenAccount,
   ZenBudget,
@@ -220,7 +221,7 @@ const REFUND_COMMENTS: Record<string, readonly string[]> = {
   "t-delivery": ["Опоздали с доставкой — вернули деньги", "Привезли не то — возврат"],
 };
 
-const MONTH_NAMES = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+const MONTH_NAMES = MONTHS.map((s) => s.toLowerCase());
 
 /** Подставить в шаблон комментария месяц ({month} — прошлый, {cur} — этот) и литры ({l}). */
 function fillComment(text: string, date: string): string {

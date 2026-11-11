@@ -17,6 +17,8 @@
  * при смене расписания стирает все незакрытые (проверено 08.10.2026).
  */
 
+import { WEEKDAYS_SHORT } from "./weekdays";
+
 export type ScheduleUnit = "day" | "week" | "month" | "year";
 
 export interface PlanSchedule {
@@ -165,7 +167,7 @@ function plural(n: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
-export const WEEKDAY_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+export const WEEKDAY_SHORT = WEEKDAYS_SHORT.map((s) => s.toLowerCase());
 
 /** «Каждый месяц», «Каждые 2 недели, по пн и чт», «Каждые 3 дня». */
 export function scheduleLabel(s: PlanSchedule): string {
