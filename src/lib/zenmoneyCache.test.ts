@@ -5,6 +5,7 @@ import {
   backfillEntities,
   CACHE_SCHEMA_VERSION,
   diffChangesPlanSet,
+  isEmptyDiff,
   type ZenCache,
 } from "./zenmoneyCache";
 import type {
@@ -344,5 +345,23 @@ describe("смена расписания плана в ответе на отп
   it("версия 8 занята без доливки — кэшу на 7 доливать нечего", () => {
     expect(backfillEntities(cache({ cacheSchemaVersion: 7 }))).toEqual([]);
     expect(CACHE_SCHEMA_VERSION).toBe(8);
+  });
+});
+
+describe("isEmptyDiff", () => {
+  it("пустой ответ — только метка и пустые списки", () => {
+    expect(isEmptyDiff({ serverTimestamp: 5 } as ZenDiffResponse)).toBe(true);
+    expect(
+      isEmptyDiff({ serverTimestamp: 5, transaction: [], account: [], instrument: [], deletion: [] } as unknown as ZenDiffResponse)
+    ).toBe(true);
+  });
+  it("любая сущность или удаление — не пустой", () => {
+    expect(isEmptyDiff({ serverTimestamp: 5, instrument: [{ id: 1 }] } as unknown as ZenDiffResponse)).toBe(false);
+    expect(
+      isEmptyDiff({ serverTimestamp: 5, deletion: [{ id: "a", object: "transaction", stamp: 1, user: 1 }] } as unknown as ZenDiffResponse)
+    ).toBe(false);
+  });
+  it("незнакомое поле — тоже изменение: лучше пройти полный путь", () => {
+    expect(isEmptyDiff({ serverTimestamp: 5, somethingNew: { x: 1 } } as unknown as ZenDiffResponse)).toBe(false);
   });
 });

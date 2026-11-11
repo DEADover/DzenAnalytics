@@ -21,7 +21,7 @@ import {
   type SyncFailure,
   type SyncStage,
 } from "../lib/syncDiagnostics";
-import type { ZenTermUnit, ZenTransaction } from "../lib/zenmoney";
+import type { ZenDiffResponse, ZenTermUnit, ZenTransaction } from "../lib/zenmoney";
 import { mapZenmoneyDiff } from "../lib/zenmoneyMap";
 import {
   loadZenCache,
@@ -30,6 +30,7 @@ import {
   cacheToDiffResponse,
   forceFetchFor,
   applyDiffWithPlans,
+  isEmptyDiff,
   type ZenCache,
 } from "../lib/zenmoneyCache";
 import { zenUsers, type ZenUserOption } from "../lib/zenUsers";
@@ -724,7 +725,6 @@ export async function recalcBalanceCalibration(): Promise<void> {
 
 export interface SyncResult {
   count: number;
-  currentBalance: number;
   /** True if this was a full sync (cache was empty or {force:true} was passed). */
   full: boolean;
   /** Delta sizes — how many entities arrived this round (helpful for "Свежее: +N"). */
@@ -839,6 +839,99 @@ interface ZenmoneyState {
    *  fired (so logs can attribute it as auto), false otherwise.
    *  Bails out fast when disabled / no token / sync already in flight. */
   runAutoSyncIfDue: () => Promise<boolean>;
+}
+
+/**
+ * Конец удачной синхронизации — общий для полного пути и раннего выхода
+ * (ответ пустой): отметить время, сбросить серию ошибок, записать журнал и,
+ * в режиме «При синхронизации», отправить накопившиеся правки.
+ */
+async function finishSync(a: {
+  diff: ZenDiffResponse;
+  isFull: boolean;
+  /** Сколько операций всего — для журнала и итога. */
+  total: number;
+  skipPush: boolean;
+  startedAt: number;
+  /** Сдвигать ли метку сервера. При пустом ответе — нет: кэш с ней не менялся. */
+  advanceStamp: boolean;
+}): Promise<SyncResult> {
+  const { diff, isFull } = a;
+  const get = useZenmoneyStore.getState;
+  const now = new Date().toISOString();
+  if (a.advanceStamp) await db.saveJSON(TIMESTAMP_KEY, diff.serverTimestamp);
+  await db.saveJSON(LAST_SYNC_KEY, now);
+  // Прошла — серия ошибок закончилась: автоповтор снова по расписанию.
+  // Саму запись оставляем — по времени видно, что она уже в прошлом.
+  const prevFailure = get().pullFailure;
+  const pullFailure = prevFailure && prevFailure.streak > 0 ? { ...prevFailure, streak: 0 } : prevFailure;
+  if (pullFailure !== prevFailure) await db.saveJSON(PULL_FAILURE_KEY, pullFailure);
+  useZenmoneyStore.setState({
+    ...(a.advanceStamp ? { serverTimestamp: diff.serverTimestamp } : {}),
+    lastSyncAt: now,
+    status: "ok",
+    error: null,
+    pullFailure,
+  });
+  // Log the result. Full vs incremental + non-zero deltas drive
+  // the human-readable summary in the log row.
+  const deltaTx = diff.transaction?.length || 0;
+  const deltaDel = diff.deletion?.length || 0;
+  // Сколько операций всего — в своём столбце журнала («Всего операций»),
+  // в описании его не повторяем.
+  const summary = isFull
+    ? "Загружено заново"
+    : deltaTx === 0 && deltaDel === 0
+      ? "Без изменений"
+      : `+${formatNum(deltaTx)} новых/изменённых${deltaDel > 0 ? `, ${formatNum(deltaDel)} удалено` : ""}`;
+  void useSyncLogStore.getState().append({
+    kind: "pull",
+    status: "ok",
+    title: isFull ? "Полная синхронизация" : "Синхронизация",
+    summary,
+    details: {
+      counts: {
+        transactions: deltaTx,
+        deletions: deltaDel,
+        total: a.total,
+      },
+    },
+    durationMs: Date.now() - a.startedAt,
+  });
+  // "on-sync" push mode: piggy-back outgoing edits on every sync.
+  // Fire-and-forget — the push has its own status / log entry, and
+  // we don't want a failed push to taint the sync's return value.
+  // Guarded by there being anything to send (edits, deletions OR
+  // locally-created drafts) so the common "nothing changed locally"
+  // case stays a no-op.
+  if (get().pushMode === "on-sync" && !a.skipPush && hasPendingPush()) {
+    // После синхронизации, а не внутри неё: отправка встаёт в ту же
+    // очередь (lib/zenLock) и ждёт, пока этот шаг закончится.
+    // Висит плашка с «Отменить» — ждём её, как в «Авто»: отменённое не
+    // должно успеть уйти в облако (см. lib/pushHold).
+    const firePush = () => {
+      const held = pushHoldLeft();
+      if (held > 0) {
+        setTimeout(firePush, Math.min(held, 500));
+        return;
+      }
+      if (get().pushMode !== "on-sync" || !hasPendingPush()) return;
+      void get().pushPendingEdits().catch(() => {
+        /* logged + surfaced inside pushPendingEdits */
+      });
+    };
+    queueMicrotask(firePush);
+  }
+  return {
+    count: a.total,
+    full: isFull,
+    delta: {
+      transactions: deltaTx,
+      accounts: diff.account?.length || 0,
+      tags: diff.tag?.length || 0,
+      deletions: deltaDel,
+    },
+  };
 }
 
 export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
@@ -1069,6 +1162,26 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // сервер в diff не сообщает (issue #99). Второй запрос идёт от новой
       // метки времени, поэтому остального почти не несёт. Упадёт — упадёт вся
       // синхронизация, и следующая повторит оба шага с прежней метки.
+      // Ничего не пришло — кэш, лента, калибровка и бюджеты остаются как
+      // есть: на большом аккаунте полный путь занимает секунды. Метку сервера
+      // тоже не двигаем — следующий запрос с прежней вернёт то же самое, а
+      // справочники не перечитают кэш впустую.
+      if (prevCache && backfill.length === 0 && isEmptyDiff(diff) && useDataStore.getState().transactionsRaw.length > 0) {
+        stage = "cloud";
+        const afterCloud = await useCloudSettingsStore.getState().step({ token, cache: prevCache, deletions: [] });
+        if (afterCloud === prevCache) {
+          stage = "finish";
+          return await finishSync({
+            diff,
+            isFull: false,
+            total: useDataStore.getState().transactionsRaw.length,
+            skipPush: !!opts.skipPush,
+            startedAt,
+            advanceStamp: false,
+          });
+        }
+        // Перенос настроек что-то записал в облако — дальше обычным путём.
+      }
       stage = "plans";
       let nextCache = await applyDiffWithPlans(prevCache, diff, fetchPlansFrom(token), {
         replaceMarkers: backfill.includes("reminderMarker"),
@@ -1147,81 +1260,14 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       await mirrorZenPlans(nextCache);
 
       stage = "finish";
-      const now = new Date().toISOString();
-      await db.saveJSON(TIMESTAMP_KEY, diff.serverTimestamp);
-      await db.saveJSON(LAST_SYNC_KEY, now);
-      // Прошла — серия ошибок закончилась: автоповтор снова по расписанию.
-      // Саму запись оставляем — по времени видно, что она уже в прошлом.
-      const prevFailure = get().pullFailure;
-      const pullFailure = prevFailure && prevFailure.streak > 0 ? { ...prevFailure, streak: 0 } : prevFailure;
-      if (pullFailure !== prevFailure) await db.saveJSON(PULL_FAILURE_KEY, pullFailure);
-      set({
-        serverTimestamp: diff.serverTimestamp,
-        lastSyncAt: now,
-        status: "ok",
-        error: null,
-        pullFailure,
+      return await finishSync({
+        diff,
+        isFull,
+        total: mapped.transactions.length,
+        skipPush: !!opts.skipPush,
+        startedAt,
+        advanceStamp: true,
       });
-      // Log the result. Full vs incremental + non-zero deltas drive
-      // the human-readable summary in the log row.
-      const deltaTx = diff.transaction?.length || 0;
-      const deltaDel = diff.deletion?.length || 0;
-      // Сколько операций всего — в своём столбце журнала («Всего операций»),
-      // в описании его не повторяем.
-      const summary = isFull
-        ? "Загружено заново"
-        : deltaTx === 0 && deltaDel === 0
-          ? "Без изменений"
-          : `+${formatNum(deltaTx)} новых/изменённых${deltaDel > 0 ? `, ${formatNum(deltaDel)} удалено` : ""}`;
-      void useSyncLogStore.getState().append({
-        kind: "pull",
-        status: "ok",
-        title: isFull ? "Полная синхронизация" : "Синхронизация",
-        summary,
-        details: {
-          counts: {
-            transactions: deltaTx,
-            deletions: deltaDel,
-            total: mapped.transactions.length,
-          },
-        },
-        durationMs: Date.now() - startedAt,
-      });
-      // "on-sync" push mode: piggy-back outgoing edits on every sync.
-      // Fire-and-forget — the push has its own status / log entry, and
-      // we don't want a failed push to taint the sync's return value.
-      // Guarded by there being anything to send (edits, deletions OR
-      // locally-created drafts) so the common "nothing changed locally"
-      // case stays a no-op.
-      if (get().pushMode === "on-sync" && !opts.skipPush && hasPendingPush()) {
-        // После синхронизации, а не внутри неё: отправка встаёт в ту же
-        // очередь (lib/zenLock) и ждёт, пока этот шаг закончится.
-        // Висит плашка с «Отменить» — ждём её, как в «Авто»: отменённое не
-        // должно успеть уйти в облако (см. lib/pushHold).
-        const firePush = () => {
-          const held = pushHoldLeft();
-          if (held > 0) {
-            setTimeout(firePush, Math.min(held, 500));
-            return;
-          }
-          if (get().pushMode !== "on-sync" || !hasPendingPush()) return;
-          void get().pushPendingEdits().catch(() => {
-            /* logged + surfaced inside pushPendingEdits */
-          });
-        };
-        queueMicrotask(firePush);
-      }
-      return {
-        count: mapped.transactions.length,
-        currentBalance: mapped.currentBalanceTotal,
-        full: isFull,
-        delta: {
-          transactions: diff.transaction?.length || 0,
-          accounts: diff.account?.length || 0,
-          tags: diff.tag?.length || 0,
-          deletions: diff.deletion?.length || 0,
-        },
-      };
     } catch (e) {
       const prev = get().pullFailure;
       const failure = describeFailure(e, {

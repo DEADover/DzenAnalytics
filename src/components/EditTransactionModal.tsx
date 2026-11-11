@@ -218,7 +218,6 @@ export function EditTransactionModal({
     [txProp, template, rates.base, initialKind]
   );
   const allTransactions = useDataStore((s) => s.transactions);
-  const reapply = useDataStore((s) => s.reapplyRules);
   const refresh = useDataStore((s) => s.refresh);
   const setEdit = useEditsStore((s) => s.setEdit);
   const addDraft = useDraftsStore((s) => s.add);
@@ -1170,7 +1169,7 @@ export function EditTransactionModal({
       // Снимок — до записи: «Отменить» вернёт правку такой, какой она была.
       const undo = editUndo([tx.id]);
       await setEdit(tx.id, patch);
-      await reapply();
+      await refresh();
       leave();
       toast("Операция сохранена", { undo });
     } catch (e) {

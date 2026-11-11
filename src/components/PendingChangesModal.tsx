@@ -175,7 +175,7 @@ function changedFields(diff: FieldDiff[]): string[] {
 export function PendingChangesModal({ onClose }: { onClose: () => void }) {
   const transactions = useDataStore((s) => s.transactions);
   const transactionsRaw = useDataStore((s) => s.transactionsRaw);
-  const reapply = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const deleteTransaction = useDataStore((s) => s.deleteTransaction);
 
   const edits = useEditsStore((s) => s.edits);
@@ -589,11 +589,11 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
       await it.revert();
     // Бюджет — одной записью: поштучная отмена затирала бы соседние правки.
     if (budgetItems.length > 0) await revertBudgetEdits(Object.keys(budgetEdits));
-    await reapply();
+    await refresh();
     toast(`${pluralRu(n, ["Откачено", "Откачены", "Откачено"])} ${n} ${pluralRu(n, ["изменение", "изменения", "изменений"])}`, {
       undo: async () => {
         await undo();
-        await reapply();
+        await refresh();
       },
     });
     // Откатывать больше нечего — окно закрываем: плашка с «Отменить» живёт
@@ -674,7 +674,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
                       action="Откатить"
                       onAction={async () => {
                         await clearEdit(id);
-                        await reapply();
+                        await refresh();
                       }}
                     />
                   ))}
@@ -688,7 +688,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
                       action="Вернуть"
                       onAction={async () => {
                         await restoreDeleted(t.id);
-                        await reapply();
+                        await refresh();
                       }}
                     />
                   ))}

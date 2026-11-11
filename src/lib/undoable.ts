@@ -75,7 +75,7 @@ export function editUndo(ids: readonly string[]): () => Promise<void> {
   const snap = useEditsStore.getState().snapshot(ids);
   return async () => {
     await useEditsStore.getState().restore(snap);
-    await useDataStore.getState().reapplyRules();
+    await useDataStore.getState().refresh();
   };
 }
 

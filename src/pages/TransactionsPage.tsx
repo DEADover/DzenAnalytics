@@ -208,7 +208,7 @@ export function TransactionsPage() {
   const setEdit = useEditsStore((s) => s.setEdit);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const setEditEach = useEditsStore((s) => s.setEditEach);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   useEffect(() => {
     if (!editsLoaded) hydrateEdits();
   }, [editsLoaded, hydrateEdits]);
@@ -234,7 +234,7 @@ export function TransactionsPage() {
   const openEditor = (t: Transaction) => {
     setEditing(t);
     if (t.unseen) {
-      void setEdit(t.id, { unseen: false }).then(() => reapplyRules());
+      void setEdit(t.id, { unseen: false }).then(() => refresh());
     }
   };
   const [creating, setCreating] = useState<TxKind | null>(null);
@@ -316,7 +316,7 @@ export function TransactionsPage() {
     } else {
       await setEditMany(ids, patch);
     }
-    await reapplyRules();
+    await refresh();
     setSelected(new Set());
     setBulkOpen(false);
   }
@@ -479,7 +479,7 @@ export function TransactionsPage() {
     const ids = searched.filter((t) => selected.has(t.id) && t.unseen).map((t) => t.id);
     if (ids.length === 0) return;
     await setEditMany(ids, { unseen: false });
-    await reapplyRules();
+    await refresh();
   }
 
   // Sums (in base currency) of the currently-selected rows, split by kind — so

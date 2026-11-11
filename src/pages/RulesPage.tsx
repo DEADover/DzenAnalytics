@@ -122,7 +122,7 @@ const RULE_COLUMNS: ResizeColumn[] = [
 export function RulesPage() {
   const transactions = useDataStore((s) => s.transactions);
   const transactionsRaw = useDataStore((s) => s.transactionsRaw);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const ruleRuns = useDataStore((s) => s.ruleRuns);
   const loadRuleRuns = useDataStore((s) => s.loadRuleRuns);
   const runRuleNow = useDataStore((s) => s.runRuleNow);
@@ -306,7 +306,7 @@ export function RulesPage() {
    * человек не станет настраивать его заново.
    */
   const setModeValue = (id: string, next: { mode: RuleMode; schedule?: RuleSchedule }) =>
-    update(id, { ...ruleModeFields(next.mode), schedule: next.schedule }).then(reapplyRules);
+    update(id, { ...ruleModeFields(next.mode), schedule: next.schedule }).then(refresh);
 
   const matchCounts = useMemo(() => {
     const out = new Map<string, number>();
@@ -432,7 +432,7 @@ export function RulesPage() {
       await add(patch, { after: editing.copyOf.id });
     else if (editing && editing !== "create") await update(editing.id, patch);
     else await add(patch);
-    await reapplyRules();
+    await refresh();
   }
 
   // Без вопроса: правило вернёт «Отменить» на плашке — на прежнее место в
@@ -441,12 +441,12 @@ export function RulesPage() {
   async function removeRule(rule: StoredCategoryRule) {
     const index = useCategoryRulesStore.getState().rules.findIndex((r) => r.id === rule.id);
     await remove(rule.id);
-    await reapplyRules();
+    await refresh();
     toast("Правило удалено", {
       undo: async () => {
         const cur = useCategoryRulesStore.getState();
         await cur.replaceAll(reinsert(cur.rules, rule, index));
-        await reapplyRules();
+        await refresh();
       },
     });
   }
@@ -457,7 +457,7 @@ export function RulesPage() {
     // «rule» — чтобы автоприменение потом не спорило с человеком: поля,
     // записанные правилом, остаются его, а правленные руками — неприкосновенны.
     await setEditEach(patches, "rule");
-    await reapplyRules();
+    await refresh();
   }
 
   const resize = useColumnResize("rules", RULE_COLUMNS, { lead: RULE_LEAD });
@@ -805,7 +805,7 @@ export function RulesPage() {
                         const from = e.dataTransfer.getData("text/plain") || dragId;
                         setDragId(null);
                         setDragOver(null);
-                        if (from && from !== rule.id) void reorder(from, idx).then(reapplyRules);
+                        if (from && from !== rule.id) void reorder(from, idx).then(refresh);
                       }}
                       onDragEnd={() => {
                         setDragId(null);
@@ -851,7 +851,7 @@ export function RulesPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              void move(rule.id, -1).then(reapplyRules);
+                              void move(rule.id, -1).then(refresh);
                             }}
                             disabled={idx === 0}
                             className="btn-icon btn-icon-sm"
@@ -863,7 +863,7 @@ export function RulesPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              void move(rule.id, 1).then(reapplyRules);
+                              void move(rule.id, 1).then(refresh);
                             }}
                             disabled={idx === rules.length - 1}
                             className="btn-icon btn-icon-sm"

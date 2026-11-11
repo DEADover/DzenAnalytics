@@ -431,7 +431,7 @@ export function CounterpartyManager() {
     await useEditsStore.getState().setEditEach(patches);
     // Правки надо наложить на набор, иначе разобранные получатели останутся в
     // списке до перезагрузки — как это делает и редактор операции.
-    await useDataStore.getState().reapplyRules();
+    await useDataStore.getState().refresh();
     setOrphanSel(new Set());
     toast(
       renameTo?.trim()
@@ -440,7 +440,7 @@ export function CounterpartyManager() {
       {
         undo: async () => {
           await undo();
-          await useDataStore.getState().reapplyRules();
+          await useDataStore.getState().refresh();
         },
       }
     );

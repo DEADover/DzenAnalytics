@@ -614,7 +614,6 @@ export function ImportPage() {
   // Гидратацию оставляем: сохранённые алиасы продолжают применяться к данным.
   const aliasesLoaded = usePayeeAliasStore((s) => s.loaded);
   const aliasesHydrate = usePayeeAliasStore((s) => s.hydrate);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
   useEffect(() => {
     if (!aliasesLoaded) aliasesHydrate();
   }, [aliasesLoaded, aliasesHydrate]);
@@ -3146,7 +3145,7 @@ export function ImportPage() {
                               const n = orphanEditIds.length;
                               const undo = editUndo(orphanEditIds);
                               await clearManyEdits(orphanEditIds);
-                              await reapplyRules();
+                              await useDataStore.getState().refresh();
                               toast(`${pluralRu(n, ["Убрана", "Убраны", "Убрано"])} ${n} ${pluralRu(n, ["зависшая правка", "зависшие правки", "зависших правок"])}`, { undo });
                             }}
                           >

@@ -135,6 +135,9 @@ interface DataState {
   setRate: (currency: string, value: number) => Promise<void>;
   setBase: (newBase: string) => Promise<void>;
   setPayeeGrouping: (enabled: boolean) => Promise<void>;
+  /** Пересобрать `transactionsRaw` (курсы, склейка получателей) и переписать
+   *  всю таблицу. Нужен только при смене псевдонимов получателей; после правок
+   *  операций, черновиков и удалений хватает дешёвого `refresh`. */
   reapplyRules: () => Promise<void>;
   /**
    * Журнал заходов правил по расписанию: id правила → когда и сколько правок.
@@ -577,7 +580,7 @@ async function applyRulesNow(ruleIds: readonly string[]): Promise<number> {
   // «rule» — чтобы автоприменение потом не спорило с человеком: записанное
   // правилом остаётся его, правленное руками неприкосновенно.
   await useEditsStore.getState().setEditEach(patches, "rule");
-  await useDataStore.getState().reapplyRules();
+  await useDataStore.getState().refresh();
   return plan.rows.length;
 }
 

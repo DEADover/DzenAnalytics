@@ -236,6 +236,19 @@ function mergeReminderMarkers(
  * относятся — их слияние по id и так применяет верно, и лишний запрос не
  * нужен.
  */
+/**
+ * Ответ синхронизации ничего не принёс: ни одной сущности и ни одного
+ * удаления — только новая метка сервера. Тогда кэш и всё, что из него
+ * собирается (лента, калибровка, бюджеты), остаются как есть.
+ */
+export function isEmptyDiff(diff: ZenDiffResponse): boolean {
+  for (const [key, value] of Object.entries(diff)) {
+    if (key === "serverTimestamp") continue;
+    if (Array.isArray(value) ? value.length > 0 : value != null) return false;
+  }
+  return true;
+}
+
 export function diffChangesPlanSet(prev: ZenCache | null, diff: ZenDiffResponse): boolean {
   if (!prev) return false; // полная синхронизация и так забирает список целиком
   // Записи с настройками (перенос между устройствами, `lib/cloudSettings`) —

@@ -49,7 +49,7 @@ export function TransactionsDrawer() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const base = useDataStore((s) => s.rates.base);
   const allTransactions = useDataStore((s) => s.transactions);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const setEditMany = useEditsStore((s) => s.setEditMany);
 
   // Без окна «Удалить?» — сразу, с плашкой «Отменить» (lib/undoable).
@@ -79,7 +79,7 @@ export function TransactionsDrawer() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     await setEditMany(ids, patch);
-    await reapplyRules();
+    await refresh();
     setSelected(new Set());
     setBulkOpen(false);
   }

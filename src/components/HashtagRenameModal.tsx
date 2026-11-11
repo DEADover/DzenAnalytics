@@ -45,7 +45,7 @@ export function HashtagRenameModal({
   // периоде — из одного тега получилось бы два, «#налоги» за июль и «#Налоги»
   // за август.
   const transactions = useDataStore((s) => s.transactions);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const setEditEach = useEditsStore((s) => s.setEditEach);
   const rules = useCategoryRulesStore((s) => s.rules);
   const pushMode = useZenmoneyStore((s) => s.pushMode);
@@ -108,7 +108,7 @@ export function HashtagRenameModal({
       const patches: Record<string, { comment: string }> = {};
       for (const row of plan.rows) patches[row.id] = { comment: row.after };
       await setEditEach(patches);
-      await reapplyRules();
+      await refresh();
       onClose();
     } finally {
       setBusy(false);

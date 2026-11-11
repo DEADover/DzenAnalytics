@@ -62,7 +62,7 @@ function searchText(t: Transaction, field: SearchField): string {
 export function SearchPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const showDrill = useDrillStore((s) => s.show);
 
@@ -84,7 +84,7 @@ export function SearchPage() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     await setEditMany(ids, patch);
-    await reapplyRules();
+    await refresh();
     setSelected(new Set());
     setBulkOpen(false);
   }

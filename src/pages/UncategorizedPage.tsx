@@ -113,7 +113,7 @@ export function UncategorizedPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
   const applyRulesNow = useDataStore((s) => s.applyRulesNow);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
@@ -270,7 +270,7 @@ export function UncategorizedPage() {
         {
           undo: async () => {
             await undo();
-            await reapplyRules();
+            await refresh();
             setApplied((prev) => new Set([...prev].filter((id) => !txIds.includes(id))));
           },
         }
@@ -285,7 +285,7 @@ export function UncategorizedPage() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     await setEditMany(ids, patch);
-    await reapplyRules();
+    await refresh();
     setSelected(new Set());
     setBulkOpen(false);
   }

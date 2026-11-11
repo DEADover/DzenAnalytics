@@ -92,7 +92,7 @@ function copiesOf(g: DuplicateGroup): Transaction[] {
 export function DuplicatesPage() {
   const transactions = useDataStore((s) => s.transactions);
   const base = useDataStore((s) => s.rates.base);
-  const reapplyRules = useDataStore((s) => s.reapplyRules);
+  const refresh = useDataStore((s) => s.refresh);
   const setEditMany = useEditsStore((s) => s.setEditMany);
   const edits = useEditsStore((s) => s.edits);
 
@@ -171,7 +171,7 @@ export function DuplicatesPage() {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
     await setEditMany(ids, patch);
-    await reapplyRules();
+    await refresh();
     setSelected(new Set());
     setBulkOpen(false);
   }
