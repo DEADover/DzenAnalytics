@@ -8,7 +8,8 @@ import { formatNum } from "../lib/format";
 export function formatSyncResult(r: SyncResult): string {
   if (r.full) return `Полная синхронизация: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
   if (r.delta.transactions === 0 && r.delta.deletions === 0) {
-    return `Без изменений. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
+    // Число всех операций тут ничего не сообщает — оно то же, что и было.
+    return "Без изменений.";
   }
   const parts: string[] = [];
   if (r.delta.transactions > 0) parts.push(`+${formatNum(r.delta.transactions)} ${pluralRu(r.delta.transactions, ["новая/изменённая", "новые/изменённые", "новых/изменённых"])}`);

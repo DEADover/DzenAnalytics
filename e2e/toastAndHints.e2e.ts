@@ -17,7 +17,9 @@ test("итог синхронизации — плашкой внизу по ц�
   await connectZen(page, "/transactions");
   await syncBtn(page).click();
   const t = toastEl(page);
-  await expect(t).toContainText("Без изменений");
+  await expect(t).toContainText("Без изменений.");
+  // Без правок общее число операций не пишем — оно не изменилось.
+  await expect(t).not.toContainText("Всего");
   await expect(t.locator("svg.text-income")).toHaveCount(1);
   await page.waitForTimeout(400);
   const box = (await t.boundingBox())!;

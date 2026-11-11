@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { formatSyncResult } from "../hooks/useSyncCommands";
 import { Checkbox } from "../components/Checkbox";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -491,23 +492,6 @@ export function ImportPage() {
   // Дзен-мани перестал принимать токен — предлагаем войти заново, не отключая.
   const zenAuthExpired =
     isAuthExpired(zenPullFailure) || isAuthExpired(zenPushFailure);
-
-  function formatSyncResult(r: {
-    count: number;
-    full: boolean;
-    delta: { transactions: number; deletions: number };
-  }): string {
-    if (r.full) return `Полная синхронизация: ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
-    if (r.delta.transactions === 0 && r.delta.deletions === 0) {
-      return `Свежее: ничего нового. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
-    }
-    const parts: string[] = [];
-    if (r.delta.transactions > 0)
-      parts.push(`+${formatNum(r.delta.transactions)} ${pluralRu(r.delta.transactions, ["новая/изменённая", "новые/изменённые", "новых/изменённых"])}`);
-    if (r.delta.deletions > 0)
-      parts.push(`${formatNum(r.delta.deletions)} ${pluralRu(r.delta.deletions, ["удалена", "удалены", "удалено"])}`);
-    return `Синхронизировано: ${parts.join(", ")}. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
-  }
 
   /**
    * Спросить, можно ли заменить CSV-данные на API.
