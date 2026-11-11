@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { BackupSettings } from "./settings/BackupSettings";
+import { ProcessingSettings } from "./settings/ProcessingSettings";
 import { InterfaceSettings } from "./settings/InterfaceSettings";
 import { formatSyncResult } from "../hooks/useSyncCommands";
 import { Checkbox } from "../components/Checkbox";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Upload, CheckCircle2, AlertTriangle, Trash2, Replace, Layers, Download, Database, Cloud, RefreshCw, Loader2, KeyRound, ExternalLink, Eye, EyeOff, Link as LinkIcon, Unlink, Clock, Settings, History, CloudDownload, CloudUpload, ChevronDown, Calculator, Coins, ALargeSmall, ArrowLeftRight, ArrowRight } from "lucide-react";
+import { Upload, CheckCircle2, AlertTriangle, Trash2, Replace, Layers, Database, Cloud, RefreshCw, Loader2, KeyRound, ExternalLink, Eye, EyeOff, Link as LinkIcon, Unlink, Settings, History, CloudDownload, CloudUpload, Calculator, ALargeSmall, ArrowLeftRight, ArrowRight } from "lucide-react";
 import { parseCsv } from "../lib/csv";
 import { isOAuthConfigured, startOAuth } from "../lib/oauth";
 import { SyncLog } from "../components/SyncLog";
@@ -14,40 +16,26 @@ import { OperationsSettings } from "../components/OperationsSettings";
 import { SettingsSectionHeader } from "../components/SettingsSectionHeader";
 import { AccountsSettings } from "../components/AccountsSettings";
 import { PendingChangesModal } from "../components/PendingChangesModal";
-import { SlicesSettings } from "../components/SlicesSettings";
-import { SettingRow } from "../components/SettingRow";
 import { CloudSettingsCard } from "../components/CloudSettingsCard";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
-import { Switch } from "../components/Switch";
 import { Segmented } from "../components/Segmented";
 import { Select } from "../components/Select";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDataStore } from "../store/useDataStore";
-import { useZenmoneyStore, recalcBalanceCalibration } from "../store/useZenmoneyStore";
-import { useOffBalanceStore } from "../store/useOffBalanceStore";
+import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useCloudSnapshotStore } from "../store/useCloudSnapshotStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { confirm } from "../store/useConfirmStore";
 import { toast } from "../store/useToastStore";
 import { editUndo } from "../lib/undoable";
-import { snapshotDeletionUndo } from "../lib/cloudSnapshots";
 import { pluralRu } from "../lib/plural";
-import { useBackupStore, type BackupInterval } from "../store/useBackupStore";
+import { useBackupStore } from "../store/useBackupStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
 import { UsersSettings } from "../components/UsersSettings";
-import { useFreeMoneyStore } from "../store/useFreeMoneyStore";
-import { useTagModeStore } from "../store/useTagModeStore";
-import { Combobox } from "../components/Combobox";
 import { PageHeader } from "../components/PageHeader";
-import { formatNum, formatDate, formatMoney } from "../lib/format";
-import { parseAndValidateBackup, restoreBackupPayload } from "../lib/backup";
-import { snapshotSummary } from "../lib/snapshotLabel";
-import { readSnapshotFile } from "../lib/snapshotFile";
-import { BackupComparison } from "../components/BackupComparison";
-import { RestoreWizardModal } from "../components/RestoreWizardModal";
-import { useRestoreWizardStore } from "../store/useRestoreWizardStore";
+import { formatNum, formatDate } from "../lib/format";
 import { usePendingChanges } from "../hooks/usePendingChanges";
 import * as db from "../lib/db";
 import { ImportXlsxCard } from "../components/ImportXlsxCard";
@@ -146,12 +134,8 @@ export function ImportPage() {
   const mergeTransactions = useDataStore((s) => s.mergeTransactions);
   const clearAll = useDataStore((s) => s.clearAll);
   const rates = useDataStore((s) => s.rates);
-  const setRate = useDataStore((s) => s.setRate);
-  const setBase = useDataStore((s) => s.setBase);
   const transactions = useDataStore((s) => s.transactions);
   const meta = useDataStore((s) => s.importMeta);
-  const includeOffBalance = useOffBalanceStore((s) => s.includeOffBalance);
-  const setIncludeOffBalance = useOffBalanceStore((s) => s.setIncludeOffBalance);
 
   // Zenmoney API sync state
   const zenToken = useZenmoneyStore((s) => s.token);
@@ -159,15 +143,6 @@ export function ImportPage() {
   const zenError = useZenmoneyStore((s) => s.error);
   const zenLastSyncAt = useZenmoneyStore((s) => s.lastSyncAt);
 
-  // Совместный доступ: переключатель живёт в «Оформлении», а список участников
-  // — в «Данных». Число участников считаем по справочнику аккаунта, чтобы на
-  // личном аккаунте строки не было вовсе.
-  const freeMethod = useFreeMoneyStore((s) => s.method);
-  const setFreeMethod = useFreeMoneyStore((s) => s.setMethod);
-  const freeReserve = useFreeMoneyStore((s) => s.reserve);
-  const setFreeReserve = useFreeMoneyStore((s) => s.setReserve);
-  const tagMode = useTagModeStore((s) => s.mode);
-  const setTagMode = useTagModeStore((s) => s.setMode);
 
   const zenLoaded = useZenmoneyStore((s) => s.loaded);
   const zenHydrate = useZenmoneyStore((s) => s.hydrate);
@@ -251,17 +226,8 @@ export function ImportPage() {
   // Available only in API mode (no point taking a snapshot of nothing).
   const cloudSnapshots = useCloudSnapshotStore((s) => s.snapshots);
   const cloudSnapshotsLoaded = useCloudSnapshotStore((s) => s.loaded);
-  const cloudSnapshotsBusy = useCloudSnapshotStore((s) => s.busy);
-  const cloudSnapshotsError = useCloudSnapshotStore((s) => s.error);
   const hydrateCloudSnapshots = useCloudSnapshotStore((s) => s.hydrate);
-  const takeCloudSnapshot = useCloudSnapshotStore((s) => s.takeSnapshot);
-  const deleteCloudSnapshot = useCloudSnapshotStore((s) => s.deleteSnapshot);
-  const downloadCloudSnapshot = useCloudSnapshotStore((s) => s.download);
-  const importCloudSnapshot = useCloudSnapshotStore((s) => s.importFromFile);
-  const cloudSnapshotsOp = useCloudSnapshotStore((s) => s.busyOp);
-  const openRestoreWizard = useRestoreWizardStore((s) => s.open);
   const pruneForeignSnapshots = useCloudSnapshotStore((s) => s.pruneForeign);
-  const [restoreWizardOpen, setRestoreWizardOpen] = useState(false);
   // Current Zenmoney user id — read from the local cache. Lets us
   // filter the snapshot list to "snapshots for the currently
   // connected account only", so switching accounts doesn't surface
@@ -280,16 +246,6 @@ export function ImportPage() {
     // `cloudSnapshots` is in the deps so we refresh the lookup when
     // a sync or restore alters the cache user record.
   }, [cloudSnapshots, zenLastSyncAt]);
-  // Visible snapshots: belong to the currently connected account
-  // (matching userId) plus legacy snapshots without a userId (so we
-  // don't silently hide pre-feature backups). Snapshots from other
-  // accounts are surfaced as a count below the list.
-  const visibleSnapshots = useMemo(() => {
-    if (currentUserId == null) return cloudSnapshots;
-    return cloudSnapshots.filter(
-      (s) => s.userId == null || s.userId === currentUserId
-    );
-  }, [cloudSnapshots, currentUserId]);
   // Подключили другой аккаунт — снимки прежнего выбрасываем. Слотов пять, и
   // занимать их копиями чужой базы незачем: восстановить в текущий аккаунт из
   // них всё равно нельзя без переноса, а место под свою страховку они съедают.
@@ -339,11 +295,6 @@ export function ImportPage() {
   // Inner tab inside the Бэкапы section — local files vs cloud
   // snapshots. Mirrors the Источник данных card pattern.
 
-  // "Show all rates" toggle for the currency-rates grid in CSV
-  // mode. By default only the 4 most-common currencies are shown
-  // (RUB / USD / EUR / GBP) — the rest live behind an expand
-  // button so this section doesn't dominate the page on first open.
-  const [showAllRates, setShowAllRates] = useState(false);
 
   // Active tab in the unified "data source" card. Defaults to
   // whichever source the user is most likely interested in:
@@ -544,34 +495,15 @@ export function ImportPage() {
 */
 
 
-  // Report period (reporting month start day)
-  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const reportPeriodLoaded = useReportPeriodStore((s) => s.loaded);
   const reportPeriodHydrate = useReportPeriodStore((s) => s.hydrate);
-  const setMonthStartDay = useReportPeriodStore((s) => s.setMonthStartDay);
-  /** День из настроек Дзен-мани; при нём своя настройка не действует. */
-  const zenMonthStartDay = useReportPeriodStore((s) => s.zenDay);
-  const followZenDay = useReportPeriodStore((s) => s.followZenDay);
-  // День расходится с Дзен-мани — отчёты здесь и в приложении будут о разных
-  // отрезках. Не запрещаем, но говорим об этом прямо в строке настройки.
-  const dayDiffersFromZen = zenMonthStartDay !== null && zenMonthStartDay !== monthStartDay;
-  const dayWindow = (day: number) =>
-    day === 1
-      ? "Календарный месяц"
-      : day >= 29
-        ? `С ${day}-го числа по предыдущее следующего; в коротком месяце — с последнего дня`
-        : `С ${day}-го числа по ${day - 1}-е следующего`;
   useEffect(() => {
     if (!reportPeriodLoaded) reportPeriodHydrate();
   }, [reportPeriodLoaded, reportPeriodHydrate]);
 
   // Scheduled backup
-  const backupInterval = useBackupStore((s) => s.interval);
-  const backupLastAt = useBackupStore((s) => s.lastBackupAt);
   const backupLoaded = useBackupStore((s) => s.loaded);
   const backupHydrate = useBackupStore((s) => s.hydrate);
-  const setBackupInterval = useBackupStore((s) => s.setInterval);
-  const runBackupNow = useBackupStore((s) => s.runNow);
   useEffect(() => {
     if (!backupLoaded) backupHydrate();
   }, [backupLoaded, backupHydrate]);
@@ -583,97 +515,8 @@ export function ImportPage() {
   const [mode, setMode] = useState<Mode>(transactions.length > 0 ? "merge" : "replace");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const backupRef = useRef<HTMLInputElement>(null);
-  const [backupBusy, setBackupBusy] = useState(false);
-  const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
-  /**
-   * Скачать бэкап руками.
-   *
-   * Тот же путь, что у расписания (`runNow`), — раньше рядом жили две кнопки,
-   * скачивавшие ОДИН И ТОТ ЖЕ файл, и разница между «Скачать бэкап» и
-   * «Скачать сейчас» была понятна только по коду. Теперь кнопка одна, и она
-   * же двигает отсчёт расписания: свежая копия только что скачана, повторять
-   * её через час незачем.
-   */
-  async function exportBackup() {
-    setBackupBusy(true);
-    setBackupMsg(null);
-    try {
-      await runBackupNow();
-      // Имя файла и его размер не показываем: браузер и так сообщает о
-      // скачивании, а строка оставалась висеть рядом с кнопкой навсегда.
-      setBackupMsg(null);
-    } catch (e) {
-      setBackupMsg(
-        `Копия не скачалась. Попробуйте ещё раз${e instanceof Error && e.message ? ` (${e.message})` : ""}`
-      );
-    } finally {
-      setBackupBusy(false);
-    }
-  }
 
-  async function importBackup(file: File) {
-    // Разбираем файл ДО вопроса о замене. Раньше сначала спрашивали
-    // «текущие данные будут заменены?», человек соглашался — и только потом
-    // узнавал, что файл вообще не тот. Страшный вопрос ради ничего.
-    let dump: Record<string, unknown>;
-    setBackupMsg(null);
-    try {
-      // Тем же чтением, что и у снимков: копию часто пересылают себе архивом,
-      // и «сервис не принял мой же бэкап» — плохой конец истории.
-      const text = await readSnapshotFile(file);
-      // Validate + sanitize (type checks, prototype-pollution stripping,
-      // size/depth bounds) before anything touches IndexedDB.
-      dump = parseAndValidateBackup(text) as unknown as Record<string, unknown>;
-    } catch (e) {
-      // Разбор и распаковка бросают готовые фразы «что не так и что делать».
-      setBackupMsg(
-        e instanceof Error && e.message
-          ? e.message
-          : "Файл копии не прочитался. Выберите файл копии сервиса (.json) и попробуйте ещё раз"
-      );
-      return;
-    }
-
-    const count = Array.isArray(dump.transactions) ? dump.transactions.length : 0;
-    const ok = await confirm({
-      title: "Восстановить из копии?",
-      message: `Текущие данные будут заменены. В файле ${formatNum(count)} ${pluralRu(count, ["операция", "операции", "операций"])}.`,
-      confirmLabel: "Восстановить",
-      tone: "warning",
-    });
-    if (!ok) return;
-    setBackupBusy(true);
-    try {
-      // Write every section back to IndexedDB (shared key list with the
-      // builder — incl. local edits/drafts/deletions/rules so un-pushed work
-      // survives a restore).
-      await restoreBackupPayload(dump);
-      const restoredCount = Array.isArray(dump.transactions)
-        ? dump.transactions.length
-        : 0;
-      setBackupMsg(
-        `Восстановлено: ${formatNum(restoredCount)} ${pluralRu(restoredCount, ["операция", "операции", "операций"])}. Обновляем страницу…`
-      );
-      // Перезагрузка, а не поимённое пере-чтение сторов.
-      //
-      // Раньше здесь был список из полутора десятков `hydrate()`, и он молча
-      // отставал ровно так же, как список ключей бэкапа: восстановленные
-      // настройки бюджета, разрезы и оформление не появлялись до ручной
-      // перезагрузки. Перезагрузка снимает этот класс ошибок целиком — все
-      // сторы поднимаются штатным путём, и забыть что-то физически нельзя.
-      setTimeout(() => window.location.reload(), 1200);
-    } catch (e) {
-      setBackupMsg(
-        `Данные из копии не восстановились. Обновите страницу и попробуйте ещё раз${
-          e instanceof Error && e.message ? ` (${e.message})` : ""
-        }`
-      );
-    } finally {
-      setBackupBusy(false);
-    }
-  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -1351,863 +1194,10 @@ export function ImportPage() {
           how every amount is computed, alongside the reporting period and
           data-scope toggles. Rendered before the main processing block below, so
           it sits first in the tab. */}
-      {settingsTab === "processing" && (<>
-
-      {/* Одна карточка на всю вкладку: раньше это были три отдельных блока,
-          каждый с абзацем пояснений над контролом, и вкладка читалась как
-          стена текста. Здесь строки, а подробности — за знаками вопроса. */}
-      <div className="card-tray card-pad">
-        <SettingsSectionHeader
-          icon={Calculator}
-          title="Как считать"
-          className="mb-1"
-        />
-        <p className="text-xs text-muted mb-3">
-          Базовые правила, по которым собираются все итоги, графики и отчёты.
-        </p>
-
-        <SettingRow
-          title="Базовая валюта"
-          status={`Все суммы и графики показываются в ${rates.base}`}
-          help={
-            <>
-              <p>
-                Валюта, в которую сводятся операции всех остальных валют. Меняя
-                её, вы меняете только представление — сами операции остаются в
-                своих валютах.
-              </p>
-              <p>
-                {zenToken
-                  ? "Курсы приходят из Дзен-мани при каждой синхронизации, настраивать их вручную не нужно."
-                  : "В режиме CSV курсы задаются вручную ниже — по ним и сводятся суммы."}
-              </p>
-            </>
-          }
-          control={
-            /* Код валюты — всегда три буквы: поле шире только съедает строку. */
-            <div className="w-24">
-              <Combobox
-                value={rates.base}
-                options={Object.keys(rates.rates).sort()}
-                onChange={(next) => {
-                  setBase(next).catch((err: Error) => alert(err.message));
-                }}
-                allowCustom={false}
-                maxHeight="min(40vh, 280px)"
-              />
-            </div>
-          }
-        />
-
-        <SettingRow
-          title="Первый день отчётного периода"
-          status={
-            dayDiffersFromZen ? (
-              <>
-                {dayWindow(monthStartDay)}
-                {` · В Дзен-мани — ${
-                  zenMonthStartDay === 1 ? "календарный месяц" : `с ${zenMonthStartDay}-го числа`
-                }, отчёты могут не сойтись с приложением · `}
-                <button
-                  type="button"
-                  className="text-accent hover:underline"
-                  onClick={() => void followZenDay()}
-                >
-                  Как в Дзен-мани
-                </button>
-              </>
-            ) : (
-              (zenMonthStartDay !== null ? "Как в Дзен-мани · " : "") + dayWindow(monthStartDay)
-            )
-          }
-          statusTone={dayDiffersFromZen ? "warn" : undefined}
-          help={
-            <>
-              <p>
-                Многие ведут учёт не «с 1-го по последнее», а от зарплаты до
-                зарплаты — например с 11-го по 10-е. Здесь задаётся день, с
-                которого начинается ваш отчётный период. В Дзен-мани та же
-                настройка называется «Дата начала периода».
-              </p>
-              <p>
-                Влияет на фильтр «Месяц», столбцы и таблицу Cash-flow, итоги «Доход /
-                Расход за …», «Топ-10 категорий» и переход в операции месяца.
-                «Год к году» и сезонность остаются по календарю: там месяц имеет
-                смысл только как календарный.
-              </p>
-              <p>
-                Допустимы значения 1–31, как и в Дзен-мани. В месяце, где
-                такого числа нет, месяц начинается в его последний день: с днём
-                31 февральский период идёт с 28 февраля (29-го в високосный год).
-              </p>
-              <p>
-                При подключённом Дзен-мани день сразу берётся из его настроек,
-                чтобы отчёты не расходились с приложением. Поставите здесь
-                другой — действовать будет он, а в строке появится
-                предупреждение: аналитика тогда считает не тот отрезок, что
-                показывает приложение Дзен-мани. «Как в Дзен-мани» возвращает
-                день из приложения.
-              </p>
-            </>
-          }
-          control={
-            <input
-              type="number"
-              min={1}
-              max={31}
-              value={monthStartDay}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n)) setMonthStartDay(n);
-              }}
-              aria-label="День начала расчётного месяца"
-              /* Значение — 1–28, то есть максимум два знака; по центру, чтобы
-                 однозначное число не висело у левого края. */
-              className="input text-sm w-16 tabular-nums text-center"
-            />
-          }
-        />
-
-        <SettingRow
-          title="Счета вне баланса"
-          status={
-            includeOffBalance
-              ? "Считаются везде, как обычные"
-              : "Не входят ни в балансы, ни в итоги"
-          }
-          help={
-            <>
-              <p>
-                В Дзен-мани счёт можно пометить как «вне баланса» — накопительные,
-                брокерские, всё, что вы не держите в повседневном балансе. Пока
-                переключатель выключен, мы это повторяем — одним правилом на
-                весь сервис:
-              </p>
-              <ul className="list-disc pl-4 space-y-1">
-                <li>
-                  операции по таким счетам не входят ни в какие итоги: ни на
-                  главной, ни в «Категориях», «Cash-flow», «Топе», «Сравнении»,
-                  «Доходах и расходах» и остальных разделах аналитики;
-                </li>
-                <li>
-                  бюджет с периметром «все счета» считает только счета в
-                  балансе — так же, как сам Дзен-мани. Выбранный явно счёт вне
-                  баланса в бюджете остаётся;
-                </li>
-                <li>
-                  «Капитал» на главной и график «Совокупно» в «Счетах» считают
-                  только балансовые счета. «Балансы счетов» на главной по
-                  умолчанию тоже, но у виджета свой переключатель «В балансе /
-                  Все» — он меняет только сам виджет.
-                </li>
-              </ul>
-              <p>
-                Списки операций — «Операции», «Поиск» и другие — и сам список
-                в «Счетах» показывают всё: это реестр, а не итог. Включите
-                переключатель — такие счета и их операции считаются везде, как
-                обычные. Цель FIRE настраивается отдельно — там свой выбор
-                счетов.
-              </p>
-              <p>
-                На общем аккаунте Дзен-мани переключатель у каждого участника
-                свой и на другие устройства переносится только к вам.
-              </p>
-            </>
-          }
-          control={
-            <Switch
-              checked={includeOffBalance}
-              label="Учитывать счета вне баланса"
-              onChange={async (next) => {
-                await setIncludeOffBalance(next);
-                // Пересобираем привязку баланса, чтобы «Совокупный баланс»
-                // обновился сразу (только режим API; для CSV — no-op).
-                await recalcBalanceCalibration();
-              }}
-            />
-          }
-        />
-
-        {/* Теги (#69). В «Расчётах», а не в «Оформлении»: от выбора зависит,
-            какие операции попадут в суммы раздела «Теги». */}
-        <SettingRow
-          title="Теги операций"
-          status={
-            tagMode === "hashtags"
-              ? "Хэштеги из комментария: «Ужин #отпуск»"
-              : "Вторая и следующие категории операции"
-          }
-          help={
-            <>
-              <p>
-                Пометить операцию сверх категории в Дзен-мани можно двумя
-                способами, и раздел «Теги» умеет оба — выберите тот, которым
-                пользуетесь.
-              </p>
-              <p>
-                <InfoTerm>Хэштеги</InfoTerm> — слова с решёткой в комментарии:
-                «Ужин #отпуск». Пишутся прямо в тексте, решётка подсказывает уже
-                знакомые.
-              </p>
-              <p>
-                <InfoTerm>Вторые категории</InfoTerm> — Дзен-мани разрешает
-                поставить операции несколько категорий. Первая остаётся основной
-                и по ней считается вся аналитика, а вторую и следующие многие
-                ведут как теги: «Отпуск», «Ремонт». В этом режиме их можно
-                ставить и снимать прямо в карточке операции.
-              </p>
-              <p>
-                Выбор влияет только на раздел «Теги» и поле тегов в карточке.
-                Вторые категории и без него видны в фильтре категорий, находятся
-                поиском и считаются в справочнике.
-              </p>
-            </>
-          }
-          control={
-            <Segmented
-              label="Что считать тегами"
-              value={tagMode}
-              onChange={(v) => void setTagMode(v)}
-              options={[
-                { value: "hashtags", label: "Хэштеги" },
-                { value: "categories", label: "Вторые категории" },
-              ]}
-            />
-          }
-        />
-
-        {!zenToken && (
-          <SettingRow
-            title="Курсы валют"
-            status={`Заданы вручную, к ${rates.base}`}
-            help={
-              <p>
-                В режиме CSV курсы неоткуда взять автоматически. Задайте те, по
-                которым хотите сводить суммы; при подключении Дзен-мани они
-                начнут приходить сами.
-              </p>
-            }
-          >
-            {(() => {
-              // Ходовые валюты сверху, остальные — за кнопкой: иначе строка
-              // разрастается редкими валютами при первом же открытии.
-              const priority = ["RUB", "USD", "EUR", "GBP"];
-              const allEntries = Object.entries(rates.rates).sort(([a], [b]) => {
-                const pa = priority.indexOf(a);
-                const pb = priority.indexOf(b);
-                if (pa !== -1 && pb !== -1) return pa - pb;
-                if (pa !== -1) return -1;
-                if (pb !== -1) return 1;
-                return a.localeCompare(b);
-              });
-              const visible = showAllRates ? allEntries : allEntries.slice(0, 4);
-              const hiddenCount = allEntries.length - visible.length;
-              return (
-                <>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                    {visible.map(([cur, val]) => (
-                      <div key={cur}>
-                        <label className="label block mb-1">1 {cur} =</label>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={val}
-                            onChange={(e) => setRate(cur, Number(e.target.value) || 0)}
-                            disabled={cur === rates.base}
-                            className="input text-sm"
-                          />
-                          <span className="text-xs text-muted">{rates.base}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {(hiddenCount > 0 || showAllRates) && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllRates((v) => !v)}
-                      className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
-                    >
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform ${
-                          showAllRates ? "rotate-180" : ""
-                        }`}
-                      />
-                      {showAllRates
-                        ? "Свернуть"
-                        : `Показать ещё ${hiddenCount} ${
-                            hiddenCount === 1
-                              ? "валюту"
-                              : hiddenCount < 5
-                                ? "валюты"
-                                : "валют"
-                          }`}
-                    </button>
-                  )}
-                </>
-              );
-            })()}
-          </SettingRow>
-        )}
-      </div>
-
-      {/* Виджет «Свободные деньги» (#96) — своей карточкой. Это настройки
-          одного виджета на главной, а не правила всех расчётов: в общей
-          карточке «Как считать» они читались как глобальные. В «Расчётах», а
-          не в «Оформлении», потому что меняют само число, а не вид. */}
-      <div className="card-tray card-pad">
-        <SettingsSectionHeader
-          icon={Coins}
-          title="Виджет «Свободные деньги»"
-          className="mb-1"
-        />
-        <p className="text-xs text-muted mb-3">
-          Действуют только на этот виджет на главной — остальные итоги и
-          отчёты не меняют.
-        </p>
-
-        <SettingRow
-          title="Расчёт на день"
-          status={
-            freeMethod === "cumulative"
-              ? "Накопительный: непотраченное переносится на завтра"
-              : "Ежедневный: лимит считается заново каждый день"
-          }
-          help={
-            <>
-              <p>
-                Виджет «Свободные деньги» на главной делит свободные деньги на
-                дни до конца отчётного периода. Делить можно двумя способами —
-                теми же, что предлагает Дзен-мани.
-              </p>
-              <p>
-                <InfoTerm>Накопительный</InfoTerm> — лимит на день один на весь
-                период, а непотраченное копится отдельной суммой: не потратив
-                ничего три дня, на четвёртый можно потратить вчетверо больше.
-                Прощает неровные дни, а неровными траты и бывают.
-              </p>
-              <p>
-                <InfoTerm>Ежедневный</InfoTerm> — остаток делится на оставшиеся
-                дни заново каждое утро. Вчерашняя экономия не пропадает, но
-                отдельно её не видно: она просто чуть поднимает лимит.
-              </p>
-              <p>
-                Переключить метод можно и прямо в виджете — у заголовка «На
-                сегодня». Начало периода виджет берёт из настроек самого
-                Дзен-мани, а не отсюда: иначе он молча разошёлся бы с
-                самим приложением Дзен-мани.
-              </p>
-            </>
-          }
-          control={
-            <Segmented
-              label="Метод расчёта свободных на день"
-              value={freeMethod}
-              onChange={(v) => void setFreeMethod(v)}
-              options={[
-                { value: "cumulative", label: "Накопительный" },
-                { value: "daily", label: "Ежедневный" },
-              ]}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Неснижаемый остаток"
-          status={
-            freeReserve > 0
-              ? `${formatMoney(freeReserve, rates.base)} не попадут в свободные`
-              : "Не задан — свободными считаются все деньги на счетах"
-          }
-          help={
-            <>
-              <p>
-                Сумма, которую вы не собираетесь тратить: подушка на счёте,
-                отложенное на крупную покупку. Вычитается из свободных денег
-                сразу, поэтому виджет не предложит потратить то, что трогать не
-                планировалось.
-              </p>
-              <p>
-                Это не то же самое, что счета вне баланса: там вы убираете счёт
-                целиком, здесь — часть суммы на обычных счетах.
-              </p>
-            </>
-          }
-          control={
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                step={1000}
-                value={freeReserve || ""}
-                placeholder="0"
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  void setFreeReserve(Number.isFinite(n) ? n : 0);
-                }}
-                aria-label="Неснижаемый остаток"
-                className="input text-sm w-32 tabular-nums text-right"
-              />
-              <span className="text-sm text-muted">{rates.base}</span>
-            </div>
-          }
-        />
-      </div>
-
-      {/* «Группировка получателей» отключена (2026-08).
-          Её задачу лучше решает справочник контрагентов: там получатель —
-          настоящая запись Дзен-мани, переименование уезжает в облако и
-          действует у всех операций сразу, а «Без контрагента» разбирает
-          строки от банка адресно. Автонормализация же склеивала по догадке
-          и жила только в этом браузере.
-
-          Блок оставлен закомментированным: если решим вернуть — код здесь,
-          вместе с ним в `useDataStore` живут `payeeGroupingEnabled`,
-          `applyPayeeGrouping` и ручные алиасы.
-
-
-      {/* Группировка получателей — единый блок: автонормализация +
-          ручные правила. Раньше были две отдельные карточки, теперь
-          объединены, потому что обе работают с одним и тем же
-          концептом (один и тот же payee, несколько написаний). *\/}
-      {transactions.length > 0 && (
-        <div className="card-tray card-pad">
-          <SettingsSectionHeader
-            icon={Users}
-            title="Группировка получателей"
-            className="mb-3"
-          />
-          <p className="text-xs text-muted mb-4">
-            Объединяет варианты одного и того же получателя.
-            Автонормализация работает по умолчанию (удаление номеров,
-            пробелов, форм. суффиксов, лидирующих банков — «Ёлочка #1234»
-            и «YOLOCHKA-MOSCOW» → один payee). Ручные правила применяются
-            <em> поверх</em> автогруппировки и работают независимо от
-            её переключателя.
-          </p>
-
-          {/* — Auto grouping toggle — *\/}
-          <label className="flex items-center gap-3 p-3 bg-panel2 rounded-lg border border-border cursor-pointer">
-            <Checkbox
-              checked={payeeGrouping}
-              onChange={(on) => setPayeeGrouping(on)}
-              label="Группировать по контрагентам"
-            />
-            <div className="flex-1">
-              <div className="font-medium text-sm">
-                Автогруппировка получателей
-              </div>
-              <div className="text-xs text-muted">
-                {aliasPreview && aliasPreview.size > 0
-                  ? `Найдено вариантов: ${aliasPreview.size}. Переключатель обратимый — можно вернуть оригинальные имена.`
-                  : "Похожих получателей не найдено в текущих данных."}
-              </div>
-            </div>
-          </label>
-          {payeeGrouping && aliasPreview && aliasPreview.size > 0 && (
-            <details className="mt-3">
-              <summary className="text-xs text-accent cursor-pointer hover:underline">
-                Показать применённые объединения ({aliasPreview.size})
-              </summary>
-              <p className="text-[11px] text-muted mt-2">
-                Цель объединения можно изменить прямо здесь — впишите своё
-                название. Правка сохранится как ручное правило (помечено
-                рамкой); кнопка ↺ вернёт автозначение.
-              </p>
-              <div className="mt-2 max-h-72 overflow-y-auto pr-1">
-                {Array.from(aliasPreview.entries())
-                  .sort((a, b) => a[0].localeCompare(b[0], "ru"))
-                  .map(([from, autoTo]) => {
-                    const manualTo = manualAliasMap.get(from);
-                    const overridden = manualTo !== undefined;
-                    return (
-                      <AutoGroupRow
-                        key={from}
-                        from={from}
-                        autoTo={autoTo}
-                        overridden={overridden}
-                        effectiveTo={manualTo ?? autoTo}
-                        onCommit={(f, to) => {
-                          addAlias(f, to).then(reapplyRules);
-                        }}
-                        onReset={(f) => {
-                          removeAlias(f).then(reapplyRules);
-                        }}
-                      />
-                    );
-                  })}
-              </div>
-            </details>
-          )}
-
-          {/* — Manual aliases — *\/}
-          <div className="mt-5 pt-5 border-t border-border">
-            <div className="text-sm font-medium mb-3">Ручные правила</div>
-
-            {/* Add new alias. Combobox (not a native <input list>) so the
-                suggestions dropdown is width- and height-bounded — the
-                native datalist popup spilled across the whole viewport. *\/}
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 mb-3">
-              <Combobox
-                value={aliasFrom}
-                options={allPayeeOptions}
-                onChange={setAliasFrom}
-                placeholder="Откуда (как сейчас называется)"
-                maxHeight="240px"
-              />
-              <span className="text-muted hidden md:inline">→</span>
-              <Combobox
-                value={aliasTo}
-                options={allPayeeOptions}
-                onChange={setAliasTo}
-                placeholder="Куда (как должно стать)"
-                maxHeight="240px"
-              />
-              <button
-                onClick={submitAlias}
-                disabled={
-                  !aliasFrom.trim() ||
-                  !aliasTo.trim() ||
-                  aliasFrom.trim() === aliasTo.trim()
-                }
-                className="btn-primary text-sm whitespace-nowrap"
-              >
-                Добавить
-              </button>
-            </div>
-
-            {/* Existing aliases *\/}
-            {manualAliases.length === 0 ? (
-              <div className="text-xs text-muted">
-                Пока нет ручных правил. Используйте поля выше, чтобы добавить
-                первое — например, <code className="pill">Pyaterochka</code> →{" "}
-                <code className="pill">Ёлочка</code>.
-              </div>
-            ) : (
-              <div className="max-h-60 overflow-y-auto text-xs space-y-1 -mx-1 px-1">
-                {manualAliases.map((a) => (
-                  <div
-                    key={a.from}
-                    className="flex items-center gap-2 py-1 border-b border-border/40 last:border-b-0"
-                  >
-                    <span className="truncate flex-1 text-text" title={a.from}>
-                      {a.from}
-                    </span>
-                    <span className="text-muted">→</span>
-                    <span
-                      className="truncate flex-1 text-text font-medium"
-                      title={a.to}
-                    >
-                      {a.to}
-                    </span>
-                    <button
-                      onClick={() => dropAlias(a.from)}
-                      className="btn-icon-danger btn-icon-sm"
-                      title="Удалить правило"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      */}
-
-      {/* Разрезы — в самом низу: настройка редкая, а места занимает больше
-          остальных. Сверху то, что трогают чаще. */}
-      <SlicesSettings />
-
-      </>)}
+      {settingsTab === "processing" && <ProcessingSettings />}
 
       {settingsTab === "backups" && (
-      <section className="card-tray card-pad space-y-5">
-        {/* Обе копии на одной странице, друг под другом: раньше их развели
-            вкладками, и рядом они никогда не показывались — а разница между
-            ними как раз в том, что одна не заменяет другую. */}
-        <SettingsSectionHeader icon={History} title="Резервные копии" />
-
-        <BackupComparison />
-
-        <>
-        <div className="rounded-xl border border-border bg-panel2/30 p-4">
-          {/* Что именно уезжает в файл — под знаком вопроса: это читают один
-              раз, а место занимало постоянно, отодвигая сами кнопки вниз. */}
-          <div className="flex items-center gap-2 mb-3">
-            <Database className="w-4 h-4 text-accent shrink-0" />
-            <span className="text-sm font-medium">Копии данных сервиса</span>
-            <InfoPopover label="Что попадает в копию">
-              <p>
-                Всё, что <InfoTerm>живёт только здесь</InfoTerm> и не приходит
-                из Дзен-мани: операции, бюджеты, цели, правила, виды, разрезы
-                данных и оформление.
-              </p>
-              <p>
-                И <InfoTerm>правки, которые ещё не ушли в Дзен-мани</InfoTerm>:
-                после восстановления их по-прежнему можно отправить.
-              </p>
-              <p>
-                <InfoTerm>Токен Дзен-мани в копию не попадает никогда</InfoTerm>{" "}
-                — ему незачем покидать компьютер. Данные из облака тоже: они
-                вернутся сами при первой синхронизации.
-              </p>
-              <p>
-                Файл сжат — распаковывать его не нужно, сервис принимает оба
-                вида.
-              </p>
-              <p>
-                Восстановление заменяет всё, что сейчас в сервисе, и
-                перезагружает страницу. Отправку правок оно переводит в{" "}
-                <InfoTerm>ручной режим</InfoTerm>: вернувшиеся правки не должны
-                уехать в Дзен-мани, прежде чем вы их увидите.
-              </p>
-            </InfoPopover>
-          </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={exportBackup}
-            disabled={backupBusy || transactions.length === 0}
-            className="btn-primary"
-          >
-            <Download className="w-4 h-4" />
-            Создать копию
-          </button>
-          <button
-            onClick={() => backupRef.current?.click()}
-            disabled={backupBusy}
-            className="btn-ghost"
-          >
-            <Upload className="w-4 h-4" />
-            Восстановить
-          </button>
-          <input
-            ref={backupRef}
-            type="file"
-            accept="application/json,.json,application/zip,.zip,application/gzip,.gz"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) importBackup(f);
-              e.target.value = "";
-            }}
-          />
-          {backupMsg && (
-            <span className="text-xs text-muted self-center">{backupMsg}</span>
-          )}
-        </div>
-
-        {/* Расписание живёт ЗДЕСЬ ЖЕ, а не отдельной карточкой: это тот же
-            самый бэкап, только скачанный без нажатия. Двумя блоками подряд он
-            читался как вторая, чем-то другая функция. */}
-        <div className="flex items-center justify-between gap-3 flex-wrap border-t border-border pt-3 mt-4">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <Clock className="w-4 h-4 text-accent shrink-0" />
-            <span className="text-sm font-medium">По расписанию</span>
-            <InfoPopover label="Как работает расписание">
-              <p>
-                Та же копия, только скачивается сама — раз в час, день или
-                неделю. Сервис проверяет срок при открытии и дальше примерно
-                каждые десять минут. К имени файла добавляется «-auto».
-              </p>
-              <p>
-                Срок считается от <InfoTerm>последней копии</InfoTerm>, в том
-                числе сделанной вручную: если копия только что готова,
-                повторять её через час незачем.
-              </p>
-              <p>
-                Копия создаётся, только пока сервис открыт: закрытую вкладку
-                браузер к сроку не разбудит. О скачивании он покажет
-                уведомление — так и должно быть.
-              </p>
-            </InfoPopover>
-            <span className="text-xs text-muted">
-              {backupLastAt
-                ? `Последняя копия: ${new Date(backupLastAt).toLocaleString("ru-RU")}`
-                : "Копий ещё не было"}
-            </span>
-          </div>
-          <div className="w-44 shrink-0">
-            <Select
-              size="sm"
-              ariaLabel="Как часто создавать копию"
-              value={backupInterval}
-              onChange={(v) => setBackupInterval(v)}
-              options={[
-                { value: "off" as BackupInterval, label: "Не делать" },
-                { value: "hour" as BackupInterval, label: "Каждый час" },
-                { value: "day" as BackupInterval, label: "Каждый день" },
-                { value: "week" as BackupInterval, label: "Каждую неделю" },
-              ]}
-            />
-          </div>
-        </div>
-      </div>
-        </>
-
-        {/* Cloud snapshot — Phase 0 of two-way sync. Only available with
-            an API token connected (there's nothing to snapshot in CSV
-            mode). Stores up to 5 raw responses of POST /v8/diff/ so we
-            can fall back to a known-good cloud state if a future push
-            operation goes wrong. */}
-        {zenToken ? (
-          <div className="rounded-xl border border-border bg-panel2/30 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <History className="w-4 h-4 text-accent shrink-0" />
-              <span className="text-sm font-medium">Снимки аккаунта Дзен-мани</span>
-              <InfoPopover label="Что попадает в снимок">
-                <p>
-                  Всё, что лежит в Дзен-мани: операции, счета, категории,
-                  контрагенты и планы. Снимок остаётся на этом компьютере, в
-                  облако не уходит, и его можно скачать файлом.
-                </p>
-                <p>
-                  Восстановление отправляет обратно в Дзен-мани всё, кроме{" "}
-                  <InfoTerm>«Планов месяца»</InfoTerm>: суммы бюджета по
-                  категориям снимок хранит, но не возвращает — при отправке они
-                  теряют подкатегории.
-                </p>
-                <p>
-                  Снимок — страховка перед{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSettingsTab("source")}
-                    className="text-accent hover:underline"
-                  >
-                    двусторонней синхронизацией
-                  </button>
-                  : если отправка правок что-то испортит, прежнее состояние
-                  можно вернуть. Перед отправкой правок снимок делается и сам,
-                  а частоту можно настроить на вкладке «Данные».
-                </p>
-                <p>
-                  Хранятся последние <InfoTerm>пять</InfoTerm>: самый старый
-                  уступает место новому.
-                </p>
-              </InfoPopover>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mb-3">
-              <button
-                onClick={() => takeCloudSnapshot()}
-                disabled={cloudSnapshotsBusy}
-                className="btn-primary"
-              >
-                {cloudSnapshotsOp === "snapshot" ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <CloudDownload className="w-4 h-4" />
-                )}
-                {cloudSnapshotsOp === "snapshot" ? "Создаю снимок…" : "Создать снимок"}
-              </button>
-              {/* Одна кнопка на всё восстановление: выбор снимка, проверка,
-                  подготовка и заливка идут шагами внутри окна. На экране они
-                  занимали половину страницы и читались все сразу. */}
-              <button
-                onClick={() => {
-                  openRestoreWizard(visibleSnapshots[0]?.id ?? null);
-                  setRestoreWizardOpen(true);
-                }}
-                disabled={cloudSnapshotsBusy}
-                className="btn-ghost"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Восстановить
-              </button>
-            </div>
-
-            {cloudSnapshotsError && (
-              <div className="text-xs text-expense flex items-start gap-2 mb-3">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{cloudSnapshotsError}</span>
-              </div>
-            )}
-
-            {/* Счётчик слотов — заголовком списка, а не подписью у кнопок:
-                он описывает список, и рядом с «Создать снимок» читался как
-                состояние кнопки. */}
-            <div className="flex items-baseline justify-between gap-3 mb-1">
-              <span className="caps-label">
-                {cloudSnapshots.length === 0 ? "Снимков ещё не было" : "Сохранённые снимки"}
-              </span>
-              {cloudSnapshots.length > 0 && (
-                <span className="text-xs text-muted tabular-nums">
-                  Занято {visibleSnapshots.length}{" "}
-                  {pluralRu(visibleSnapshots.length, ["слот", "слота", "слотов"])} из 5
-                </span>
-              )}
-            </div>
-
-            {visibleSnapshots.length > 0 && (
-              <div className="text-xs space-y-1 -mx-1 px-1 max-h-72 overflow-y-auto">
-                {visibleSnapshots.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center gap-3 py-2 border-b border-border/40 last:border-b-0"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">
-                        {new Date(s.createdAt).toLocaleString("ru-RU", {
-                          day: "numeric",
-                          month: "long",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                      <div className="text-xs text-muted tabular-nums">
-                        {snapshotSummary(s.counts, s.approxBytes)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => downloadCloudSnapshot(s.id)}
-                      className="btn-icon shrink-0"
-                      title="Сохранить снимок файлом"
-                      aria-label="Сохранить снимок файлом"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        // Без вопроса: снимок вернёт «Отменить» на плашке.
-                        const undo = await snapshotDeletionUndo(s.id);
-                        await deleteCloudSnapshot(s.id);
-                        toast("Снимок удалён", {
-                          undo: async () => {
-                            await undo();
-                            await useCloudSnapshotStore.getState().hydrate();
-                          },
-                        });
-                      }}
-                      className="btn-icon-danger shrink-0"
-                      title="Удалить снимок с этого компьютера"
-                      aria-label="Удалить снимок"
-                      disabled={cloudSnapshotsBusy}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {restoreWizardOpen && (
-              <RestoreWizardModal
-                snapshots={visibleSnapshots}
-                onImportFile={(f) => importCloudSnapshot(f)}
-                onTakeSnapshot={() => takeCloudSnapshot()}
-                takingSnapshot={cloudSnapshotsOp === "snapshot"}
-                onClose={() => setRestoreWizardOpen(false)}
-              />
-            )}
-
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border bg-panel2/30 p-4 text-sm text-muted">
-            Снимки аккаунта доступны только при подключённом Дзен-мани.
-            Подключите его на вкладке «Данные».
-          </div>
-        )}
-      </section>
+        <BackupSettings currentUserId={currentUserId} onOpenSource={() => setSettingsTab("source")} />
       )}
 
       {/* Люди на общем аккаунте (#92). Сама карточка прячется, когда человек
