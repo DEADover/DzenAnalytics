@@ -26,7 +26,8 @@ src/
 ├── main.tsx      вход: выбор роутера, разбор возврата после входа, демо, service worker
 ├── App.tsx       оболочка: маршруты, глобальные окна, гидратация сторов, фоновые таймеры
 ├── types.ts      Transaction и базовые типы
-├── pages/        разделы — по файлу на маршрут (31 раздел)
+├── pages/        разделы — по файлу на маршрут (31 раздел); вкладки настроек —
+│                 в pages/settings/, виджеты главной — в components/dashboard/blocks/
 ├── components/   интерфейс; общие компоненты — здесь же (см. «Общие компоненты»)
 ├── hooks/        React-хуки, которые собирают данные из сторов для разделов
 ├── store/        Zustand-сторы: данные, правки, настройки (~80)
@@ -265,13 +266,21 @@ Docker) — поле для токена. В однофайловой сборк
 | Что | Компонент |
 |---|---|
 | Таблицы (сортировка, CSV, своя ширина столбцов) | `DataTable` (`components/table/tableKit.ts`) |
-| Окна | `Modal`, `ModalHeader`, `ModalBody`, `ModalFooter` |
+| Окна | `Modal`, `ModalHeader`, `ModalBody`, `ModalFooter`; пометка слева от кнопок — `FooterNote` |
+| Поле формы (ярлык + поле, связаны для экранного чтеца) | `FormField` |
+| Escape во всплывающем слое | `useEscapeLayer` (`lib/escapeStack.ts`): закрывается только верхний слой; `Modal` ещё держит Tab по кругу |
+| Выбор месяца, квартала, года | панель `MonthMenu`; дорожка со стрелками — `MonthPicker` / `YearPicker` |
+| Скачать файл | `downloadBlob` (`lib/downloadBlob.ts`), CSV — `downloadCsv` |
 | Выбор из списка | `Combobox`, `Select`, `MultiSelect`; категория — всегда `CategoryCascadePicker` (внутри прокрутки — с `portal`) |
 | Переключатели, бегунки | `Segmented`, `Switch`, `Slider` |
 | Подсказки графиков | `ChartTooltipCard` + `TooltipFacts` |
 | Плитки итогов | `StatCell`, `StatRow` (`SectionCard.tsx`) |
 | Отклонения | `DeviationPill`, `DiffModeToggle` (₽ → % → ₽ %) |
 | Выбор формата выгрузки | `FormatChoice` |
+
+Справочные списки — тоже по одному: названия месяцев (`lib/months.ts`), дни
+недели (`lib/weekdays.ts`), медиана (`lib/stats.ts`). Правка операции из окна
+собирается чистой функцией `lib/buildEditPatch.ts` (под тестами).
 
 Системных подсказок браузера нет: каждый `title` перехватывает
 `lib/nativeTooltips.ts` и показывает свою.
