@@ -682,7 +682,7 @@ export async function revertBudgetEdits(ids: string[]): Promise<void> {
  * doesn't move the split. Returns null in CSV mode. Sorted by title (ru).
  */
 export async function getCategoryTagsFromCache(): Promise<CategoryTag[] | null> {
-  const cache = await loadZenCache();
+  const cache = await getZenCache();
   if (!cache) return null;
   return cache.tags
     .map((t) => ({

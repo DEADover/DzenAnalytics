@@ -30,7 +30,10 @@ import clsx from "clsx";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { txAccountKey } from "../lib/accountKey";
 import { useDataStore } from "../store/useDataStore";
-import { getCategoryTagsFromCache } from "../store/useZenmoneyStore";
+import { getZenCache } from "../lib/zenCacheMemo";
+import { memoLast } from "../lib/memoLast";
+import type { ZenTag } from "../lib/zenmoney";
+import type { AccountDirectory } from "../lib/accountDirectory";
 import { accountOptions } from "../lib/accountOptions";
 import {
   FILTER_NONE,
@@ -122,195 +125,59 @@ const PICKER_PHONE =
 /** Служебные категории, которые держим наверху списка без заголовка группы. */
 const PINNED_CATEGORIES = ["Корректировка"];
 
-export function GlobalFilters({
-  showDateRange = true,
-  dateRangeHint,
-  showDataFilters = true,
-  dataFiltersHint,
-  dimmed = false,
-  period,
-}: {
-  /**
-   * Управляет ли эта панель периодом. `false` — контролы дат остаются на месте,
-   * но становятся НЕАКТИВНЫМИ.
-   *
-   * Раньше они просто исчезали, и панель на страницах со своим периодом
-   * («Сравнение», «Календарь», «50/30/20») выглядела короче, чем на остальных.
-   * Одинаковая на вид панель, часть которой погашена, читается спокойнее, чем
-   * панель, у которой каждый раз разный набор контролов.
-   */
-  showDateRange?: boolean;
-  /** Чем объяснить, почему даты недоступны. Показывается подсказкой. */
-  dateRangeHint?: string;
-  /**
-   * Работают ли фильтры ДАННЫХ: сохранённый вид, «Дополнительно», счета,
-   * категории, валюта, поиск. `false` — они остаются на месте, но гаснут и не
-   * нажимаются, а период при этом живой. Зеркало `showDateRange`, только с
-   * другой стороны панели.
-   *
-   * Нужно там, где страница считает по всей истории и слушает только период
-   * («Счета» → «Капитал»): без этого рядом стоят два фильтра «Счета» — общий,
-   * который на остатки не влияет, и свой у графика, — и понять, какой чем
-   * управляет, нельзя.
-   */
-  showDataFilters?: boolean;
-  /** Чем объяснить, почему фильтры данных недоступны. Подсказкой и строкой под панелью. */
-  dataFiltersHint?: string;
-  /**
-   * Панель целиком не действует на то, что сейчас на экране: гасим её и не даём
-   * трогать. Тот же приём, что и с датами выше, только на всю панель.
-   *
-   * Убирать панель совсем нельзя: она общая для всего приложения, и её пропажа
-   * читалась бы как «фильтров тут не бывает». Погашенная панель на месте
-   * говорит правду: они есть, но этим данным не указ.
-   */
-  dimmed?: boolean;
-  /** Controlled period — when provided, ALL period controls (presets, month
-   *  picker, custom range) drive this page-local controller instead of the
-   *  global filter store, without touching the global «месяц». Used by history
-   *  charts (Cash-flow, Trends). See `useLocalPeriod`. */
-  period?: PeriodController;
-} = {}) {
-  const transactions = useDataStore((s) => s.transactions);
-  // Фильтр сравнивает суммы в базовой валюте, поэтому и подпись — по ней.
-  const base = useDataStore((s) => s.rates.base);
-  const f = useFiltersStore();
-  const [search, setSearchSoon] = useDebouncedField(f.search, f.setSearch);
-  const controlledPeriod = period !== undefined;
-  // Period slice source: the local controller when controlled, else the store.
-  // Both expose the same fields/handlers (preset/monthYM/from/to + setters).
-  const periodCtl: PeriodController = controlledPeriod ? period : f;
-  const additionalRef = useRef<HTMLDivElement>(null);
-  const [additionalOpen, setAdditionalOpen] = useState(false);
+type TagKinds = Map<string, "expense" | "income" | "both">;
 
-  /** Название категории → расходная она или доходная, по справочнику Дзен-мани.
-   *  Пусто в режиме CSV — тогда тип выводим из самих операций. */
-  const [tagKinds, setTagKinds] = useState<Map<string, "expense" | "income" | "both">>(
-    new Map()
+// ── Выборки для фильтров — общие на модуль ────────────────────────────────
+// Панель фильтров монтируется заново на каждой странице, а `useMemo` живёт
+// в компоненте: каждый переход проходил бы все операции заново. Здесь итог
+// помнится, пока не сменились операции или справочник (см. `memoLast`).
+
+/** Название корневой категории → её тип по справочнику Дзен-мани. */
+const tagKindsOf = memoLast((tags: readonly ZenTag[]): TagKinds => {
+  const m: TagKinds = new Map();
+  for (const t of tags) {
+    if (t.parent) continue; // тип задаёт корневая категория
+    m.set(t.title, t.showOutcome && t.showIncome ? "both" : t.showIncome ? "income" : "expense");
+  }
+  return m;
+});
+/** Последний разобранный справочник: новая панель берёт его сразу. */
+let lastTagKinds: TagKinds = new Map();
+
+const accountMetaOf = memoLast((dir: AccountDirectory) => {
+  const liveEntries = dir.list.filter((e) => e.live);
+  return {
+    // Архивные — вниз списка, под разделителем.
+    archivedAccounts: new Set(liveEntries.filter((e) => e.archive).map((e) => e.key)),
+    /** Ключ счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV: там
+     *  метаданных счетов нет, и группировать нечем. */
+    accountKinds: new Map(liveEntries.map((e) => [e.key, accountKindLabel(e.type ?? "", e.savings)])),
+    /** Долговые счета: их в фильтре можно раскрыть по контрагентам. */
+    debtAccounts: new Set(liveEntries.filter((e) => DEBT_TYPES.has(e.type ?? "")).map((e) => e.key)),
+  };
+});
+
+// Список счетов — операции ПЛЮС справочник Дзен-мани: счёт без операций в
+// загруженных данных на странице «Счета» есть, и в фильтре он тоже должен
+// быть (issue #67). `accountKinds` знает все счета справочника и пуст в
+// режиме CSV — там остаются одни операции.
+const accountsOf = memoLast((transactions: Transaction[], dir: AccountDirectory) => {
+  const { archivedAccounts, accountKinds, debtAccounts } = accountMetaOf(dir);
+  const base = accountOptions(
+    transactions.map((t) => txAccountKey(t)),
+    accountKinds.keys(),
+    { archived: archivedAccounts, kinds: accountKinds, labelOf: dir.label }
   );
+  if (debtAccounts.size === 0) return base;
+  // Долговой счёт в Дзен-мани ОДИН на все долги, и фильтр по нему отвечает
+  // «все сразу». Поэтому контрагенты идут ВЛОЖЕННЫМИ прямо под своим счётом —
+  // теми же именами, что и в разбивке на странице «Счета».
+  return withDebtCounterparties(base, debtAccounts, transactions);
+});
 
-  useEffect(() => {
-    let cancelled = false;
-    void getCategoryTagsFromCache().then((tags) => {
-      if (cancelled || !tags) return;
-      const m = new Map<string, "expense" | "income" | "both">();
-      for (const t of tags) {
-        if (t.parent) continue; // тип задаёт корневая категория
-        m.set(
-          t.title,
-          t.showOutcome && t.showIncome
-            ? "both"
-            : t.showIncome
-              ? "income"
-              : "expense"
-        );
-      }
-      setTagKinds(m);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
-  // Счета — по ключам справочника (номер счёта, а не название): два
-  // «Т-Банка» в фильтре — две строки, у каждой своя подпись с уточнением.
-  const dir = useAccountDirectory();
-  const liveEntries = useMemo(() => dir.list.filter((e) => e.live), [dir]);
-  // Архивные — вниз списка, под разделителем.
-  const archivedAccounts = useMemo(
-    () => new Set(liveEntries.filter((e) => e.archive).map((e) => e.key)),
-    [liveEntries]
-  );
-  /** Ключ счёта → его вид («Карта», «Депозит», …). Пусто в режиме CSV: там
-   *  метаданных счетов нет, и группировать нечем. */
-  const accountKinds = useMemo(
-    () => new Map(liveEntries.map((e) => [e.key, accountKindLabel(e.type ?? "", e.savings)])),
-    [liveEntries]
-  );
-  /** Долговые счета: их в фильтре можно раскрыть по контрагентам. */
-  const debtAccounts = useMemo(
-    () => new Set(liveEntries.filter((e) => DEBT_TYPES.has(e.type ?? "")).map((e) => e.key)),
-    [liveEntries]
-  );
-
-  // Отобранные счета, запомненные названием (память фильтров, сохранённые
-  // виды, наборы до перехода на ключи), — в ключи: название раскрывается во
-  // все счета с ним, как и работало раньше.
-  const setSetRef = f.setSet;
-  useEffect(() => {
-    if (f.accounts.size === 0 || dir.list.length === 0) return;
-    let changed = false;
-    const next = new Set<string>();
-    for (const v of f.accounts) {
-      if (v === FILTER_NONE || dir.byKey.has(v) || parseDebtKey(v)) {
-        next.add(v);
-        continue;
-      }
-      const keys = dir.keysByTitle(v);
-      if (keys.length === 0) {
-        next.add(v);
-        continue;
-      }
-      for (const k of keys) next.add(k);
-      changed = true;
-    }
-    if (changed) setSetRef("accounts", next);
-  }, [f.accounts, dir, setSetRef]);
-
-  // Список счетов — операции ПЛЮС справочник Дзен-мани: счёт без операций в
-  // загруженных данных на странице «Счета» есть, и в фильтре он тоже должен
-  // быть (issue #67). `accountKinds` знает все счета справочника и пуст в
-  // режиме CSV — там остаются одни операции.
-  const accounts = useMemo(() => {
-    const base = accountOptions(
-      transactions.map((t) => txAccountKey(t)),
-      accountKinds.keys(),
-      { archived: archivedAccounts, kinds: accountKinds, labelOf: dir.label }
-    );
-    if (debtAccounts.size === 0) return base;
-    // Долговой счёт в Дзен-мани ОДИН на все долги, и фильтр по нему отвечает
-    // «все сразу». Поэтому контрагенты идут ВЛОЖЕННЫМИ прямо под своим счётом —
-    // теми же именами, что и в разбивке на странице «Счета».
-    return withDebtCounterparties(base, debtAccounts, transactions);
-  }, [transactions, archivedAccounts, accountKinds, debtAccounts, dir]);
-
-  /** Заголовок группы для пикера счетов: архивные идут под своим разделителем,
-   *  который рисует сам MultiSelect, поэтому им группу не назначаем. */
-  const accountGroup = useCallback(
-    (title: string) => {
-      // Контрагент живёт в группе своего счёта: он его ветка, а не отдельный
-      // раздел — иначе между счётом и его же разбивкой встал бы заголовок.
-      const debt = parseDebtKey(title);
-      const key = debt ? debt.account : title;
-      return archivedAccounts.has(key) ? null : (accountKinds.get(key) ?? null);
-    },
-    [archivedAccounts, accountKinds]
-  );
-
-  /** Подпись варианта: у пары «счёт → контрагент» показываем человека. */
-  const accountLabel = useCallback(
-    (value: string) => parseDebtKey(value)?.payee ?? dir.label(value),
-    [dir]
-  );
-
-  /**
-   * Категории, которые встречаются на выбранных счетах, — список в фильтре
-   * категорий сужается до них: выбран счёт «С», а по нему не было ни «А», ни
-   * «Б» — их и незачем предлагать. Счета не выбраны — `null`, список полный.
-   */
-  const categoriesOnAccounts = useMemo(() => {
-    if (f.accounts.size === 0 || f.accounts.has(FILTER_NONE)) return null;
-    const debtPicks = debtSelection(f.accounts);
-    const out = new Set<string>();
-    for (const t of transactions) {
-      if (!t.category || !onPickedAccounts(t, f.accounts, debtPicks)) continue;
-      for (const key of categoryKeysOf(t)) out.add(key);
-    }
-    return out;
-  }, [transactions, f.accounts]);
-
-  // Parent categories each with their observed sub-categories — for the cascade
-  // category filter (parent on the left, subs on the right).
-  const categoryNodes = useMemo(() => {
+// Parent categories each with their observed sub-categories — for the cascade
+// category filter (parent on the left, subs on the right).
+const categoryNodesOf = memoLast((transactions: Transaction[], tagKinds: TagKinds) => {
     const map = new Map<
       string,
       { subs: Set<string>; hasBare: boolean; seenIncome: boolean; seenExpense: boolean }
@@ -382,31 +249,26 @@ export function GlobalFilters({
       ...pinned,
       ...real.filter((n) => !pinnedNames.has(n.name)),
     ];
-  }, [transactions, tagKinds]);
+});
 
-  // Люди на аккаунте (#92). Считаем по самим операциям, а не по списку
-  // аккаунта: на общем аккаунте человек мог не завести ни одной операции, и
-  // пустая строка в фильтре только мешала бы. На личном список выйдет из
-  // одного человека — тогда фильтр не показываем вовсе, выбирать не из кого.
-  const memberIds = useMemo(() => membersInData(transactions), [transactions]);
-  // «Общие» — отдельным пунктом: операция на общем счёте не принадлежит
-  // никому, и выбрасывать её из выбора нельзя. Пункт добавляем только если
-  // общие счета в данных есть.
-  const userOptions = useMemo(() => {
-    const out = memberIds.map(String);
-    if (hasSharedItems(transactions)) out.push(MEMBER_SHARED);
-    return out;
-  }, [memberIds, transactions]);
-  const userAliases = useMembersStore((s) => s.aliases);
-  const zenUserList = useZenUsers();
+const memberIdsOf = memoLast((transactions: Transaction[]) => membersInData(transactions));
 
-  const currencies = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of transactions) if (t.currency) set.add(t.currency);
-    return Array.from(set).sort();
-  }, [transactions]);
+// «Общие» — отдельным пунктом: операция на общем счёте не принадлежит
+// никому, и выбрасывать её из выбора нельзя. Пункт добавляем только если
+// общие счета в данных есть.
+const userOptionsOf = memoLast((memberIds: ReturnType<typeof membersInData>, transactions: Transaction[]) => {
+  const out = memberIds.map(String);
+  if (hasSharedItems(transactions)) out.push(MEMBER_SHARED);
+  return out;
+});
 
-  const dataRange = useMemo(() => {
+const currenciesOf = memoLast((transactions: Transaction[]) => {
+  const set = new Set<string>();
+  for (const t of transactions) if (t.currency) set.add(t.currency);
+  return Array.from(set).sort();
+});
+
+const dataRangeOf = memoLast((transactions: Transaction[]) => {
     let min = "";
     let max = "";
     for (const t of transactions) {
@@ -421,7 +283,175 @@ export function GlobalFilters({
       minDate: min || null,
       maxDate: max || null,
     };
+});
+
+export function GlobalFilters({
+  showDateRange = true,
+  dateRangeHint,
+  showDataFilters = true,
+  dataFiltersHint,
+  dimmed = false,
+  period,
+}: {
+  /**
+   * Управляет ли эта панель периодом. `false` — контролы дат остаются на месте,
+   * но становятся НЕАКТИВНЫМИ.
+   *
+   * Раньше они просто исчезали, и панель на страницах со своим периодом
+   * («Сравнение», «Календарь», «50/30/20») выглядела короче, чем на остальных.
+   * Одинаковая на вид панель, часть которой погашена, читается спокойнее, чем
+   * панель, у которой каждый раз разный набор контролов.
+   */
+  showDateRange?: boolean;
+  /** Чем объяснить, почему даты недоступны. Показывается подсказкой. */
+  dateRangeHint?: string;
+  /**
+   * Работают ли фильтры ДАННЫХ: сохранённый вид, «Дополнительно», счета,
+   * категории, валюта, поиск. `false` — они остаются на месте, но гаснут и не
+   * нажимаются, а период при этом живой. Зеркало `showDateRange`, только с
+   * другой стороны панели.
+   *
+   * Нужно там, где страница считает по всей истории и слушает только период
+   * («Счета» → «Капитал»): без этого рядом стоят два фильтра «Счета» — общий,
+   * который на остатки не влияет, и свой у графика, — и понять, какой чем
+   * управляет, нельзя.
+   */
+  showDataFilters?: boolean;
+  /** Чем объяснить, почему фильтры данных недоступны. Подсказкой и строкой под панелью. */
+  dataFiltersHint?: string;
+  /**
+   * Панель целиком не действует на то, что сейчас на экране: гасим её и не даём
+   * трогать. Тот же приём, что и с датами выше, только на всю панель.
+   *
+   * Убирать панель совсем нельзя: она общая для всего приложения, и её пропажа
+   * читалась бы как «фильтров тут не бывает». Погашенная панель на месте
+   * говорит правду: они есть, но этим данным не указ.
+   */
+  dimmed?: boolean;
+  /** Controlled period — when provided, ALL period controls (presets, month
+   *  picker, custom range) drive this page-local controller instead of the
+   *  global filter store, without touching the global «месяц». Used by history
+   *  charts (Cash-flow, Trends). See `useLocalPeriod`. */
+  period?: PeriodController;
+} = {}) {
+  const transactions = useDataStore((s) => s.transactions);
+  // Фильтр сравнивает суммы в базовой валюте, поэтому и подпись — по ней.
+  const base = useDataStore((s) => s.rates.base);
+  const f = useFiltersStore();
+  const [search, setSearchSoon] = useDebouncedField(f.search, f.setSearch);
+  const controlledPeriod = period !== undefined;
+  // Period slice source: the local controller when controlled, else the store.
+  // Both expose the same fields/handlers (preset/monthYM/from/to + setters).
+  const periodCtl: PeriodController = controlledPeriod ? period : f;
+  const additionalRef = useRef<HTMLDivElement>(null);
+  const [additionalOpen, setAdditionalOpen] = useState(false);
+
+  /** Название категории → расходная она или доходная, по справочнику Дзен-мани.
+   *  Пусто в режиме CSV — тогда тип выводим из самих операций. Тот же объект,
+   *  пока справочник не менялся (см. `tagKindsOf`): новый на каждый переход
+   *  пересобирал дерево категорий второй раз. */
+  const [tagKinds, setTagKinds] = useState<TagKinds>(() => lastTagKinds);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getZenCache().then((cache) => {
+      if (cancelled || !cache) return;
+      lastTagKinds = tagKindsOf(cache.tags);
+      setTagKinds(lastTagKinds);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [transactions]);
+  // Счета — по ключам справочника (номер счёта, а не название): два
+  // «Т-Банка» в фильтре — две строки, у каждой своя подпись с уточнением.
+  const dir = useAccountDirectory();
+  const { archivedAccounts, accountKinds } = accountMetaOf(dir);
+
+  // Отобранные счета, запомненные названием (память фильтров, сохранённые
+  // виды, наборы до перехода на ключи), — в ключи: название раскрывается во
+  // все счета с ним, как и работало раньше.
+  const setSetRef = f.setSet;
+  useEffect(() => {
+    if (f.accounts.size === 0 || dir.list.length === 0) return;
+    let changed = false;
+    const next = new Set<string>();
+    for (const v of f.accounts) {
+      if (v === FILTER_NONE || dir.byKey.has(v) || parseDebtKey(v)) {
+        next.add(v);
+        continue;
+      }
+      const keys = dir.keysByTitle(v);
+      if (keys.length === 0) {
+        next.add(v);
+        continue;
+      }
+      for (const k of keys) next.add(k);
+      changed = true;
+    }
+    if (changed) setSetRef("accounts", next);
+  }, [f.accounts, dir, setSetRef]);
+
+  // Список счетов — операции ПЛЮС справочник Дзен-мани: счёт без операций в
+  // загруженных данных на странице «Счета» есть, и в фильтре он тоже должен
+  // быть (issue #67). `accountKinds` знает все счета справочника и пуст в
+  // режиме CSV — там остаются одни операции.
+  const accounts = accountsOf(transactions, dir);
+
+  /** Заголовок группы для пикера счетов: архивные идут под своим разделителем,
+   *  который рисует сам MultiSelect, поэтому им группу не назначаем. */
+  const accountGroup = useCallback(
+    (title: string) => {
+      // Контрагент живёт в группе своего счёта: он его ветка, а не отдельный
+      // раздел — иначе между счётом и его же разбивкой встал бы заголовок.
+      const debt = parseDebtKey(title);
+      const key = debt ? debt.account : title;
+      return archivedAccounts.has(key) ? null : (accountKinds.get(key) ?? null);
+    },
+    [archivedAccounts, accountKinds]
+  );
+
+  /** Подпись варианта: у пары «счёт → контрагент» показываем человека. */
+  const accountLabel = useCallback(
+    (value: string) => parseDebtKey(value)?.payee ?? dir.label(value),
+    [dir]
+  );
+
+  /**
+   * Категории, которые встречаются на выбранных счетах, — список в фильтре
+   * категорий сужается до них: выбран счёт «С», а по нему не было ни «А», ни
+   * «Б» — их и незачем предлагать. Счета не выбраны — `null`, список полный.
+   */
+  const categoriesOnAccounts = useMemo(() => {
+    if (f.accounts.size === 0 || f.accounts.has(FILTER_NONE)) return null;
+    const debtPicks = debtSelection(f.accounts);
+    const out = new Set<string>();
+    for (const t of transactions) {
+      if (!t.category || !onPickedAccounts(t, f.accounts, debtPicks)) continue;
+      for (const key of categoryKeysOf(t)) out.add(key);
+    }
+    return out;
+  }, [transactions, f.accounts]);
+
+  // Parent categories each with their observed sub-categories — for the cascade
+  // category filter (parent on the left, subs on the right).
+  const categoryNodes = categoryNodesOf(transactions, tagKinds);
+
+  // Люди на аккаунте (#92). Считаем по самим операциям, а не по списку
+  // аккаунта: на общем аккаунте человек мог не завести ни одной операции, и
+  // пустая строка в фильтре только мешала бы. На личном список выйдет из
+  // одного человека — тогда фильтр не показываем вовсе, выбирать не из кого.
+  const memberIds = memberIdsOf(transactions);
+  // «Общие» — отдельным пунктом: операция на общем счёте не принадлежит
+  // никому, и выбрасывать её из выбора нельзя. Пункт добавляем только если
+  // общие счета в данных есть.
+  const userOptions = userOptionsOf(memberIds, transactions);
+  const userAliases = useMembersStore((s) => s.aliases);
+  const zenUserList = useZenUsers();
+
+  const currencies = currenciesOf(transactions);
+
+  const dataRange = dataRangeOf(transactions);
 
   // Год якорится тем же `monthYM`, поэтому пикеру он подходит как есть.
   const anchored =
