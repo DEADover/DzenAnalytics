@@ -55,7 +55,18 @@ for (const width of [1440, 768]) {
     // уехавшая от поля. Человек так быстро метку не нажмёт.
     // Лента догоняет поле отложенно — ждём ровно прежний список.
     await expect(payees).toHaveCount(nEverywhere);
-    await page.waitForTimeout(150);
+    // И само поле должно стоять: подсказка честно закрывается, когда оно
+    // сдвигается, а под нагрузкой раскладка доезжает с опозданием.
+    let prev = "";
+    await expect
+      .poll(async () => {
+        const b = await field.boundingBox();
+        const now = JSON.stringify(b);
+        const still = now === prev;
+        prev = now;
+        return still;
+      }, { intervals: [150] })
+      .toBe(true);
 
     // Метка открывает подсказку; клик «В фильтре» — обратно.
     await badge.click();

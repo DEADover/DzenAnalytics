@@ -224,6 +224,8 @@ export async function connectZen(page: Page, path = "/"): Promise<void> {
     const { useDataStore } = await store("useDataStore");
     return useDataStore.getState().transactions.length > 0;
   });
+  // Код раздела приходит отдельным куском — ждём, пока он нарисуется.
+  await page.locator("[data-page-loading]").waitFor({ state: "detached" });
 }
 
 /** Режим отправки: «Выключено», «Вручную», «Авто», «При синке». */

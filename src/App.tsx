@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { isViewTransitionUpdate } from "./lib/viewTransition";
 import { TopNav } from "./components/TopNav";
@@ -24,36 +24,39 @@ import { useTourStore } from "./store/useTourStore";
 import { TourHub } from "./components/tour/TourHub";
 import { TourOverlay } from "./components/tour/TourOverlay";
 import { DashboardPage } from "./pages/DashboardPage";
-import { CashflowPage } from "./pages/CashflowPage";
-import { TransactionsPage } from "./pages/TransactionsPage";
-import { Budget503020Page } from "./pages/Budget503020Page";
-import { CategoriesPage } from "./pages/CategoriesPage";
-import { ReportPage } from "./pages/ReportPage";
-import { DynamicsPage } from "./pages/DynamicsPage";
-import { AccountsPage } from "./pages/AccountsPage";
-import { TopPage } from "./pages/TopPage";
-import { CounterpartiesPage } from "./pages/CounterpartiesPage";
-import { ComparePage } from "./pages/ComparePage";
-import { ImportPage } from "./pages/ImportPage";
-import { CalendarPage } from "./pages/CalendarPage";
-import { TagsPage } from "./pages/TagsPage";
-import { RecurringPage } from "./pages/RecurringPage";
-import { TrendsPage } from "./pages/TrendsPage";
-import { BudgetsPage } from "./pages/BudgetsPage";
-import { AnomaliesPage } from "./pages/AnomaliesPage";
-import { SearchPage } from "./pages/SearchPage";
-import { GoalsPage } from "./pages/GoalsPage";
-import { DuplicatesPage } from "./pages/DuplicatesPage";
-import { UncategorizedPage } from "./pages/UncategorizedPage";
-import { DeletedPage } from "./pages/DeletedPage";
-import { SankeyPage } from "./pages/SankeyPage";
-import { HelpPage } from "./pages/HelpPage";
-import { RulesPage } from "./pages/RulesPage";
-import { WordcloudPage } from "./pages/WordcloudPage";
-import { HealthPage } from "./pages/HealthPage";
-import { WhatIfPage } from "./pages/WhatIfPage";
-import { YearReviewPage } from "./pages/YearReviewPage";
-import { DigestPage } from "./pages/DigestPage";
+import {
+  ImportPage,
+  RecurringPage,
+  ComparePage,
+  BudgetsPage,
+  AnomaliesPage,
+  SearchPage,
+  GoalsPage,
+  DuplicatesPage,
+  UncategorizedPage,
+  DeletedPage,
+  HelpPage,
+  RulesPage,
+  HealthPage,
+  WhatIfPage,
+  YearReviewPage,
+  DigestPage,
+  TransactionsPage,
+  CashflowPage,
+  CategoriesPage,
+  ReportPage,
+  DynamicsPage,
+  AccountsPage,
+  CalendarPage,
+  TagsPage,
+  TopPage,
+  CounterpartiesPage,
+  TrendsPage,
+  SankeyPage,
+  WordcloudPage,
+  Budget503020Page,
+  preloadAllPages,
+} from "./lazyPages";
 import { useDataStore } from "./store/useDataStore";
 import { useThemeStore } from "./store/useThemeStore";
 import { useBackupStore } from "./store/useBackupStore";
@@ -131,7 +134,11 @@ function PlainLayout() {
           пересоздаваться на каждом переходе, а с новым узлом заново
           проигрывается и анимация. */}
       <div key={pathname} className={enter.animate ? "page-enter" : undefined}>
-        <Outlet />
+        {/* Раздел, чей код ещё не пришёл (см. `pages.ts`), — пустое место
+            высотой с экран, а не прыжок подвала вверх. */}
+        <Suspense fallback={<div className="min-h-[70vh]" data-page-loading />}>
+          <Outlet />
+        </Suspense>
       </div>
     </ErrorBoundary>
   );
@@ -526,6 +533,13 @@ function App() {
       clearInterval(id);
     };
   }, []);
+
+  // Код остальных разделов — в свободную минуту после старта: переход потом
+  // ничего не ждёт (см. `lazyPages.ts`). Только в сборке: в разработке
+  // кусков нет, и подгрузка лишь заставляла бы Vite готовить все разделы.
+  useEffect(() => {
+    if (loaded && import.meta.env.PROD) preloadAllPages();
+  }, [loaded]);
 
   // Ждём и «Скрыть суммы»: иначе после перезагрузки цифры мелькнули бы до
   // того, как режим прочитан.
