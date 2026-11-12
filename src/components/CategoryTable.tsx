@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { formatMoney, formatNum, formatPct } from "../lib/format";
 import { diffSortValue, type DiffMode } from "../lib/diffMode";
 import { CategoryDot } from "./CategoryDot";
+import type { CategoryTableRow } from "../lib/categoryTableRows";
 import { DataTable, type Column } from "./DataTable";
 import { DeviationPill } from "./DeviationPill";
 import { DiffModeToggle } from "./DiffModeToggle";
@@ -13,43 +14,7 @@ import { DiffModeToggle } from "./DiffModeToggle";
  * `key` — полное имя («Еда / Кафе» у подкатегории), `name` — то, что написано
  * в строке: у подкатегории без повтора родителя.
  */
-export interface CategoryTableRow {
-  key: string;
-  name: string;
-  /** Родитель подкатегории — для значка и подсказки. */
-  parent?: string;
-  value: number;
-  count: number;
-  /** Доля от итога таблицы, 0…1. */
-  share: number;
-  /** С чем сравниваем: среднее за прошлые месяцы или второй период. */
-  compare?: number;
-  /** Цвет полосы. */
-  color?: string;
-  /** Цвет значка, если у подкатегории своего нет. */
-  dotFallback?: string;
-  /** «Без подкатегории»: операции самой категории, не разнесённые по подкатегориям. */
-  own?: boolean;
-  children?: CategoryTableRow[];
-}
-
-/** Подпись строки с операциями самой категории, без подкатегории. */
-export const OWN_ROW_LABEL = "Без подкатегории";
-
-/**
- * Строка «Без подкатегории» под категорией — та часть суммы, что записана на
- * саму категорию. Без неё подкатегории не складывались в итог категории, и
- * разница ничем не объяснялась. Нужна, только если у категории есть
- * подкатегории (`hasSubs`) и на ней самой что-то есть.
- */
-export function ownCategoryRow(
-  parent: string,
-  hasSubs: boolean,
-  row: Omit<CategoryTableRow, "key" | "name" | "parent" | "own">
-): CategoryTableRow[] {
-  if (!hasSubs || (row.value <= 0.0001 && (row.compare ?? 0) <= 0.0001)) return [];
-  return [{ ...row, key: `${parent}::own`, name: OWN_ROW_LABEL, parent, own: true }];
-}
+export type { CategoryTableRow };
 
 interface CompareSpec {
   label: string;

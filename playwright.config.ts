@@ -13,7 +13,11 @@ export default defineConfig({
   testMatch: "**/*.e2e.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // В CI один повтор: на чужой машине под нагрузкой бывают редкие сбои по
+  // времени. Тест, прошедший со второго раза, Playwright помечает «flaky» —
+  // это видно в отчёте, а не прячется.
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
   reporter: [["list"]],
   timeout: 60_000,
   expect: { timeout: 10_000 },

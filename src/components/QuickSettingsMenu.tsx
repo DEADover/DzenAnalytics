@@ -139,7 +139,7 @@ function QuickSettingsPanel({ onClose }: { onClose: () => void }) {
  * Какие пункты сейчас имеют смысл. Остальные из панели не пропадают — просто
  * не показываются, пока не понадобятся (например, отправка — без Дзен-мани).
  */
-export function useAvailableQuickSettings(): (id: string) => boolean {
+function useAvailableQuickSettings(): (id: string) => boolean {
   const token = useZenmoneyStore((s) => s.token);
   const ownerId = useMembersStore((s) => s.ownerId);
   return (id) => {

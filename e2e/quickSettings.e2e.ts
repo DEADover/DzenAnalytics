@@ -67,7 +67,7 @@ test("«Скрыть суммы»: ни одной суммы цифрами н�
   await expect(page.locator("[data-keep]")).toHaveCount(1);
   await expect(page.locator("main").getByText(/\d ₽/)).toHaveCount(0);
 
-  const money = /\d[\d   ,]*\s?[₽$€]/;
+  const money = /\d[\d\u00a0\u202f ,]*\s?[₽$€]/;
   const leaks: string[] = [];
   for (const route of ROUTES) {
     if (route === "/help" || route === "/import") continue;

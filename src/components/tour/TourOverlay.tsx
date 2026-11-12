@@ -324,6 +324,9 @@ export function TourOverlay() {
     return () => cancelAnimationFrame(raf);
   }, [step, chapterId, stepIdx]);
 
+  // Без списка зависимостей нарочно: высоту карточки меряем после каждой
+  // отрисовки, а setCardH срабатывает только при настоящем изменении.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const h = cardRef.current?.offsetHeight;
     if (h && Math.abs(h - cardH) > 1) setCardH(h);

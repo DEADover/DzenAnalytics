@@ -108,7 +108,7 @@ export function PlanEditModal({
     return () => {
       alive = false;
     };
-  }, [plan.reminder]);
+  }, [plan.reminder, plan.id]);
   const scheduleChanged = scope === "chain" && !!schedule && !!scheduleOrig && !sameSchedule(schedule, scheduleOrig);
   const schedulePreview = schedule ? scheduleDates(schedule, today, planHorizon(today)) : [];
   const [saving, setSaving] = useState(false);

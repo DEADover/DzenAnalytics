@@ -6,7 +6,8 @@ import { zenIconToLucide } from "../lib/zenIconLucide";
 import { pluralOps } from "../lib/plural";
 import { useDrillStore } from "../store/useDrillStore";
 import { KindSwitcher } from "./KindSwitcher";
-import { CategoryTable, ownCategoryRow, type CategoryTableRow } from "./CategoryTable";
+import { CategoryTable } from "./CategoryTable";
+import { ownCategoryRow, type CategoryTableRow } from "../lib/categoryTableRows";
 
 // A Budgera-style two-ring category donut: the inner ring is the top-level
 // categories (each with its glyph), the outer thin ring breaks every category

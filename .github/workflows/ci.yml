@@ -52,12 +52,9 @@ jobs:
         run: npm run build:standalone
 
   lint:
-    name: Lint (informational)
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    # Don't block merges on lint until we've paid down the existing
-    # warnings. Surfaces the number so we can watch it shrink.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,4 +62,30 @@ jobs:
           node-version: "22"
           cache: "npm"
       - run: npm ci
-      - run: npm run lint
+      # Предупреждения тоже не пропускаем: иначе они копятся незаметно.
+      - run: npm run lint -- --max-warnings 0
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      # Тесты идут в установленном Google Chrome (channel: "chrome") — на
+      # ubuntu-latest он уже есть. Шрифты с кириллицей ставим на всякий
+      # случай: от них зависят проверки «подпись в одну строку».
+      - name: Fonts
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core fonts-liberation
+      - run: npm run test:e2e
+      - name: Traces of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
