@@ -14,7 +14,9 @@ export function formatSyncResult(r: SyncResult): string {
   const parts: string[] = [];
   if (r.delta.transactions > 0) parts.push(`+${formatNum(r.delta.transactions)} ${pluralRu(r.delta.transactions, ["новая/изменённая", "новые/изменённые", "новых/изменённых"])}`);
   if (r.delta.deletions > 0) parts.push(`${formatNum(r.delta.deletions)} ${pluralRu(r.delta.deletions, ["удалена", "удалены", "удалено"])}`);
-  return `${parts.join(", ")}. Всего ${formatNum(r.count)} ${pluralRu(r.count, ["операция", "операции", "операций"])}.`;
+  // Общее число операций в итоге не пишем — оно ничего не сообщает о том,
+  // что пришло; оно есть в журнале синхронизации.
+  return `${parts.join(", ")}.`;
 }
 
 /**

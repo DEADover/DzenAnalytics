@@ -28,6 +28,21 @@ test("итог синхронизации — плашкой внизу по ц�
   if (process.env.E2E_SHOTS) await page.screenshot({ path: process.env.E2E_SHOTS + "/sync-toast.png", clip: { x: 360, y: 780, width: 720, height: 120 } });
 });
 
+test("пришли изменения — итог без общего числа операций", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  const id = await page.evaluate(async () => {
+    type Store = { getState: () => { transactionsRaw: { id: string }[] } };
+    const w = window as unknown as { __store: (n: string) => Promise<{ useDataStore: Store }> };
+    const { useDataStore } = await w.__store("useDataStore");
+    return useDataStore.getState().transactionsRaw[0]!.id;
+  });
+  zen.cloudEdits.push({ id, patch: { comment: "Изменено в облаке" } });
+  await syncBtn(page).click();
+  const t = toastEl(page);
+  await expect(t).toContainText("+1 новая/изменённая.");
+  await expect(t).not.toContainText("Всего");
+});
+
 test("итог синхронизации не сбивает «Отменить», а встаёт следом", async ({ page }) => {
   await connectZen(page, "/transactions");
   await page.locator(".op-row").first().getByRole("button", { name: "Удалить операцию" }).click();
