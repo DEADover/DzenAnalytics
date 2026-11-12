@@ -3,7 +3,7 @@
  * операции ступенькой в свои дни, остаток бюджета ровно по оставшимся дням
  * (настройка «Размазывать план»). На «Сравнении» и на графике бюджета.
  */
-import { test, expect, connectZen } from "./harness";
+import { test, expect, connectZen, readMeta } from "./harness";
 import type { Page, Locator } from "@playwright/test";
 
 const money = (s: string) => Number(s.replace(/[^\d−-]/g, "").replace("−", "-"));
@@ -66,6 +66,10 @@ test("бюджет: «Размазывать план» на графике ме
   await expect(summary).toContainText(/(свободно на конец месяца|не хватает до конца месяца)/i);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
+  // Перезагрузка ниже — настройка должна успеть лечь в базу.
+  await expect
+    .poll(async () => (await readMeta<{ smearPlan?: boolean }>(page, "budgetSettings"))?.smearPlan)
+    .toBe(false);
   // Настройка одна: на «Сравнении» она тоже выключена.
   await page.goto("/compare");
   const card = await trackCard(page);

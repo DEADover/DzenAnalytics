@@ -3,7 +3,7 @@
  * клик по строке операции её не отмечает; галочка и двойной клик
  * работают как раньше.
  */
-import { test, expect, connectZen } from "./harness";
+import { test, expect, connectZen, readMeta } from "./harness";
 
 test("выключили «Выделение строки кликом» — клик не отмечает, галочка и двойной клик работают", async ({ page }) => {
   await connectZen(page, "/settings?tab=interface");
@@ -11,6 +11,10 @@ test("выключили «Выделение строки кликом» — к
   await expect(sw).toBeChecked();
   await sw.click();
   await expect(sw).not.toBeChecked();
+  // Перезагрузка ниже — настройка должна успеть лечь в базу.
+  await expect
+    .poll(async () => (await readMeta<{ rowClickSelect?: boolean }>(page, "displaySettings"))?.rowClickSelect)
+    .toBe(false);
 
   await page.goto("/transactions");
   const row = page.locator(".op-row").nth(1);

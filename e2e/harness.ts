@@ -242,3 +242,25 @@ export async function setPushMode(page: Page, mode: "off" | "manual" | "auto" | 
 export async function horizontalOverflow(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 }
+
+/**
+ * Значение из служебной таблицы `meta` базы панели — то, что переживёт
+ * перезагрузку. Настройки и журнал пишутся в базу следом за действием, и
+ * `page.goto` до конца записи их теряет: перед перезагрузкой ждём значение
+ * здесь (`expect.poll(() => readMeta(page, key))`).
+ */
+export async function readMeta<T = unknown>(page: Page, key: string): Promise<T | undefined> {
+  return page.evaluate(
+    (k) =>
+      new Promise<T | undefined>((resolve) => {
+        const req = indexedDB.open("dzenanalytics");
+        req.onsuccess = () => {
+          const get = req.result.transaction("meta").objectStore("meta").get(k);
+          get.onsuccess = () => resolve(get.result as T | undefined);
+          get.onerror = () => resolve(undefined);
+        };
+        req.onerror = () => resolve(undefined);
+      }),
+    key
+  );
+}

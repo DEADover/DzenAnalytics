@@ -1,4 +1,4 @@
-import { test, expect, connectZen, FAKE_TOKEN } from "./harness";
+import { test, expect, connectZen, FAKE_TOKEN, readMeta } from "./harness";
 
 /**
  * Синхронизация сломалась у человека: он должен увидеть, что делать, а автор
@@ -18,7 +18,8 @@ test("токен перестал приниматься: «Войти зано�
   const relogin = page.getByRole("button", { name: "Войти заново" });
   await expect(relogin).toBeVisible();
 
-  // Сбой хранится, а не живёт до перезагрузки.
+  // Сбой хранится, а не живёт до перезагрузки: ждём его в базе.
+  await expect.poll(async () => (await readMeta<{ status?: number }>(page, "zenmoneyPullFailure"))?.status).toBe(401);
   await page.reload();
   await expect(relogin).toBeVisible();
 
@@ -55,20 +56,7 @@ test("сбой повторяется — одна строка журнала �
   // Журнал пишется в базу следом за ошибкой; перезагрузка до конца записи её
   // теряет — ждём, пока «×2» окажется в самой базе.
   await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          new Promise<number>((resolve) => {
-            const req = indexedDB.open("dzenanalytics");
-            req.onsuccess = () => {
-              const get = req.result.transaction("meta").objectStore("meta").get("syncLog");
-              get.onsuccess = () => resolve((get.result as { repeat?: number }[] | undefined)?.[0]?.repeat ?? 1);
-              get.onerror = () => resolve(0);
-            };
-            req.onerror = () => resolve(0);
-          })
-      )
-    )
+    .poll(async () => (await readMeta<{ repeat?: number }[]>(page, "syncLog"))?.[0]?.repeat ?? 1)
     .toBe(2);
 
   await page.goto("/settings?tab=source&source=api");
