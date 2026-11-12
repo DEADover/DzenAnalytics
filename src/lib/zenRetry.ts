@@ -20,6 +20,25 @@ export function isTransientZenError(e: unknown): boolean {
 /** Паузы между попытками, мс: всего попыток на одну больше. */
 export const RETRY_DELAYS_MS = [1500, 5000] as const;
 
+/**
+ * 429 — «слишком часто». Ждём столько, сколько просит сервер (`Retry-After`),
+ * а не сказал — полминуты: через полторы секунды тот же ответ гарантирован.
+ * Просит дольше минуты — не ждём здесь вовсе: человек не должен смотреть на
+ * «отправляется» минутами, повторит синхронизация по расписанию.
+ */
+export const RATE_LIMIT_DEFAULT_MS = 30_000;
+export const RATE_LIMIT_MAX_WAIT_MS = 60_000;
+
+/** Сколько ждать перед следующей попыткой; `null` — не повторять. */
+export function retryDelayFor(e: unknown, planned: number): number | null {
+  if (!isTransientZenError(e)) return null;
+  if (e instanceof ZenApiError && e.status === 429) {
+    const ask = e.retryAfterMs ?? RATE_LIMIT_DEFAULT_MS;
+    return ask > RATE_LIMIT_MAX_WAIT_MS ? null : Math.max(planned, ask);
+  }
+  return planned;
+}
+
 export async function retryTransient<T>(
   fn: () => Promise<T>,
   opts: {
@@ -34,9 +53,10 @@ export async function retryTransient<T>(
     try {
       return await fn();
     } catch (e) {
-      if (attempt >= delays.length || !isTransientZenError(e)) throw e;
+      const wait = attempt < delays.length ? retryDelayFor(e, delays[attempt]) : null;
+      if (wait === null) throw e;
       opts.onRetry?.(attempt + 1, e);
-      await sleep(delays[attempt]);
+      await sleep(wait);
     }
   }
 }

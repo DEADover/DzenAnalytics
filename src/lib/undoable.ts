@@ -9,7 +9,7 @@
  * не попадает ни удаление, ни его возврат.
  */
 import { useDataStore } from "../store/useDataStore";
-import { useEditsStore } from "../store/useEditsStore";
+import { EDIT_STORE_KEYS, useEditsStore } from "../store/useEditsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { pruneSpentSnapshots } from "../store/useDeletedPayloadsStore";
@@ -85,7 +85,7 @@ export function editUndo(ids: readonly string[]): () => Promise<void> {
  */
 export async function snapshotPending(): Promise<() => Promise<void>> {
   return snapshotStores([
-    [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+    [useEditsStore, EDIT_STORE_KEYS],
     [useDraftsStore, ["pendingTransactions"]],
     [useDeletedStore, ["deletedTransactions", "deletedTransactionsAt"]],
     [useTagEditsStore, ["tagEdits"]],

@@ -8,6 +8,7 @@
 // пользователь копирует одной кнопкой. Ни токена, ни сумм, ни названий в
 // отчёт не попадает.
 
+import { formatAppErrors, type AppError } from "./appErrors";
 import { ZenApiError, ZenTimeoutError } from "./zenmoney";
 
 /** Шаг, на котором синхронизация или отправка остановилась. */
@@ -56,6 +57,8 @@ export interface SyncFailure {
   version: string;
   /** Сколько синхронизаций подряд закончились ошибкой (включая эту). */
   streak: number;
+  /** Сколько Дзен-мани просил подождать (429 с `Retry-After`), мс. */
+  retryAfterMs?: number | null;
 }
 
 /** Разобрать пойманное исключение в запись об ошибке. */
@@ -66,6 +69,7 @@ export function describeFailure(
   const err = e instanceof Error ? e : new Error(typeof e === "string" ? e : "Неизвестная ошибка");
   const status = e instanceof ZenApiError ? e.status : null;
   const code = e instanceof ZenApiError ? e.code : null;
+  const retryAfterMs = e instanceof ZenApiError ? e.retryAfterMs : null;
   // DOMException (QuotaExceededError и т.п.) — тоже Error, имя берём как есть.
   const stack = err.stack
     ? err.stack
@@ -85,6 +89,7 @@ export function describeFailure(
     stack,
     version: ctx.version,
     streak: ctx.streak,
+    ...(retryAfterMs ? { retryAfterMs } : {}),
   };
 }
 
@@ -141,7 +146,8 @@ export function backoffMs(streak: number): number {
 /** Когда можно следующую автопопытку; null — паузы нет. */
 export function nextAutoRetryAt(f: SyncFailure | null): number | null {
   if (!f || f.streak <= 0) return null;
-  return new Date(f.at).getTime() + backoffMs(f.streak);
+  // Сервер сам сказал, когда можно (429), — раньше этого не стучимся.
+  return new Date(f.at).getTime() + Math.max(backoffMs(f.streak), f.retryAfterMs ?? 0);
 }
 
 /**
@@ -190,6 +196,8 @@ export interface SyncReportInput {
   storage: { usage: number; quota: number } | null;
   profiles: number;
   log: { ts: number; kind: string; status: string; title: string; error?: string; repeat?: number }[];
+  /** Ошибки приложения вне синхронизации (lib/appErrors). */
+  appErrors?: readonly AppError[];
 }
 
 const fmtDate = (iso: string | number | null) =>
@@ -235,6 +243,7 @@ export function formatSyncReport(r: SyncReportInput): string {
   );
   const pend = Object.entries(r.pending).filter(([, n]) => n > 0);
   lines.push(`Очередь правок: ${pend.length ? pend.map(([k, n]) => `${k} ${n}`).join(", ") : "пусто"}`);
+  if (r.appErrors) lines.push(...formatAppErrors(r.appErrors));
   lines.push(
     r.storage ? `Место сайта в браузере: занято ${mb(r.storage.usage)} из ${mb(r.storage.quota)}` : "Место сайта в браузере: неизвестно"
   );

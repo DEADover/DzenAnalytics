@@ -17,6 +17,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import type { ZenTransaction } from "../lib/zenmoney";
 
 const KEY = "pendingTransactions";
@@ -54,6 +55,9 @@ interface DraftsState {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useDraftsStore = create<DraftsState>((set, get) => {
   /** Пометки живут только у существующих черновиков. */
   async function dropResend(ids: readonly string[]) {
@@ -70,50 +74,50 @@ export const useDraftsStore = create<DraftsState>((set, get) => {
   resend: new Set<string>(),
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const data = (await db.loadJSON<Record<string, ZenTransaction>>(KEY)) || {};
     const marks = (await db.loadJSON<string[]>(RESEND_KEY)) || [];
     set({ drafts: data, resend: new Set(marks.filter((id) => id in data)), loaded: true });
-  },
+  }),
 
-  markResend: async (ids) => {
+  markResend: (ids) => queue(async () => {
     const fresh = ids.filter((id) => id in get().drafts && !get().resend.has(id));
     if (fresh.length === 0) return;
     const next = new Set([...get().resend, ...fresh]);
     await db.saveJSON(RESEND_KEY, [...next]);
     set({ resend: next });
-  },
+  }),
 
-  add: async (tx) => {
+  add: (tx) => queue(async () => {
     const next = { ...get().drafts, [tx.id]: tx };
     await db.saveJSON(KEY, next);
     set({ drafts: next });
-  },
+  }),
 
-  addMany: async (txs) => {
+  addMany: (txs) => queue(async () => {
     if (txs.length === 0) return;
     const next = { ...get().drafts };
     for (const tx of txs) next[tx.id] = tx;
     await db.saveJSON(KEY, next);
     set({ drafts: next });
-  },
+  }),
 
-  update: async (tx) => {
+  update: (tx) => queue(async () => {
     const next = { ...get().drafts, [tx.id]: tx };
     await db.saveJSON(KEY, next);
     set({ drafts: next });
-  },
+  }),
 
-  remove: async (id) => {
+  remove: (id) => queue(async () => {
     if (!(id in get().drafts)) return;
     const next = { ...get().drafts };
     delete next[id];
     await db.saveJSON(KEY, next);
     set({ drafts: next });
     await dropResend([id]);
-  },
+  }),
 
-  clearMany: async (ids) => {
+  clearMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const next = { ...get().drafts };
     let changed = false;
@@ -127,13 +131,13 @@ export const useDraftsStore = create<DraftsState>((set, get) => {
     await db.saveJSON(KEY, next);
     set({ drafts: next });
     await dropResend(ids);
-  },
+  }),
 
-  clearAll: async () => {
+  clearAll: () => queue(async () => {
     await db.saveJSON(KEY, {});
     await db.saveJSON(RESEND_KEY, []);
     set({ drafts: {}, resend: new Set<string>() });
-  },
+  }),
   };
 });
 

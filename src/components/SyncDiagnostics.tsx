@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { appErrors } from "../lib/appErrors";
 import { Check, ClipboardCopy, Stethoscope } from "lucide-react";
 import { useZenmoneyStore, type PushMode } from "../store/useZenmoneyStore";
 import { useCloudSettingsStore } from "../store/useCloudSettingsStore";
@@ -73,6 +74,7 @@ export function SyncDiagnostics() {
       serverTimestamp: z.serverTimestamp,
       pullFailure: z.pullFailure,
       pushFailure: z.pushFailure,
+      appErrors: appErrors(),
       cache: cache
         ? {
             transactions: cache.transactions.length,

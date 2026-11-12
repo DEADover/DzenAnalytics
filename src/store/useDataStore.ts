@@ -2,6 +2,7 @@ import { localToday } from "../lib/period";
 import { create } from "zustand";
 import type { Transaction, CurrencyRates, ImportMeta } from "../types";
 import * as db from "../lib/db";
+import { recordAppError } from "../lib/appErrors";
 import { LEGACY_PAYEE_KEYS, restoreOriginalPayees } from "../lib/legacyPayees";
 import {
   baseWithHistory,
@@ -27,7 +28,7 @@ import {
 import { makeCategoryChecker, makeKindChecks } from "../lib/zenmoneyPush";
 
 import { applyEdits } from "../lib/applyEdits";
-import { useEditsStore, type TransactionEdit } from "./useEditsStore";
+import { setEditBaseSource, useEditsStore, type TransactionEdit } from "./useEditsStore";
 import { useDeletedStore, loadDeletedSet } from "./useDeletedStore";
 import { useDeletedPayloadsStore, loadDeletedPayloads } from "./useDeletedPayloadsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
@@ -738,6 +739,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       const raw = recalcBase(get().transactionsRaw, rates, merged);
       const final = await finalize(raw, rates);
       set({ transactions: final, transactionsRaw: raw });
+    } catch (e) {
+      // Фоновый прогрев: недогруженные даты перезапросятся в следующий раз,
+      // а сама ошибка — в отчёт, а не в необработанные обещания.
+      recordAppError("прогрев курсов ЦБ", e);
     } finally {
       set({ histWarming: null, histRatesUnavailable: unresolved });
     }
@@ -990,3 +995,21 @@ export const useDataStore = create<DataState>((set, get) => ({
 // Сменилось, чьё видно (кто вы, прятать ли чужие личные счета), — операции
 // пересобираются из неизменного сырого набора. После сброса списка счетов.
 onMembersVisibilityChange(() => useDataStore.getState().refresh(), 1);
+
+/**
+ * Операция по id в том виде, в каком она пришла из облака или файла, — без
+ * правок поверх. Индекс строится один раз на каждый новый набор.
+ */
+let indexedRaw: Transaction[] | null = null;
+let rawIndex = new Map<string, Transaction>();
+export function rawTransactionLookup(): (id: string) => Transaction | undefined {
+  const raw = useDataStore.getState().transactionsRaw;
+  if (raw !== indexedRaw) {
+    rawIndex = new Map(raw.map((t) => [t.id, t]));
+    indexedRaw = raw;
+  }
+  return (id) => rawIndex.get(id);
+}
+
+// Правка запоминает, поверх какой версии операции она сделана (lib/editBases).
+setEditBaseSource(rawTransactionLookup);

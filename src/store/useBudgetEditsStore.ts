@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import {
   budgetEditId,
   applyBudgetSkipBump,
@@ -31,30 +32,33 @@ interface State {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useBudgetEditsStore = create<State>((set, get) => ({
   edits: {},
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const data = await db.loadJSON<Record<string, BudgetEdit>>(KEY);
     set({ edits: data || {}, loaded: true });
-  },
+  }),
 
-  queue: async (edit) => {
+  queue: (edit) => queue(async () => {
     const next = { ...get().edits, [budgetEditId(edit)]: edit };
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  queueMany: async (edits) => {
+  queueMany: (edits) => queue(async () => {
     if (edits.length === 0) return;
     const next = { ...get().edits };
     for (const edit of edits) next[budgetEditId(edit)] = edit;
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  clearMany: async (ids) => {
+  clearMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const next = { ...get().edits };
     let changed = false;
@@ -67,9 +71,9 @@ export const useBudgetEditsStore = create<State>((set, get) => ({
     if (!changed) return;
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  bumpSkips: async (ids, max) => {
+  bumpSkips: (ids, max) => queue(async () => {
     if (ids.length === 0) return [];
     const { edits: next, dropped, changed } = applyBudgetSkipBump(
       get().edits,
@@ -80,12 +84,12 @@ export const useBudgetEditsStore = create<State>((set, get) => ({
     await db.saveJSON(KEY, next);
     set({ edits: next });
     return dropped;
-  },
+  }),
 
-  clearAll: async () => {
+  clearAll: () => queue(async () => {
     await db.saveJSON(KEY, {});
     set({ edits: {} });
-  },
+  }),
 }));
 
 /** Read budget edits without a hook — for the push builder. */

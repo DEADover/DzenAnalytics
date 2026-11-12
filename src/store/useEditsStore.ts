@@ -9,6 +9,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import type { Transaction } from "../types";
 import {
   forgetOrigins,
@@ -17,6 +18,7 @@ import {
   seedOrigins,
   type EditOrigins,
 } from "../lib/editOrigins";
+import { forgetBases, recordBases, staleFields, type EditBases } from "../lib/editBases";
 
 // Whitelisted editable fields. Keeping it explicit avoids accidentally
 // stomping derived fields like `amountBase` (we recompute that ourselves).
@@ -75,6 +77,8 @@ interface EditsState {
   edits: Record<string, TransactionEdit>;
   /** Поля, записанные правилами (см. `lib/editOrigins`). */
   origins: EditOrigins;
+  /** От какой версии облака сделана каждая правка (см. `lib/editBases`). */
+  bases: EditBases;
   loaded: boolean;
   hydrate: () => Promise<void>;
   setEdit: (id: string, patch: TransactionEdit, origin?: EditOrigin) => Promise<void>;
@@ -99,22 +103,47 @@ interface EditsState {
   snapshot: (ids: readonly string[]) => EditsSnapshot;
   /** Вернуть правки этих операций к снимку: была правка — она, не было — никакой. */
   restore: (snap: EditsSnapshot) => Promise<void>;
+  /**
+   * Синхронизация привезла операции `changed` (id → когда изменены в облаке,
+   * мс). Поля правок, которые облако поменяло позже, снимаются. `serverOf` —
+   * операция в том виде, в каком она пришла (без правок). Возвращает, сколько
+   * полей снято.
+   */
+  settleWithServer: (
+    changed: ReadonlyMap<string, number>,
+    serverOf: (id: string) => Transaction | undefined
+  ) => Promise<number>;
 }
 
 export interface EditsSnapshot {
   edits: Record<string, TransactionEdit | undefined>;
   origins: Record<string, EditableField[] | undefined>;
+  bases: EditBases;
 }
 
 const KEY = "transactionEdits";
 const ORIGINS_KEY = "transactionEditOrigins";
+const BASES_KEY = "transactionEditBases";
 
-/** Записать правки и карту происхождения одним заходом. */
+/** Ключи, под которыми лежит очередь правок: для снимков, вкладок и бэкапа. */
+export const EDIT_STORE_KEYS = [KEY, ORIGINS_KEY, BASES_KEY] as const;
+
+/**
+ * Операции, поверх которых кладутся правки, — без самих правок. Задаёт стор
+ * данных (он импортирует этот, а не наоборот).
+ */
+let serverLookup: () => (id: string) => Transaction | undefined = () => () => undefined;
+export function setEditBaseSource(fn: () => (id: string) => Transaction | undefined): void {
+  serverLookup = fn;
+}
+
+/** Записать правки, карту происхождения и версии одним заходом. */
 async function persist(
   edits: Record<string, TransactionEdit>,
-  origins: EditOrigins
+  origins: EditOrigins,
+  bases: EditBases
 ): Promise<void> {
-  await Promise.all([db.saveJSON(KEY, edits), db.saveJSON(ORIGINS_KEY, origins)]);
+  await Promise.all([db.saveJSON(KEY, edits), db.saveJSON(ORIGINS_KEY, origins), db.saveJSON(BASES_KEY, bases)]);
 }
 
 /** Разметить поля патча по автору. */
@@ -130,93 +159,113 @@ function trace(
     : markUserFields(origins, id, fields);
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useEditsStore = create<EditsState>((set, get) => ({
   edits: {},
   origins: {},
+  bases: {},
   loaded: false,
 
-  hydrate: async () => {
-    const [data, saved] = await Promise.all([
+  hydrate: () => queue(async () => {
+    const [data, saved, bases] = await Promise.all([
       db.loadJSON<Record<string, TransactionEdit>>(KEY),
       db.loadJSON<EditOrigins>(ORIGINS_KEY),
+      db.loadJSON<EditBases>(BASES_KEY),
     ]);
     const edits = data || {};
     // Карты ещё нет — размечаем накопленное как записанное правилами: так для
     // существующих данных ничего не меняется (см. `seedOrigins`).
     const origins = saved ?? seedOrigins(edits);
     if (!saved && Object.keys(origins).length > 0) await db.saveJSON(ORIGINS_KEY, origins);
-    set({ edits, origins, loaded: true });
-  },
+    // Правки, сделанные до меток версии, меток не имеют — они, как и раньше,
+    // накладываются поверх облака.
+    set({ edits, origins, bases: bases ?? {}, loaded: true });
+  }),
 
-  setEdit: async (id, patch, origin = "user") => {
+  setEdit: (id, patch, origin = "user") => queue(async () => {
     const next = { ...get().edits, [id]: { ...get().edits[id], ...patch } };
     const origins = trace(get().origins, id, patch, origin);
-    await persist(next, origins);
-    set({ edits: next, origins });
-  },
+    const bases = recordBases(get().bases, id, patch, serverLookup()(id), Date.now());
+    await persist(next, origins, bases);
+    set({ edits: next, origins, bases });
+  }),
 
-  setEditMany: async (ids, patch, origin = "user") => {
+  setEditMany: (ids, patch, origin = "user") => queue(async () => {
     if (ids.length === 0) return;
     const prev = get().edits;
     const next = { ...prev };
     let origins = get().origins;
+    let bases = get().bases;
+    const serverOf = serverLookup();
+    const now = Date.now();
     for (const id of ids) {
       next[id] = { ...prev[id], ...patch };
       origins = trace(origins, id, patch, origin);
+      bases = recordBases(bases, id, patch, serverOf(id), now);
     }
-    await persist(next, origins);
-    set({ edits: next, origins });
-  },
+    await persist(next, origins, bases);
+    set({ edits: next, origins, bases });
+  }),
 
-  setEditEach: async (patches, origin = "user") => {
+  setEditEach: (patches, origin = "user") => queue(async () => {
     const ids = Object.keys(patches);
     if (ids.length === 0) return;
     const prev = get().edits;
     const next = { ...prev };
     let origins = get().origins;
+    let bases = get().bases;
+    const serverOf = serverLookup();
+    const now = Date.now();
     for (const id of ids) {
       next[id] = { ...prev[id], ...patches[id] };
       origins = trace(origins, id, patches[id], origin);
+      bases = recordBases(bases, id, patches[id], serverOf(id), now);
     }
-    await persist(next, origins);
-    set({ edits: next, origins });
-  },
+    await persist(next, origins, bases);
+    set({ edits: next, origins, bases });
+  }),
 
-  clearEdit: async (id) => {
+  clearEdit: (id) => queue(async () => {
     const next = { ...get().edits };
     delete next[id];
     const origins = forgetOrigins(get().origins, [id]);
-    await persist(next, origins);
-    set({ edits: next, origins });
-  },
+    const bases = forgetBases(get().bases, [id]);
+    await persist(next, origins, bases);
+    set({ edits: next, origins, bases });
+  }),
 
-  clearMany: async (ids) => {
+  clearMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const next = { ...get().edits };
     for (const id of ids) delete next[id];
     const origins = forgetOrigins(get().origins, ids);
-    await persist(next, origins);
-    set({ edits: next, origins });
-  },
+    const bases = forgetBases(get().bases, ids);
+    await persist(next, origins, bases);
+    set({ edits: next, origins, bases });
+  }),
 
-  clearAll: async () => {
-    await persist({}, {});
-    set({ edits: {}, origins: {} });
-  },
+  clearAll: () => queue(async () => {
+    await persist({}, {}, {});
+    set({ edits: {}, origins: {}, bases: {} });
+  }),
 
   snapshot: (ids) => {
-    const { edits, origins } = get();
-    const snap: EditsSnapshot = { edits: {}, origins: {} };
+    const { edits, origins, bases } = get();
+    const snap: EditsSnapshot = { edits: {}, origins: {}, bases: {} };
     for (const id of ids) {
       snap.edits[id] = edits[id] ? { ...edits[id] } : undefined;
       snap.origins[id] = origins[id] ? [...origins[id]] : undefined;
+      if (bases[id]) snap.bases[id] = { ...bases[id] };
     }
     return snap;
   },
 
-  restore: async (snap) => {
+  restore: (snap) => queue(async () => {
     const edits = { ...get().edits };
     const origins = { ...get().origins };
+    const bases = { ...get().bases };
     for (const id of Object.keys(snap.edits)) {
       const e = snap.edits[id];
       if (e) edits[id] = e;
@@ -224,8 +273,49 @@ export const useEditsStore = create<EditsState>((set, get) => ({
       const o = snap.origins[id];
       if (o) origins[id] = o;
       else delete origins[id];
+      const b = snap.bases?.[id];
+      if (b) bases[id] = b;
+      else delete bases[id];
     }
-    await persist(edits, origins);
-    set({ edits, origins });
-  },
+    await persist(edits, origins, bases);
+    set({ edits, origins, bases });
+  }),
+
+  settleWithServer: (changed, serverOf) => queue(async () => {
+    const { edits, origins, bases } = get();
+    let nextEdits: Record<string, TransactionEdit> | null = null;
+    let nextBases: EditBases | null = null;
+    let dropped = 0;
+    for (const [id, at] of changed) {
+      const edit = edits[id];
+      const server = edit && bases[id] ? serverOf(id) : undefined;
+      if (!edit || !server) continue;
+      const stale = staleFields(edit, bases[id], server, at);
+      if (stale.length === 0) continue;
+      nextEdits ??= { ...edits };
+      nextBases ??= { ...bases };
+      const keep = { ...edit };
+      const keepBase = { ...bases[id] };
+      for (const f of stale) {
+        delete keep[f];
+        delete keepBase[f];
+      }
+      dropped += stale.length;
+      if (Object.keys(keep).length === 0) {
+        delete nextEdits[id];
+        delete nextBases[id];
+      } else {
+        nextEdits[id] = keep;
+        nextBases[id] = keepBase;
+      }
+    }
+    if (!nextEdits || !nextBases) return 0;
+    // Автор правки — только для оставшихся полей; карта и так терпит лишнее,
+    // но снятую целиком операцию из неё убираем.
+    const gone = Object.keys(edits).filter((id) => !nextEdits![id]);
+    const nextOrigins = forgetOrigins(origins, gone);
+    await persist(nextEdits, nextOrigins, nextBases);
+    set({ edits: nextEdits, origins: nextOrigins, bases: nextBases });
+    return dropped;
+  }),
 }));

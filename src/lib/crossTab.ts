@@ -17,7 +17,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useDeletedPayloadsStore } from "../store/useDeletedPayloadsStore";
 import { useDeletedStore } from "../store/useDeletedStore";
 import { useDraftsStore } from "../store/useDraftsStore";
-import { useEditsStore } from "../store/useEditsStore";
+import { EDIT_STORE_KEYS, useEditsStore } from "../store/useEditsStore";
 import { useNewCategoriesStore } from "../store/useNewCategoriesStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
 import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
@@ -32,7 +32,7 @@ type Hydratable = { getState: () => { hydrate: () => Promise<void> } };
 
 /** Очереди того, что ждёт отправки, и ключи, под которыми они лежат. */
 const QUEUES: readonly (readonly [Hydratable, readonly string[]])[] = [
-  [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+  [useEditsStore, EDIT_STORE_KEYS],
   [useDraftsStore, ["pendingTransactions", "pendingTransactionsResend"]],
   [useDeletedStore, ["deletedTransactions", "deletedTransactionsAt"]],
   [useDeletedPayloadsStore, ["deletedPayloads"]],

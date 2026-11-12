@@ -48,6 +48,7 @@
  * accidentally blank them out.
  */
 
+import { retryTransient } from "./zenRetry";
 import { pushDiff, type PushPayload } from "./zenmoney";
 import type {
   ZenAccount,
@@ -1637,7 +1638,10 @@ export async function sendPush(
     }
     console.groupEnd();
   }
-  return pushDiff(token, serverTimestamp, payload);
+  // Временный сбой (сеть, 5xx, 429) — ещё попытка. Безопасно: каждая
+  // запись уходит под своим id, и повтор обновляет принятое, а не заводит
+  // второе.
+  return retryTransient(() => pushDiff(token, serverTimestamp, payload));
 }
 
 /** A pending patch onto a tag — only the touched fields are present. Mirrors

@@ -7,6 +7,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 
 /**
  * A pending patch onto a tag. Only the touched fields are present — the push
@@ -46,16 +47,19 @@ interface State {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useTagEditsStore = create<State>((set, get) => ({
   edits: {},
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const data = await db.loadJSON<Record<string, TagEdit>>(KEY);
     set({ edits: data || {}, loaded: true });
-  },
+  }),
 
-  patch: async (tagId, partial) => {
+  patch: (tagId, partial) => queue(async () => {
     const cur: TagEdit = { ...(get().edits[tagId] || {}) };
     for (const [k, v] of Object.entries(partial)) {
       if (v === undefined) delete cur[k as keyof TagEdit];
@@ -66,13 +70,13 @@ export const useTagEditsStore = create<State>((set, get) => ({
     else next[tagId] = cur;
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
   setRequired: async (tagId, required) => {
     await get().patch(tagId, { required });
   },
 
-  clearMany: async (ids) => {
+  clearMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const next = { ...get().edits };
     let changed = false;
@@ -85,12 +89,12 @@ export const useTagEditsStore = create<State>((set, get) => ({
     if (!changed) return;
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  clearAll: async () => {
+  clearAll: () => queue(async () => {
     await db.saveJSON(KEY, {});
     set({ edits: {} });
-  },
+  }),
 }));
 
 /** Read tag edits without a hook — for the push builder. */

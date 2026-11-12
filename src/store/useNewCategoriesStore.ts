@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 
 export interface NewCategory {
   /** Fresh client-minted uuid — becomes the Zenmoney tag id on push. */
@@ -33,46 +34,49 @@ interface State {
   clear: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useNewCategoriesStore = create<State>((set, get) => ({
   items: [],
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const data = await db.loadJSON<NewCategory[]>(KEY);
     set({ items: Array.isArray(data) ? data : [], loaded: true });
-  },
+  }),
 
-  add: async (cat) => {
+  add: (cat) => queue(async () => {
     const next = [...get().items, cat];
     await db.saveJSON(KEY, next);
     set({ items: next });
-  },
+  }),
 
-  update: async (id, patch) => {
+  update: (id, patch) => queue(async () => {
     const next = get().items.map((c) => (c.id === id ? { ...c, ...patch } : c));
     await db.saveJSON(KEY, next);
     set({ items: next });
-  },
+  }),
 
-  remove: async (id) => {
+  remove: (id) => queue(async () => {
     const next = get().items.filter((c) => c.id !== id);
     await db.saveJSON(KEY, next);
     set({ items: next });
-  },
+  }),
 
-  removeMany: async (ids) => {
+  removeMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const drop = new Set(ids);
     const next = get().items.filter((c) => !drop.has(c.id));
     if (next.length === get().items.length) return;
     await db.saveJSON(KEY, next);
     set({ items: next });
-  },
+  }),
 
-  clear: async () => {
+  clear: () => queue(async () => {
     await db.saveJSON(KEY, []);
     set({ items: [] });
-  },
+  }),
 }));
 
 /** Read new categories without a hook — for the push builder. */

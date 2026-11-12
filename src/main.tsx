@@ -14,6 +14,10 @@ import { seedDemoLocal } from "./lib/demo/demoSeed";
 import { useZenmoneyStore } from "./store/useZenmoneyStore";
 import { useDataStore } from "./store/useDataStore";
 import { resumeSwitch } from "./lib/switchOverlay";
+import { installGlobalErrorHandlers } from "./lib/appErrors";
+
+// Необработанные ошибки — в журнал для отчёта, а не в пустоту (lib/appErrors).
+installGlobalErrorHandlers();
 
 const isFileProtocol =
   typeof window !== "undefined" && window.location.protocol === "file:";

@@ -286,12 +286,29 @@ export interface ZenDiffResponse {
 export class ZenApiError extends Error {
   status: number;
   code: string | null;
-  constructor(message: string, status: number, code: string | null = null) {
+  /** Сколько сервер просит подождать перед повтором (`Retry-After`), мс. */
+  retryAfterMs: number | null;
+  constructor(message: string, status: number, code: string | null = null, retryAfterMs: number | null = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.retryAfterMs = retryAfterMs;
     this.name = "ZenApiError";
   }
+}
+
+/**
+ * `Retry-After`: секунды или дата (RFC 9110). Нет, не разобрать или уже
+ * прошло — `null`.
+ */
+export function parseRetryAfter(value: string | null | undefined, now: number = Date.now()): number | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (/^\d+$/.test(v)) return Number(v) * 1000;
+  const at = Date.parse(v);
+  if (Number.isNaN(at)) return null;
+  const ms = at - now;
+  return ms > 0 ? ms : null;
 }
 
 /** Дзен-мани не ответил вовремя — запрос оборван по тайм-ауту. */
@@ -421,7 +438,7 @@ export async function fetchDiff(
       } catch {
         // ignore parse errors — keep the HTTP-status fallback
       }
-      throw new ZenApiError(msg, res.status, code);
+      throw new ZenApiError(msg, res.status, code, parseRetryAfter(res.headers.get("Retry-After")));
     }
     return (await res.json()) as ZenDiffResponse;
   });
@@ -551,7 +568,7 @@ export async function pushDiff(
           }
         })();
       }
-      throw new ZenApiError(msg, res.status, code);
+      throw new ZenApiError(msg, res.status, code, parseRetryAfter(res.headers.get("Retry-After")));
     }
     return (await res.json()) as ZenDiffResponse;
   });

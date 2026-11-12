@@ -12,6 +12,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import type { ZenTransaction } from "../lib/zenmoney";
 import type { ZenCache } from "../lib/zenmoneyCache";
 import { useDeletedStore } from "./useDeletedStore";
@@ -30,24 +31,27 @@ interface DeletedPayloadsState {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useDeletedPayloadsStore = create<DeletedPayloadsState>((set, get) => ({
   payloads: {},
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const data = await db.loadJSON<Record<string, ZenTransaction>>(KEY);
     set({ payloads: data || {}, loaded: true });
-  },
+  }),
 
-  saveMany: async (txs) => {
+  saveMany: (txs) => queue(async () => {
     if (txs.length === 0) return;
     const next = { ...get().payloads };
     for (const t of txs) next[t.id] = t;
     set({ payloads: next });
     await db.saveJSON(KEY, next);
-  },
+  }),
 
-  removeMany: async (ids) => {
+  removeMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const next = { ...get().payloads };
     let changed = false;
@@ -60,12 +64,12 @@ export const useDeletedPayloadsStore = create<DeletedPayloadsState>((set, get) =
     if (!changed) return;
     set({ payloads: next });
     await db.saveJSON(KEY, next);
-  },
+  }),
 
-  clearAll: async () => {
+  clearAll: () => queue(async () => {
     set({ payloads: {} });
     await db.saveJSON(KEY, {});
-  },
+  }),
 }));
 
 /**

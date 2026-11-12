@@ -80,3 +80,19 @@ describe("useEditsStore: снятие правок пачкой", () => {
     expect(Object.keys(useEditsStore.getState().edits)).toEqual(["a"]);
   });
 });
+
+describe("useEditsStore: пересекающиеся вызовы в одной вкладке", () => {
+  it("две правки сразу — обе на месте, в памяти и на диске", async () => {
+    const s = useEditsStore.getState();
+    await Promise.all([s.setEdit("a", { comment: "раз" }), s.setEdit("b", { comment: "два" })]);
+    expect(useEditsStore.getState().edits).toEqual({ a: { comment: "раз" }, b: { comment: "два" } });
+    expect(disk.get("transactionEdits")).toEqual({ a: { comment: "раз" }, b: { comment: "два" } });
+  });
+
+  it("правка во время чистки после отправки не теряется", async () => {
+    await useEditsStore.getState().setEdit("a", { comment: "ушло" });
+    const s = useEditsStore.getState();
+    await Promise.all([s.clearMany(["a"]), s.setEdit("b", { comment: "новая" })]);
+    expect(useEditsStore.getState().edits).toEqual({ b: { comment: "новая" } });
+  });
+});

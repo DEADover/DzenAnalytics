@@ -12,7 +12,7 @@
  */
 import { test as base, expect, type Page } from "@playwright/test";
 import { NOW, fullDiff } from "./fixtures/zenAccount";
-import type { ZenDiffResponse } from "../src/lib/zenmoney";
+import type { ZenDiffResponse, ZenTransaction } from "../src/lib/zenmoney";
 
 /** Тело запроса к `/v8/diff/`: метка плюс то, что клиент отправляет. */
 export type DiffBody = Partial<Omit<ZenDiffResponse, "serverTimestamp">> & {
@@ -52,6 +52,12 @@ export class FakeZen {
   pullDelays: number[] = [];
   /** Операции, удалённые «на другом устройстве»: уедут со следующим скачиванием. */
   cloudDeletes: string[] = [];
+  /**
+   * Операции, изменённые «на другом устройстве»: уедут со следующим
+   * скачиванием — поля поверх выдуманной операции, `changed` — когда, в
+   * секундах (по умолчанию «сейчас» по часам сервера).
+   */
+  cloudEdits: { id: string; patch: Partial<ZenTransaction> }[] = [];
   /** Подправить выдуманный аккаунт под тест — до подключения. */
   patchFull: ((diff: ZenDiffResponse) => ZenDiffResponse) | null = null;
   /** Токены, которые сервер больше не принимает (ответ 401). */
@@ -95,13 +101,19 @@ export class FakeZen {
       user: fullDiff(this.stamp).user[0]!.id,
     }));
     this.cloudDeletes = [];
+    const base = this.cloudEdits.length > 0 ? fullDiff(this.stamp).transaction : [];
+    const transaction = this.cloudEdits.flatMap(({ id, patch }) => {
+      const t = base.find((x) => x.id === id);
+      return t ? [{ ...t, changed: this.stamp, ...patch }] : [];
+    });
+    this.cloudEdits = [];
     return {
       serverTimestamp: this.stamp,
       instrument: [],
       account: [],
       tag: [],
       merchant: [],
-      transaction: [],
+      transaction,
       user: users,
       ...(deletion.length > 0 ? { deletion } : {}),
     };

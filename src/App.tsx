@@ -20,6 +20,7 @@ import { ConnectZenDialog } from "./components/ConnectZenDialog";
 import { connectZen } from "./store/useConnectStore";
 import { pushHoldLeft } from "./lib/pushHold";
 import { pushGate } from "./lib/syncDecisions";
+import { hydrateSafely } from "./lib/appErrors";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useTourStore } from "./store/useTourStore";
 import { TourHub } from "./components/tour/TourHub";
@@ -153,6 +154,8 @@ function App() {
   useEffect(() => startCrossTabSync(), []);
   const hydrate = useDataStore((s) => s.hydrate);
   const loaded = useDataStore((s) => s.loaded);
+  // Ленту не удалось прочитать из браузера и со второго раза.
+  const [startupFailed, setStartupFailed] = useState(false);
   const hasData = useDataStore((s) => s.transactions.length > 0);
 
   // `?connect=1` — «Подключить свой Дзен-мани» из демо: после выхода из демо
@@ -231,54 +234,56 @@ function App() {
     // filters hidden rows from the very first render. (loadDeletedSet
     // falls back to disk anyway, but this populates the in-memory copy
     // that the UI + auto-push subscription read.)
-    useDeletedStore.getState().hydrate();
-    useDeletedPayloadsStore.getState().hydrate();
-    useDraftsStore.getState().hydrate();
-    useImportBatchesStore.getState().hydrate();
-    useTagEditsStore.getState().hydrate();
-    useAccountEditsStore.getState().hydrate();
-    useBudgetEditsStore.getState().hydrate();
-    useDisplayStore.getState().hydrate();
-    useColumnWidthsStore.getState().hydrate();
-    useDiffModeStore.getState().hydrate();
-    useOffBalanceStore.getState().hydrate();
-    usePrivacyStore.getState().hydrate();
-    useQuickSettingsStore.getState().hydrate();
-    useSlicesStore.getState().hydrate();
-    useNewCategoriesStore.getState().hydrate();
-    useCounterpartyEditsStore.getState().hydrate();
-    useTagDeletionsStore.getState().hydrate();
-    usePlannedDeletionsStore.getState().hydrate();
-    usePlanActionsStore.getState().hydrate();
-    useDashboardLayoutStore.getState().hydrate();
-    useFilterMemoryStore.getState().hydrate();
-    // Правила нужны переносу настроек с первой синхронизации, а не только на
-    // страницах, где их показывают.
-    void useCategoryRulesStore.getState().hydrate();
-    // Слежка за правками сама ждёт, пока каждое хранилище прочитает своё.
-    void useCloudSettingsStore.getState().hydrate();
-    useSplitGroupsStore.getState().hydrate();
-    useMembersStore.getState().hydrate();
-    // Эти два читают своё при запуске, а не при заходе на страницу: их
-    // настройки переносятся между устройствами, и облако ждёт, пока все
-    // переносимые хранилища прочитают своё с диска.
-    useDuplicateExclusionsStore.getState().hydrate();
-    useAccountsViewStore.getState().hydrate();
-    useFreeMoneyStore.getState().hydrate();
-    useTagModeStore.getState().hydrate();
-    useHeaderNavStore.getState().hydrate();
-    // Перенос настроек ждёт, пока КАЖДОЕ переносимое хранилище прочитает своё.
-    // Эти раньше читались только на своих страницах — и пока человек не
-    // открывал «Бюджет», «Цели» и «Здоровье», настройки не переносились вовсе.
-    useBudgetSettingsStore.getState().hydrate();
-    useGoalsStore.getState().hydrate();
-    useCounterpartyNotesStore.getState().hydrate();
-    useSavedViewsStore.getState().hydrate();
-    useFireStore.getState().hydrate();
-    useWhatIfStore.getState().hydrate();
-    hydrate();
-    backupHydrate();
-    reportPeriodHydrate();
+    // Каждое хранилище — через `hydrateSafely`: сбой чтения с диска не
+    // теряется молча (lib/appErrors), а непрочитанная лента не держит
+    // «Загрузку…» вечно. Порядок важен: удалённые — первыми, чтобы лента с
+    // первого кадра не показывала скрытое. Перенос настроек ждёт, пока каждое
+    // переносимое хранилище прочитает своё, поэтому все они читаются здесь, а
+    // не на своих страницах.
+    const stores = [
+      ["useDeletedStore", useDeletedStore],
+      ["useDeletedPayloadsStore", useDeletedPayloadsStore],
+      ["useDraftsStore", useDraftsStore],
+      ["useImportBatchesStore", useImportBatchesStore],
+      ["useTagEditsStore", useTagEditsStore],
+      ["useAccountEditsStore", useAccountEditsStore],
+      ["useBudgetEditsStore", useBudgetEditsStore],
+      ["useDisplayStore", useDisplayStore],
+      ["useColumnWidthsStore", useColumnWidthsStore],
+      ["useDiffModeStore", useDiffModeStore],
+      ["useOffBalanceStore", useOffBalanceStore],
+      ["usePrivacyStore", usePrivacyStore],
+      ["useQuickSettingsStore", useQuickSettingsStore],
+      ["useSlicesStore", useSlicesStore],
+      ["useNewCategoriesStore", useNewCategoriesStore],
+      ["useCounterpartyEditsStore", useCounterpartyEditsStore],
+      ["useTagDeletionsStore", useTagDeletionsStore],
+      ["usePlannedDeletionsStore", usePlannedDeletionsStore],
+      ["usePlanActionsStore", usePlanActionsStore],
+      ["useDashboardLayoutStore", useDashboardLayoutStore],
+      ["useFilterMemoryStore", useFilterMemoryStore],
+      ["useCategoryRulesStore", useCategoryRulesStore],
+      ["useCloudSettingsStore", useCloudSettingsStore],
+      ["useSplitGroupsStore", useSplitGroupsStore],
+      ["useMembersStore", useMembersStore],
+      ["useDuplicateExclusionsStore", useDuplicateExclusionsStore],
+      ["useAccountsViewStore", useAccountsViewStore],
+      ["useFreeMoneyStore", useFreeMoneyStore],
+      ["useTagModeStore", useTagModeStore],
+      ["useHeaderNavStore", useHeaderNavStore],
+      ["useBudgetSettingsStore", useBudgetSettingsStore],
+      ["useGoalsStore", useGoalsStore],
+      ["useCounterpartyNotesStore", useCounterpartyNotesStore],
+      ["useSavedViewsStore", useSavedViewsStore],
+      ["useFireStore", useFireStore],
+      ["useWhatIfStore", useWhatIfStore],
+    ] as const;
+    for (const [name, store] of stores) void hydrateSafely(name, () => store.getState().hydrate());
+    void hydrateSafely("useDataStore", hydrate).then((ok) => {
+      if (!ok) setStartupFailed(true);
+    });
+    void hydrateSafely("useBackupStore", backupHydrate);
+    void hydrateSafely("useReportPeriodStore", reportPeriodHydrate);
     return initTheme();
   }, [hydrate, backupHydrate, reportPeriodHydrate, initTheme]);
 
@@ -541,8 +546,20 @@ function App() {
   // того, как режим прочитан.
   if (!loaded || !privacyLoaded) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted">
-        Загрузка…
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted">
+        {startupFailed ? (
+          <>
+            <p className="text-text">Не удалось прочитать данные из браузера.</p>
+            <p className="text-sm max-w-md text-center">
+              Обычно помогает перезагрузка. Если панель открыта в нескольких вкладках, закройте лишние.
+            </p>
+            <button type="button" className="btn-primary" onClick={() => window.location.reload()}>
+              Перезагрузить
+            </button>
+          </>
+        ) : (
+          "Загрузка…"
+        )}
       </div>
     );
   }

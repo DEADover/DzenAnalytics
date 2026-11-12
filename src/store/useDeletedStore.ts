@@ -21,6 +21,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 
 const KEY = "deletedTransactions";
 /** Когда операцию спрятали — для раздела «Удалённые», где свежие удаления
@@ -59,26 +60,29 @@ interface DeletedState {
   isDeleted: (id: string) => boolean;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useDeletedStore = create<DeletedState>((set, get) => ({
   deletedIds: [],
   deletedSet: new Set(),
   deletedAt: {},
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const [stored, at] = await Promise.all([
       db.loadJSON<string[]>(KEY),
       db.loadJSON<Record<string, number>>(AT_KEY),
     ]);
     const ids = Array.isArray(stored) ? stored : [];
     set({ deletedIds: ids, deletedSet: new Set(ids), deletedAt: at ?? {}, loaded: true });
-  },
+  }),
 
   remove: async (id) => {
     await get().removeMany([id]);
   },
 
-  removeMany: async (toAdd, opts) => {
+  removeMany: (toAdd, opts) => queue(async () => {
     const cur = get().deletedSet;
     const fresh = toAdd.filter((id) => !cur.has(id));
     if (fresh.length === 0) return;
@@ -91,28 +95,28 @@ export const useDeletedStore = create<DeletedState>((set, get) => ({
     }
     set({ deletedIds: ids, deletedSet: new Set(ids), deletedAt });
     await Promise.all([db.saveJSON(KEY, ids), db.saveJSON(AT_KEY, deletedAt)]);
-  },
+  }),
 
-  restore: async (id) => {
+  restore: (id) => queue(async () => {
     if (!get().deletedSet.has(id)) return;
     const ids = get().deletedIds.filter((x) => x !== id);
     set({ deletedIds: ids, deletedSet: new Set(ids) });
     await db.saveJSON(KEY, ids);
-  },
+  }),
 
-  restoreMany: async (toRestore) => {
+  restoreMany: (toRestore) => queue(async () => {
     if (toRestore.length === 0) return;
     const drop = new Set(toRestore);
     const ids = get().deletedIds.filter((x) => !drop.has(x));
     if (ids.length === get().deletedIds.length) return;
     set({ deletedIds: ids, deletedSet: new Set(ids) });
     await db.saveJSON(KEY, ids);
-  },
+  }),
 
-  clearAll: async () => {
+  clearAll: () => queue(async () => {
     set({ deletedIds: [], deletedSet: new Set(), deletedAt: {} });
     await Promise.all([db.saveJSON(KEY, []), db.saveJSON(AT_KEY, {})]);
-  },
+  }),
 
   isDeleted: (id) => get().deletedSet.has(id),
 }));

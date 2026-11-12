@@ -13,7 +13,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
-import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
+import { EDIT_STORE_KEYS, useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
 import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -237,7 +237,7 @@ export function UncategorizedPage() {
     // Без вопроса: созданные правила и разметку операций вернёт «Отменить» на
     // плашке — снимок правок и правил до применения.
     const undo = await snapshotStores([
-      [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+      [useEditsStore, EDIT_STORE_KEYS],
       [useCategoryRulesStore, ["categoryRules"]],
     ]);
     const txIds = rules.map((r) => r.txId);

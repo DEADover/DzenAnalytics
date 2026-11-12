@@ -8,6 +8,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import type { PlannedDeletion } from "../lib/zenmoneyPush";
 
 const KEY = "plannedDeletions";
@@ -34,6 +35,9 @@ interface State {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const usePlannedDeletionsStore = create<State>((set, get) => {
   async function persist(deletions: Persisted) {
     await db.saveJSON(KEY, deletions);
@@ -44,32 +48,32 @@ export const usePlannedDeletionsStore = create<State>((set, get) => {
     deletions: {},
     loaded: false,
 
-    hydrate: async () => {
+    hydrate: () => queue(async () => {
       const data = await db.loadJSON<Persisted>(KEY);
       set({ deletions: data || {}, loaded: true });
-    },
+    }),
 
-    remove: async (entry) => {
+    remove: (entry) => queue(async () => {
       await persist({ ...get().deletions, [entry.id]: entry });
-    },
+    }),
 
-    restore: async (id) => {
+    restore: (id) => queue(async () => {
       const next = { ...get().deletions };
       if (next[id] === undefined) return;
       delete next[id];
       await persist(next);
-    },
+    }),
 
-    clearPushed: async (ids) => {
+    clearPushed: (ids) => queue(async () => {
       if (ids.length === 0) return;
       const next = { ...get().deletions };
       for (const id of ids) delete next[id];
       await persist(next);
-    },
+    }),
 
-    clearAll: async () => {
+    clearAll: () => queue(async () => {
       await persist({});
-    },
+    }),
   };
 });
 

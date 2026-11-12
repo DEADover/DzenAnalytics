@@ -13,6 +13,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 
 export interface NewCounterparty {
   /** Fresh client-minted uuid — becomes the Zenmoney merchant id on push. */
@@ -71,6 +72,9 @@ interface State extends Persisted {
 
 const EMPTY: Persisted = { renames: {}, created: [], deleted: [], merges: {} };
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useCounterpartyEditsStore = create<State>((set, get) => {
   async function persist(next: Persisted) {
     await db.saveJSON(KEY, next);
@@ -90,7 +94,7 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
     ...EMPTY,
     loaded: false,
 
-    hydrate: async () => {
+    hydrate: () => queue(async () => {
       const data = await db.loadJSON<Partial<Persisted>>(KEY);
       set({
         renames: data?.renames ?? {},
@@ -99,30 +103,30 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
         merges: data?.merges ?? {},
         loaded: true,
       });
-    },
+    }),
 
-    rename: async (id, title) => {
+    rename: (id, title) => queue(async () => {
       const renames = { ...get().renames };
       if (title === undefined) delete renames[id];
       else renames[id] = title;
       await persist({ ...snapshot(), renames });
-    },
+    }),
 
-    addNew: async (item) => {
+    addNew: (item) => queue(async () => {
       await persist({ ...snapshot(), created: [...get().created, item] });
-    },
+    }),
 
-    addManyNew: async (items) => {
+    addManyNew: (items) => queue(async () => {
       if (items.length === 0) return;
       await persist({ ...snapshot(), created: [...get().created, ...items] });
-    },
+    }),
 
-    renameNew: async (id, title) => {
+    renameNew: (id, title) => queue(async () => {
       const created = get().created.map((c) => (c.id === id ? { ...c, title } : c));
       await persist({ ...snapshot(), created });
-    },
+    }),
 
-    removeManyNew: async (ids) => {
+    removeManyNew: (ids) => queue(async () => {
       const drop = new Set(ids);
       const s = snapshot();
       const created = s.created.filter((c) => !drop.has(c.id));
@@ -130,9 +134,9 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
       const renames = { ...s.renames };
       for (const id of drop) delete renames[id];
       await persist({ ...s, renames, created });
-    },
+    }),
 
-    remove: async (id) => {
+    remove: (id) => queue(async () => {
       const s = snapshot();
       const isDraft = s.created.some((c) => c.id === id);
       if (isDraft) {
@@ -158,22 +162,22 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
         if (survivor === id) delete merges[dup];
       }
       await persist({ ...s, renames, merges, deleted: [...s.deleted, id] });
-    },
+    }),
 
-    restore: async (id) => {
+    restore: (id) => queue(async () => {
       const s = snapshot();
       const merges = { ...s.merges };
       const wasMerged = merges[id] !== undefined;
       delete merges[id];
       if (!s.deleted.includes(id) && !wasMerged) return;
       await persist({ ...s, merges, deleted: s.deleted.filter((d) => d !== id) });
-    },
+    }),
 
     merge: async (id, survivorId) => {
       await get().mergeMany([{ id, survivorId }]);
     },
 
-    mergeMany: async (pairs) => {
+    mergeMany: (pairs) => queue(async () => {
       const s = snapshot();
       const merges = { ...s.merges };
       const renames = { ...s.renames };
@@ -187,14 +191,14 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
         delete renames[id]; // the row is going away — its rename is moot
       }
       await persist({ ...s, renames, merges });
-    },
+    }),
 
-    clearPushed: async ({
+    clearPushed: ({
       renamedIds = [],
       createdIds = [],
       deletedIds = [],
       mergedIds = [],
-    }) => {
+    }) => queue(async () => {
       const s = snapshot();
       const renames = { ...s.renames };
       for (const id of renamedIds) delete renames[id];
@@ -208,11 +212,11 @@ export const useCounterpartyEditsStore = create<State>((set, get) => {
         created: s.created.filter((c) => !createdDrop.has(c.id)),
         deleted: s.deleted.filter((d) => !deletedDrop.has(d)),
       });
-    },
+    }),
 
-    clearAll: async () => {
+    clearAll: () => queue(async () => {
       await persist({ ...EMPTY });
-    },
+    }),
   };
 });
 

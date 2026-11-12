@@ -11,6 +11,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import type { ZenTermUnit } from "../lib/zenmoney";
 
 /**
@@ -66,16 +67,19 @@ interface State {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useAccountEditsStore = create<State>((set, get) => ({
   edits: {},
   loaded: false,
 
-  hydrate: async () => {
+  hydrate: () => queue(async () => {
     const data = await db.loadJSON<Record<string, AccountEdit>>(KEY);
     set({ edits: data || {}, loaded: true });
-  },
+  }),
 
-  patch: async (accountId, partial) => {
+  patch: (accountId, partial) => queue(async () => {
     const cur: AccountEdit = { ...(get().edits[accountId] || {}) };
     for (const [k, v] of Object.entries(partial)) {
       if (v === undefined) delete cur[k as keyof AccountEdit];
@@ -86,17 +90,17 @@ export const useAccountEditsStore = create<State>((set, get) => ({
     else next[accountId] = cur;
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  revert: async (accountId) => {
+  revert: (accountId) => queue(async () => {
     if (!(accountId in get().edits)) return;
     const next = { ...get().edits };
     delete next[accountId];
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  clearMany: async (ids) => {
+  clearMany: (ids) => queue(async () => {
     if (ids.length === 0) return;
     const next = { ...get().edits };
     let changed = false;
@@ -109,12 +113,12 @@ export const useAccountEditsStore = create<State>((set, get) => ({
     if (!changed) return;
     await db.saveJSON(KEY, next);
     set({ edits: next });
-  },
+  }),
 
-  clearAll: async () => {
+  clearAll: () => queue(async () => {
     await db.saveJSON(KEY, {});
     set({ edits: {} });
-  },
+  }),
 }));
 
 /** Read account edits without a hook — for the push builder. */

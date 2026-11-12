@@ -23,7 +23,7 @@ import {
 } from "../store/useZenmoneyStore";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryRulesStore } from "../store/useCategoryRulesStore";
-import { useEditsStore, type TransactionEdit } from "../store/useEditsStore";
+import { EDIT_STORE_KEYS, useEditsStore, type TransactionEdit } from "../store/useEditsStore";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
 import { toast } from "../store/useToastStore";
@@ -418,7 +418,7 @@ export function CounterpartyManager() {
     // «Отменить» на плашке — снимок справочника и правок до привязки.
     const undo = await snapshotStores([
       [useCounterpartyEditsStore, ["counterpartyEdits"]],
-      [useEditsStore, ["transactionEdits", "transactionEditOrigins"]],
+      [useEditsStore, EDIT_STORE_KEYS],
     ]);
     await useCounterpartyEditsStore.getState().addManyNew(
       toCreate.map((o) => ({ id: crypto.randomUUID(), title: targetOf(o) }))

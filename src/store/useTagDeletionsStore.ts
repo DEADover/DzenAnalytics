@@ -11,6 +11,7 @@
 
 import { create } from "zustand";
 import * as db from "../lib/db";
+import { serialQueue } from "../lib/serialQueue";
 import type { TagDeletion } from "../lib/zenmoneyPush";
 
 const KEY = "tagDeletions";
@@ -31,6 +32,9 @@ interface State {
   clearAll: () => Promise<void>;
 }
 
+/** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
+const queue = serialQueue();
+
 export const useTagDeletionsStore = create<State>((set, get) => {
   async function persist(deletions: Persisted) {
     await db.saveJSON(KEY, deletions);
@@ -41,32 +45,32 @@ export const useTagDeletionsStore = create<State>((set, get) => {
     deletions: {},
     loaded: false,
 
-    hydrate: async () => {
+    hydrate: () => queue(async () => {
       const data = await db.loadJSON<Persisted>(KEY);
       set({ deletions: data || {}, loaded: true });
-    },
+    }),
 
-    remove: async (id, replacementId) => {
+    remove: (id, replacementId) => queue(async () => {
       await persist({ ...get().deletions, [id]: replacementId });
-    },
+    }),
 
-    restore: async (id) => {
+    restore: (id) => queue(async () => {
       const next = { ...get().deletions };
       if (next[id] === undefined) return;
       delete next[id];
       await persist(next);
-    },
+    }),
 
-    clearPushed: async (ids) => {
+    clearPushed: (ids) => queue(async () => {
       if (ids.length === 0) return;
       const next = { ...get().deletions };
       for (const id of ids) delete next[id];
       await persist(next);
-    },
+    }),
 
-    clearAll: async () => {
+    clearAll: () => queue(async () => {
       await persist({});
-    },
+    }),
   };
 });
 

@@ -83,7 +83,7 @@ import {
   takeSnapshot,
   DAILY_WINDOW_MS,
 } from "../lib/cloudSnapshots";
-import { useDataStore } from "./useDataStore";
+import { rawTransactionLookup, useDataStore } from "./useDataStore";
 import { useCalibrationStore } from "./useCalibrationStore";
 import { useOffBalanceStore } from "./useOffBalanceStore";
 import { toBase } from "../lib/csv";
@@ -1249,6 +1249,14 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // Update store rates as well so re-aggregation uses fresh numbers.
       useDataStore.setState({ rates: mapped.rates });
       await useDataStore.getState().setTransactions(mapped.transactions, meta);
+      // Операцию поменяли в облаке (например, с телефона) позже, чем здесь
+      // правили то же поле, — побеждает облако: правка поля снимается, а не
+      // перекрывает свежее изменение и не уезжает потом обратно.
+      const changedAt = new Map((diff.transaction ?? []).map((t) => [t.id, t.changed * 1000] as const));
+      if (changedAt.size > 0) {
+        const dropped = await useEditsStore.getState().settleWithServer(changedAt, rawTransactionLookup());
+        if (dropped > 0) await useDataStore.getState().refresh();
+      }
 
       // Auto-calibration: the API exposes current real balance per account,
       // which CSV lacks. Anchor the "Совокупный баланс" chart/KPIs to the real
