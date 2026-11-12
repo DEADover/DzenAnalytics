@@ -10,6 +10,7 @@ import { pluralRu } from "../lib/plural";
 import { changedFields, sameEntry, unchangedSince } from "../lib/pushQueue";
 import { zenExclusive } from "../lib/zenLock";
 import { pushHoldLeft } from "../lib/pushHold";
+import { autoSyncDue, canSkipEmptySync, pushGate, settleFailure, syncSummary } from "../lib/syncDecisions";
 import * as db from "../lib/db";
 import { fetchDiff, fetchTokenUserIds } from "../lib/zenmoney";
 import {
@@ -17,7 +18,6 @@ import {
   failureDetails,
   friendlyFailure,
   logFailure,
-  nextAutoRetryAt,
   type SyncFailure,
   type SyncStage,
 } from "../lib/syncDiagnostics";
@@ -872,7 +872,7 @@ async function finishSync(a: {
   // Прошла — серия ошибок закончилась: автоповтор снова по расписанию.
   // Саму запись оставляем — по времени видно, что она уже в прошлом.
   const prevFailure = get().pullFailure;
-  const pullFailure = prevFailure && prevFailure.streak > 0 ? { ...prevFailure, streak: 0 } : prevFailure;
+  const pullFailure = settleFailure(prevFailure);
   if (pullFailure !== prevFailure) await db.saveJSON(PULL_FAILURE_KEY, pullFailure);
   useZenmoneyStore.setState({
     ...(a.advanceStamp ? { serverTimestamp: diff.serverTimestamp } : {}),
@@ -887,11 +887,7 @@ async function finishSync(a: {
   const deltaDel = diff.deletion?.length || 0;
   // Сколько операций всего — в своём столбце журнала («Всего операций»),
   // в описании его не повторяем.
-  const summary = isFull
-    ? "Загружено заново"
-    : deltaTx === 0 && deltaDel === 0
-      ? "Без изменений"
-      : `+${formatNum(deltaTx)} новых/изменённых${deltaDel > 0 ? `, ${formatNum(deltaDel)} удалено` : ""}`;
+  const summary = syncSummary(isFull, deltaTx, deltaDel, formatNum);
   void useSyncLogStore.getState().append({
     kind: "pull",
     status: "ok",
@@ -918,12 +914,19 @@ async function finishSync(a: {
     // Висит плашка с «Отменить» — ждём её, как в «Авто»: отменённое не
     // должно успеть уйти в облако (см. lib/pushHold).
     const firePush = () => {
-      const held = pushHoldLeft();
-      if (held > 0) {
-        setTimeout(firePush, Math.min(held, 500));
+      const live = get();
+      const gate = pushGate({
+        want: "on-sync",
+        mode: live.pushMode,
+        holdLeft: pushHoldLeft(),
+        pushStatus: live.pushStatus,
+        pending: hasPendingPush(),
+      });
+      if (gate.action === "wait") {
+        setTimeout(firePush, gate.ms);
         return;
       }
-      if (get().pushMode !== "on-sync" || !hasPendingPush()) return;
+      if (gate.action === "drop") return;
       void get().pushPendingEdits().catch(() => {
         /* logged + surfaced inside pushPendingEdits */
       });
@@ -1174,7 +1177,15 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       // есть: на большом аккаунте полный путь занимает секунды. Метку сервера
       // тоже не двигаем — следующий запрос с прежней вернёт то же самое, а
       // справочники не перечитают кэш впустую.
-      if (prevCache && backfill.length === 0 && isEmptyDiff(diff) && useDataStore.getState().transactionsRaw.length > 0) {
+      if (
+        prevCache &&
+        canSkipEmptySync({
+          hasCache: true,
+          backfill: backfill.length,
+          diffEmpty: isEmptyDiff(diff),
+          haveTransactions: useDataStore.getState().transactionsRaw.length > 0,
+        })
+      ) {
         stage = "cloud";
         const afterCloud = await useCloudSettingsStore.getState().step({ token, cache: prevCache, deletions: [] });
         if (afterCloud === prevCache) {
@@ -2123,16 +2134,20 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
 
   runAutoSyncIfDue: async () => {
     const s = get();
-    // Gate-rails: no token / not enabled / mid-sync ⇒ do nothing.
-    if (!s.token || !s.autoSyncEnabled) return false;
-    if (s.status === "syncing" || s.status === "checking") return false;
-    const intervalMs = autoSyncToMs(s.autoSyncValue, s.autoSyncUnit);
-    const lastMs = s.lastSyncAt ? new Date(s.lastSyncAt).getTime() : 0;
-    if (Date.now() - lastMs < intervalMs) return false;
-    // После ошибок — нарастающая пауза (1 → 2 → 5 → 15 → 30 мин), а не
-    // попытка каждые 30 секунд. Ручная синхронизация её не ждёт.
-    const retryAt = nextAutoRetryAt(s.pullFailure);
-    if (retryAt !== null && Date.now() < retryAt) return false;
+    // После ошибок — нарастающая пауза, а не попытка каждые 30 секунд;
+    // ручная синхронизация её не ждёт.
+    const due = autoSyncDue(
+      {
+        token: s.token,
+        enabled: s.autoSyncEnabled,
+        status: s.status,
+        intervalMs: autoSyncToMs(s.autoSyncValue, s.autoSyncUnit),
+        lastSyncAt: s.lastSyncAt,
+        pullFailure: s.pullFailure,
+      },
+      Date.now()
+    );
+    if (!due) return false;
     try {
       await get().sync();
       return true;

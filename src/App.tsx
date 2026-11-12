@@ -19,6 +19,7 @@ import { Toaster } from "./components/Toaster";
 import { ConnectZenDialog } from "./components/ConnectZenDialog";
 import { connectZen } from "./store/useConnectStore";
 import { pushHoldLeft } from "./lib/pushHold";
+import { pushGate } from "./lib/syncDecisions";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useTourStore } from "./store/useTourStore";
 import { TourHub } from "./components/tour/TourHub";
@@ -364,26 +365,21 @@ function App() {
       if (timer) clearTimeout(timer);
       const fire = () => {
         timer = null;
-        // Висит плашка с «Отменить» — ждём её: отменённое не должно успеть
-        // уйти в облако (см. lib/pushHold).
-        // Проверяем часто: плашку могут закрыть раньше, и ждать тогда незачем.
-        const held = pushHoldLeft();
-        if (held > 0) {
-          timer = setTimeout(fire, Math.min(held, 500));
-          return;
-        }
+        // Плашка «Отменить», смена режима, идущая отправка, отменённые
+        // правки — решает общая проверка (та же у «При синхронизации»).
         const live = useZenmoneyStore.getState();
-        // Re-check at fire-time: user may have toggled mode off while
-        // the debounce was pending.
-        if (live.pushMode !== "auto") return;
-        // Отправка уже идёт — дожидаемся её конца, а не бросаем: правка,
-        // сделанная по ходу, в тот запрос не попала и ждёт следующего.
-        if (live.pushStatus === "syncing") {
-          timer = setTimeout(fire, 500);
+        const gate = pushGate({
+          want: "auto",
+          mode: live.pushMode,
+          holdLeft: pushHoldLeft(),
+          pushStatus: live.pushStatus,
+          pending: hasPendingPush(),
+        });
+        if (gate.action === "wait") {
+          timer = setTimeout(fire, gate.ms);
           return;
         }
-        // Отменили всё, что ждало, — отправлять нечего.
-        if (!hasPendingPush()) return;
+        if (gate.action === "drop") return;
         void useZenmoneyStore.getState().pushPendingEdits().catch(() => {
           /* surfaced via pushError + sync log */
         });
