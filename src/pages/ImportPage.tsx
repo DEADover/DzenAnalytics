@@ -32,7 +32,6 @@ import { editUndo } from "../lib/undoable";
 import { pluralRu } from "../lib/plural";
 import { useBackupStore } from "../store/useBackupStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { usePayeeAliasStore } from "../store/usePayeeAliasStore";
 import { UsersSettings } from "../components/UsersSettings";
 import { PageHeader } from "../components/PageHeader";
 import { formatNum, formatDate } from "../lib/format";
@@ -44,89 +43,6 @@ type Mode = "replace" | "merge";
 
 /** CSV прочитался, но ни одной операции в нём не нашлось. */
 const CSV_NO_ROWS = "В файле не нашлось ни одной операции. Проверьте, что это CSV-выгрузка из Дзен-мани.";
-
-/**
- * One row of the auto-grouping table. Shows `from → effectiveTo` where
- * the target is inline-editable. Editing commits a manual alias
- * (override) keyed by the original `from`; resetting removes it so the
- * fuzzy auto target applies again. Local input state keeps typing
- * snappy across hundreds of rows.
- */
-
-/* Отключено вместе с блоком «Группировка получателей» — см. ниже.
-function AutoGroupRow({
-  from,
-  autoTo,
-  overridden,
-  effectiveTo,
-  onCommit,
-  onReset,
-}: {
-  from: string;
-  autoTo: string;
-  overridden: boolean;
-  effectiveTo: string;
-  onCommit: (from: string, to: string) => void;
-  onReset: (from: string) => void;
-}) {
-  const [val, setVal] = useState(effectiveTo);
-  // Re-seed when the effective target changes externally (e.g. reset
-  // elsewhere, or a re-grouping pass).
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setVal(effectiveTo);
-  }, [effectiveTo]);
-
-  function commit() {
-    const next = val.trim();
-    if (!next || next === effectiveTo) {
-      setVal(effectiveTo);
-      return;
-    }
-    if (next === autoTo) {
-      // Back to the fuzzy default → drop any manual override.
-      if (overridden) onReset(from);
-    } else {
-      onCommit(from, next);
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2 py-1 border-b border-border/40 last:border-b-0">
-      <span className="truncate flex-1 min-w-0 text-muted" title={from}>
-        {from}
-      </span>
-      <span className="text-muted shrink-0">→</span>
-      <input
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-          if (e.key === "Escape") setVal(effectiveTo);
-        }}
-        className={`input text-xs !py-1 flex-1 min-w-0 ${
-          overridden ? "border-accent/50 text-text" : "text-text"
-        }`}
-        title={overridden ? "Изменено вручную" : "Автогруппировка"}
-      />
-      {/* Fixed-width slot so the row width doesn't jump when the reset
-          button appears/disappears on override. *\/}
-      <span className="w-7 shrink-0 flex items-center justify-center">
-        {overridden && (
-          <button
-            onClick={() => onReset(from)}
-            className="btn-icon btn-icon-sm"
-            title="Сбросить к автогруппировке"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </span>
-    </div>
-  );
-}
-*/
 
 export function ImportPage() {
   const nav = useNavigate();
@@ -429,72 +345,6 @@ export function ImportPage() {
     setSyncSuccess(null);
   }
 
-  // Manual payee aliases — user-curated overrides on top of (or in
-  // place of) the fuzzy auto-grouping above.
-  // Отключено вместе с блоком «Группировка получателей»: сами алиасы никуда
-  // не делись и продолжают применяться в пайплайне, но править их отсюда
-  // больше нельзя.
-  // const manualAliases = usePayeeAliasStore((s) => s.aliases);
-  // const aliasesLoaded = usePayeeAliasStore((s) => s.loaded);
-  // const aliasesHydrate = usePayeeAliasStore((s) => s.hydrate);
-  // const addAlias = usePayeeAliasStore((s) => s.add);
-  // const removeAlias = usePayeeAliasStore((s) => s.remove);
-  // Гидратацию оставляем: сохранённые алиасы продолжают применяться к данным.
-  const aliasesLoaded = usePayeeAliasStore((s) => s.loaded);
-  const aliasesHydrate = usePayeeAliasStore((s) => s.hydrate);
-  useEffect(() => {
-    if (!aliasesLoaded) aliasesHydrate();
-  }, [aliasesLoaded, aliasesHydrate]);
-  // const [aliasFrom, setAliasFrom] = useState("");
-  // const [aliasTo, setAliasTo] = useState("");
-
-  // Distinct payees from the current dataset — used as datalist options
-  // for the manual alias inputs so the user can pick existing names by
-  // typing a few letters.
-/* Отключено вместе с блоком «Группировка получателей».
-  const allPayeeOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of transactions) {
-      if (t.payee) set.add(t.payee);
-      if (t.payeeOriginal) set.add(t.payeeOriginal);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
-  }, [transactions]);
-*/
-
-
-  // Manual aliases as a from→to lookup, for marking which auto-grouping
-  // rows the user has overridden.
-/* Отключено вместе с блоком «Группировка получателей».
-  const manualAliasMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const a of manualAliases) m.set(a.from, a.to);
-    return m;
-  }, [manualAliases]);
-*/
-
-
-/* Отключено вместе с блоком «Группировка получателей».
-  async function submitAlias() {
-    const f = aliasFrom.trim();
-    const t = aliasTo.trim();
-    if (!f || !t || f === t) return;
-    await addAlias(f, t);
-    await reapplyRules();
-    setAliasFrom("");
-    setAliasTo("");
-  }
-*/
-
-
-/* Отключено вместе с блоком «Группировка получателей».
-  async function dropAlias(from: string) {
-    await removeAlias(from);
-    await reapplyRules();
-  }
-*/
-
-
   const reportPeriodLoaded = useReportPeriodStore((s) => s.loaded);
   const reportPeriodHydrate = useReportPeriodStore((s) => s.hydrate);
   useEffect(() => {
@@ -576,16 +426,6 @@ export function ImportPage() {
     const file = e.dataTransfer.files?.[0];
     if (file) handleFile(file);
   }
-
-/* Отключено вместе с блоком «Группировка получателей».
-  const aliasPreview = (() => {
-    if (transactions.length === 0) return null;
-    const allPayees = transactions.map((t) => t.payeeOriginal || t.payee).filter(Boolean);
-    const aliases = buildPayeeAliasMap(allPayees);
-    return aliases;
-  })();
-*/
-
 
   return (
     <div className="space-y-6">
@@ -1158,7 +998,6 @@ export function ImportPage() {
                     "dashboardLayout",
                     "reportPeriod",
                     "includeOffBalance",
-                    "payeeGrouping",
                     "backupInterval",
                     "backupLastAt",
                     "rates",

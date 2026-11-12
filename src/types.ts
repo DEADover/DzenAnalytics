@@ -58,8 +58,7 @@ export interface Transaction {
    * Counterparty title from the user's OWN Zenmoney merchant dictionary
    * (`ZenTransaction.merchant` → `ZenMerchant.title`) — Дзен has no global
    * brand catalogue, so this is whatever the user accumulated. Different from
-   * `payee` — payee is what's currently displayed (possibly cleaned
-   * by Zenmoney auto-grouping or our local pipeline), brand is the
+   * `payee` — payee is the text on the operation, brand is the
    * specific merchant entity the user / Zenmoney tagged the
    * transaction with. Null when there's no brand attached. CSV
    * imports always have null — only the API populates this field.

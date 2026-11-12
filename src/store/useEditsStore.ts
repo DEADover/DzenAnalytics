@@ -1,5 +1,5 @@
 // Per-transaction local overrides. The overlay is applied AFTER all
-// canonical post-processing (payee grouping, category rules), so user
+// canonical post-processing (rates, category rules), so user
 // edits "win" against everything else.
 //
 // In CSV mode they are the only way to fix anything. In API mode they

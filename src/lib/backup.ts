@@ -93,8 +93,6 @@ export const BACKUP_META_KEYS = [
   "annotations", // legacy — feature archived (see archive/annotations); data preserved
   "categoryFlags", // legacy — kept so old backups round-trip
   "inflation", // legacy — feature removed; kept so old backups round-trip
-  "payeeGrouping",
-  "payeeAliases",
   "userAliases", // как звать людей на общем аккаунте Дзен-мани (#92)
   "userOwner", // кого из них считать собой (#92)
   "membersShowForeign", // показывать ли чужие личные счета — хранится обратным, см. useMembersStore (#95)

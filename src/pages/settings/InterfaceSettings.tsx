@@ -47,9 +47,6 @@ export function InterfaceSettings() {
       cancelled = true;
     };
   }, [zenLastSyncAt]);
-  // Отключено вместе с блоком «Группировка получателей»:
-  // const payeeGrouping = useDataStore((s) => s.payeeGroupingEnabled);
-  // const setPayeeGrouping = useDataStore((s) => s.setPayeeGrouping);
   // Тема: в шапке переключаются только светлая и тёмная, а «как в системе»
   // до этого нигде не выбиралась — жила в хранилище без интерфейса.
   const themeMode = useThemeStore((s) => s.mode);

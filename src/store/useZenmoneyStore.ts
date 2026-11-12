@@ -1225,7 +1225,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
       const isFull = fromTs === 0;
 
       // Push transactions + rates into the main data store. setTransactions
-      // already runs payee grouping + category rules + recomputes amountBase.
+      // already runs category rules and recomputes amountBase.
       const meta: ImportMeta = {
         importedAt: new Date().toISOString(),
         fileName: `Дзен-мани API · ${mapped.accountsActive} ${pluralRu(mapped.accountsActive, ["счёт", "счёта", "счетов"])} · ${mapped.tagsTotal} ${pluralRu(mapped.tagsTotal, ["категория", "категории", "категорий"])}`,

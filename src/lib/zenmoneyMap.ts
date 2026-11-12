@@ -313,10 +313,7 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
       payee: zt.payee || "",
       payeeOriginal: zt.payee || "",
       // Raw bank-statement text — the unmodified value. Captured here
-      // for info only (Edit-modal hint, debugging weird names). NOT
-      // used by the payee-grouping pipeline; that still operates on
-      // `payeeOriginal` so the user's Zenmoney-side fixes survive a
-      // re-sync.
+      // for info only (Edit-modal hint, debugging weird names).
       payeeRaw: zt.originalPayee || null,
       // Resolve brand from the merchant dictionary. `zt.merchant` is
       // an id pointing into `merchantsById`; null when Zenmoney hasn't

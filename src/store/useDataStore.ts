@@ -2,6 +2,7 @@ import { localToday } from "../lib/period";
 import { create } from "zustand";
 import type { Transaction, CurrencyRates, ImportMeta } from "../types";
 import * as db from "../lib/db";
+import { LEGACY_PAYEE_KEYS, restoreOriginalPayees } from "../lib/legacyPayees";
 import {
   baseWithHistory,
   fetchHistoricalRubRates,
@@ -10,7 +11,6 @@ import {
   seedDayRates,
   type HistDayRates,
 } from "../lib/historicalRates";
-import { buildPayeeAliasMap } from "../lib/payeeNormalize";
 import { migrateRule, restoreRuleCategories, ruleSeesTx, type StoredRule } from "../lib/ruleEngine";
 import { autoApplyPatches } from "../lib/ruleAutoApply";
 import { rulesView } from "../lib/rulesView";
@@ -36,7 +36,6 @@ import { fillAccountKeys } from "../lib/accountKey";
 import type { ZenTransaction } from "../lib/zenmoney";
 import { loadDrafts, useDraftsStore } from "./useDraftsStore";
 import { draftsToTransactions } from "../lib/draftsMap";
-import { aliasesToMap, type PayeeAlias } from "./usePayeeAliasStore";
 import { onMembersVisibilityChange, useMembersStore } from "./useMembersStore";
 
 // Rough cross-rates relative to RUB — purely a starting point so the rates UI
@@ -107,7 +106,6 @@ interface DataState {
    *  (issue #53). */
   histRatesUnavailable: number;
   importMeta: ImportMeta | null;
-  payeeGroupingEnabled: boolean;
   loaded: boolean;
   hydrate: () => Promise<void>;
   /** Fetch CBR rates for every foreign-currency op date not yet resolved,
@@ -134,11 +132,6 @@ interface DataState {
   clearAll: () => Promise<void>;
   setRate: (currency: string, value: number) => Promise<void>;
   setBase: (newBase: string) => Promise<void>;
-  setPayeeGrouping: (enabled: boolean) => Promise<void>;
-  /** Пересобрать `transactionsRaw` (курсы, склейка получателей) и переписать
-   *  всю таблицу. Нужен только при смене псевдонимов получателей; после правок
-   *  операций, черновиков и удалений хватает дешёвого `refresh`. */
-  reapplyRules: () => Promise<void>;
   /**
    * Журнал заходов правил по расписанию: id правила → когда и сколько правок.
    *
@@ -608,63 +601,6 @@ async function loadEditsFromStore(): Promise<
   return disk || {};
 }
 
-/** Read the user's manual payee aliases straight from IDB, so this
- *  module doesn't depend on the React component lifecycle. */
-async function loadManualAliasesFromStore(): Promise<PayeeAlias[]> {
-  const data = await db.loadJSON<PayeeAlias[]>("payeeAliases");
-  return Array.isArray(data) ? data : [];
-}
-
-/**
- * Apply payee-grouping pipeline:
- *   1. Restore every tx's `payee` to `payeeOriginal` (clean slate).
- *   2. If auto-grouping is enabled, run the fuzzy alias detector
- *      and map variants to their canonical representative.
- *   3. Apply the user's manual aliases on top — these always win,
- *      so the user can pin down anything fuzzy missed (or override
- *      it when it grouped too eagerly).
- */
-function applyPayeeGrouping(
-  txs: Transaction[],
-  enabled: boolean,
-  manualAliases: PayeeAlias[] = []
-): Transaction[] {
-  // Step 1 — restore originals.
-  let out = txs.map((t) =>
-    t.payeeOriginal ? { ...t, payee: t.payeeOriginal } : t
-  );
-
-  // Step 2 — fuzzy auto-grouping (only when toggle is on).
-  if (enabled) {
-    const allPayees = out.map((t) => t.payee).filter(Boolean);
-    const aliases = buildPayeeAliasMap(allPayees);
-    if (aliases.size > 0) {
-      out = out.map((t) => {
-        const canonical = aliases.get(t.payee);
-        return canonical ? { ...t, payee: canonical } : t;
-      });
-    }
-  }
-
-  // Step 3 — manual aliases (curated by the user), always applied.
-  // Match by the current (post-auto) payee first — that's a "rename the
-  // whole group" rule. Fall back to the ORIGINAL payee so a manual
-  // override of a single auto-grouped name works too (the auto-grouping
-  // table lets the user retarget one original without touching the rest
-  // of its group). Post-auto match wins so existing group-level rules
-  // keep their meaning.
-  if (manualAliases.length > 0) {
-    const manual = aliasesToMap(manualAliases);
-    out = out.map((t) => {
-      const next =
-        manual.get(t.payee) ??
-        (t.payeeOriginal ? manual.get(t.payeeOriginal) : undefined);
-      return next ? { ...t, payee: next } : t;
-    });
-  }
-
-  return out;
-}
 
 export const useDataStore = create<DataState>((set, get) => ({
   transactions: [],
@@ -675,19 +611,19 @@ export const useDataStore = create<DataState>((set, get) => ({
   histWarming: null,
   histRatesUnavailable: 0,
   importMeta: null,
-  payeeGroupingEnabled: false,
   loaded: false,
 
   hydrate: async () => {
-    const [txs, savedRates, savedHist, meta, grouping, manualAliases] =
-      await Promise.all([
-        db.loadTransactions(),
-        db.loadRates(),
-        db.loadJSON<HistDayRates>(HIST_RATES_KEY),
-        db.loadImportMeta(),
-        db.loadJSON<boolean>("payeeGrouping"),
-        loadManualAliasesFromStore(),
-      ]);
+    const [loadedTxs, savedRates, savedHist, meta] = await Promise.all([
+      db.loadTransactions(),
+      db.loadRates(),
+      db.loadJSON<HistDayRates>(HIST_RATES_KEY),
+      db.loadImportMeta(),
+    ]);
+    const restored = restoreOriginalPayees(loadedTxs);
+    const txs = restored.txs;
+    if (restored.changed) await db.saveTransactions(txs);
+    for (const key of LEGACY_PAYEE_KEYS) void db.deleteByPrefix(key).catch(() => {});
     const rates = mergeRatesWithDefaults(savedRates);
     let hist = savedHist || {};
     // Курсы, найденные по старому правилу (суббота и праздники пропускались,
@@ -708,7 +644,6 @@ export const useDataStore = create<DataState>((set, get) => ({
     seedDayRates(hist);
     void purgeLegacyDayCache();
     let raw = recalcBase(txs, rates, hist);
-    raw = applyPayeeGrouping(raw, grouping || false, manualAliases);
     raw = restoreRuleCategories(raw);
     // Расписание догоняет при открытии: браузерное приложение ночью не
     // работает, и «раз в день» означает первый заход в новый день.
@@ -719,7 +654,6 @@ export const useDataStore = create<DataState>((set, get) => ({
       transactionsRaw: raw,
       rates,
       importMeta: meta,
-      payeeGroupingEnabled: grouping || false,
       loaded: true,
     });
     // Fill any gaps (new dates / first run) in the background, then reprice.
@@ -825,10 +759,8 @@ export const useDataStore = create<DataState>((set, get) => ({
   dismissHistRatesWarning: () => set({ histRatesUnavailable: 0 }),
 
   setTransactions: async (txs, meta) => {
-    const { payeeGroupingEnabled } = get();
     const rates = ensureCurrenciesInRates(get().rates, txs);
     if (rates !== get().rates) await db.saveRates(rates);
-    const manualAliases = await loadManualAliasesFromStore();
     // Синхронизация Дзен-мани приходит сюда ПОЛНЫМ набором, поэтому «новые»
     // определяем по прошлому составу, а не по размеру входящего.
     // Прошлый состав берём с диска, если в памяти его ещё нет. Синхронизация
@@ -841,7 +773,6 @@ export const useDataStore = create<DataState>((set, get) => ({
       (inMemory.length > 0 ? inMemory : await db.loadTransactions()).map((t) => t.id)
     );
     let raw = recalcBase(txs, rates, get().histDayRates);
-    raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
     raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     await db.saveImportMeta(meta);
@@ -853,15 +784,13 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   mergeTransactions: async (incoming, meta) => {
-    const { payeeGroupingEnabled, transactionsRaw: existing } = get();
+    const { transactionsRaw: existing } = get();
     const rates = ensureCurrenciesInRates(get().rates, incoming);
     if (rates !== get().rates) await db.saveRates(rates);
-    const manualAliases = await loadManualAliasesFromStore();
     const existingIds = new Set(existing.map((t) => t.id));
     const fresh = incoming.filter((t) => !existingIds.has(t.id));
     const combined = [...existing, ...fresh];
     let raw = recalcBase(combined, rates, get().histDayRates);
-    raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
     raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     await autoApplyToNew(raw, existingIds);
@@ -896,9 +825,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       rates: { ...get().rates.rates, [currency]: value },
     };
     await db.saveRates(rates);
-    const manualAliases = await loadManualAliasesFromStore();
     let raw = recalcBase(get().transactionsRaw, rates, get().histDayRates);
-    raw = applyPayeeGrouping(raw, get().payeeGroupingEnabled, manualAliases);
     raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
@@ -924,25 +851,11 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
     const rates: CurrencyRates = { base: newBase, rates: nextRates };
     await db.saveRates(rates);
-    const manualAliases = await loadManualAliasesFromStore();
     let raw = recalcBase(get().transactionsRaw, rates, get().histDayRates);
-    raw = applyPayeeGrouping(raw, get().payeeGroupingEnabled, manualAliases);
     raw = restoreRuleCategories(raw);
     await db.saveTransactions(raw);
     const final = await finalize(raw, rates);
     set({ rates, transactions: final, transactionsRaw: raw });
-  },
-
-  setPayeeGrouping: async (enabled) => {
-    await db.saveJSON("payeeGrouping", enabled);
-    const { transactionsRaw: existing, rates } = get();
-    const manualAliases = await loadManualAliasesFromStore();
-    let raw = recalcBase(existing, rates, get().histDayRates);
-    raw = applyPayeeGrouping(raw, enabled, manualAliases);
-    raw = restoreRuleCategories(raw);
-    await db.saveTransactions(raw);
-    const final = await finalize(raw, rates);
-    set({ payeeGroupingEnabled: enabled, transactions: final, transactionsRaw: raw });
   },
 
   ruleRuns: {},
@@ -956,17 +869,6 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   runDueRules: async () => {
     await runScheduledRules(get().transactionsRaw);
-  },
-
-  reapplyRules: async () => {
-    const { transactionsRaw: existing, rates, payeeGroupingEnabled } = get();
-    const manualAliases = await loadManualAliasesFromStore();
-    let raw = recalcBase(existing, rates, get().histDayRates);
-    raw = applyPayeeGrouping(raw, payeeGroupingEnabled, manualAliases);
-    raw = restoreRuleCategories(raw);
-    await db.saveTransactions(raw);
-    const final = await finalize(raw, rates);
-    set({ transactions: final, transactionsRaw: raw });
   },
 
   refresh: async () => {
