@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capitalAccountKeys, planFactRow } from "./monthReview";
+import { capitalAccountKeys } from "./monthReview";
 import { debtKey } from "./debtFilter";
 import { MEMBER_SHARED } from "./zenUsers";
 
@@ -60,17 +60,5 @@ describe("capitalAccountKeys", () => {
     expect(
       capitalAccountKeys({ accounts, universe, pickedAccounts: new Set(["\u0000__none__"]), pickedUsers: none })
     ).toEqual([]);
-  });
-});
-
-describe("planFactRow", () => {
-  it("считает долю и остаток", () => {
-    expect(planFactRow(100_000, 64_000)).toEqual({ plan: 100_000, fact: 64_000, ratio: 0.64, left: 36_000 });
-  });
-  it("перерасход — остаток отрицательный", () => {
-    expect(planFactRow(50_000, 60_000)?.left).toBe(-10_000);
-  });
-  it("без плана строки нет", () => {
-    expect(planFactRow(0, 5_000)).toBeNull();
   });
 });

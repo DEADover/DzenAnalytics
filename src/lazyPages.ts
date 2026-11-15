@@ -23,6 +23,7 @@ export const RulesPage = lazyPage(() => import("./pages/RulesPage").then((m) => 
 export const HealthPage = lazyPage(() => import("./pages/HealthPage").then((m) => m.HealthPage));
 export const WhatIfPage = lazyPage(() => import("./pages/WhatIfPage").then((m) => m.WhatIfPage));
 export const YearReviewPage = lazyPage(() => import("./pages/YearReviewPage").then((m) => m.YearReviewPage));
+export const OverviewPage = lazyPage(() => import("./pages/OverviewPage").then((m) => m.OverviewPage));
 export const DigestPage = lazyPage(() => import("./pages/DigestPage").then((m) => m.DigestPage));
 export const TransactionsPage = lazyPage(() => import("./pages/TransactionsPage").then((m) => m.TransactionsPage));
 export const CashflowPage = lazyPage(() => import("./pages/CashflowPage").then((m) => m.CashflowPage));
@@ -55,6 +56,7 @@ const BY_PATH: Record<string, LazyPage> = {
   "/health": HealthPage,
   "/whatif": WhatIfPage,
   "/year-review": YearReviewPage,
+  "/overview": OverviewPage,
   "/digest": DigestPage,
   "/transactions": TransactionsPage,
   "/cashflow": CashflowPage,

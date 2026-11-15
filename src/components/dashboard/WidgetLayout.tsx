@@ -43,6 +43,28 @@ import { SectionEmpty } from "../SectionEmpty";
 
 /* ─────────────────────────────  обойма виджета  ───────────────────────────── */
 
+/**
+ * Поддон виджета — то, во что вставлено его содержимое. Один на главную и на
+ * «Обзор месяца»: там те же виджеты стоят в постоянной раскладке, без ручек.
+ */
+export function WidgetPlate({ sunken, children }: { sunken?: boolean; children: ReactNode }) {
+  if (sunken) {
+    // Одна коробка вместо поддона: кант тут нечем нарисовать, обойма
+    // залита тем же серым, что и подложка.
+    //
+    // Снизу поле больше верхнего — 36 против 20. Это не описка:
+    // содержимое таких виджетов заканчивается таблицей итогов, у последней
+    // строки нет нижней черты, и текст обрывается прямо у канта. Ровные
+    // поля тут читаются как прижатый низ; неровные — как ровные.
+    return <div className="card-sunken h-full flex flex-col px-5 pt-5 pb-9">{children}</div>;
+  }
+  return (
+    <div className="tray h-full flex flex-col">
+      <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
+    </div>
+  );
+}
+
 export function WidgetShell({
   placement,
   meta,
@@ -257,22 +279,7 @@ export function WidgetShell({
           editing && !meta.live && "opacity-50 pointer-events-none select-none"
         )}
       >
-        {bare ? (
-          children
-        ) : sunken ? (
-          // Одна коробка вместо поддона: кант тут нечем нарисовать, обойма
-          // залита тем же серым, что и подложка.
-          //
-          // Снизу поле больше верхнего — 36 против 20. Это не описка:
-          // содержимое таких виджетов заканчивается таблицей итогов, у последней
-          // строки нет нижней черты, и текст обрывается прямо у канта. Ровные
-          // поля тут читаются как прижатый низ; неровные — как ровные.
-          <div className="card-sunken h-full flex flex-col px-5 pt-5 pb-9">{children}</div>
-        ) : (
-          <div className="tray h-full flex flex-col">
-            <div className="tray-core flex-1 min-h-0 flex flex-col p-5">{children}</div>
-          </div>
-        )}
+        {bare ? children : <WidgetPlate sunken={sunken}>{children}</WidgetPlate>}
       </div>
 
       {editing && !meta.live && (

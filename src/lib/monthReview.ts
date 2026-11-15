@@ -1,6 +1,6 @@
 /**
  * Разбор выбранного месяца (#130): какие счета идут в капитал при заданных
- * фильтрах и как план бюджета сопоставляется с фактом.
+ * общих фильтрах.
  */
 
 import { parseDebtKey } from "./debtFilter";
@@ -49,19 +49,4 @@ export function capitalAccountKeys(input: {
     out.push(a.key);
   }
   return out;
-}
-
-export interface PlanFactRow {
-  plan: number;
-  fact: number;
-  /** Факт к плану; `null`, когда плана нет. */
-  ratio: number | null;
-  /** План минус факт: у расхода — сколько осталось, у дохода — сколько недобрали. */
-  left: number;
-}
-
-/** Строка «план и факт»; `null` — плана на месяц нет. */
-export function planFactRow(plan: number, fact: number): PlanFactRow | null {
-  if (!(plan > 0)) return null;
-  return { plan, fact, ratio: fact / plan, left: plan - fact };
 }

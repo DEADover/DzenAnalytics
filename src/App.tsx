@@ -43,6 +43,7 @@ import {
   WhatIfPage,
   YearReviewPage,
   DigestPage,
+  OverviewPage,
   TransactionsPage,
   CashflowPage,
   CategoriesPage,
@@ -599,6 +600,7 @@ function App() {
             <Route path="/health" element={<HealthPage />} />
             <Route path="/whatif" element={<WhatIfPage />} />
             <Route path="/year-review" element={<YearReviewPage />} />
+            <Route path="/overview" element={<OverviewPage />} />
             <Route path="/digest" element={<DigestPage />} />
             {/* Filtered pages: GlobalFilters is rendered INSIDE each page right
                 after PageHeader (see TransactionsPage, CashflowPage, etc.) so

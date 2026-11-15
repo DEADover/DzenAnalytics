@@ -396,6 +396,46 @@ export function onPickedAccounts(
 }
 
 /**
+ * Фильтры оставили не все операции — что угодно, кроме периода.
+ *
+ * Нужно страницам, где период выбирают на месте: с таким фактом нельзя
+ * сравнивать то, что считается по всем счетам и статьям, — например, план
+ * бюджета.
+ */
+export function isNarrowed(
+  f: Pick<
+    FiltersState,
+    | "accounts"
+    | "categories"
+    | "currencies"
+    | "users"
+    | "types"
+    | "search"
+    | "minAmount"
+    | "maxAmount"
+    | "onlyUncategorized"
+    | "onlyWithComment"
+    | "onlyWithoutComment"
+    | "onlyNew"
+  >
+): boolean {
+  return (
+    f.accounts.size > 0 ||
+    f.categories.size > 0 ||
+    f.currencies.size > 0 ||
+    f.users.size > 0 ||
+    f.types.size > 0 ||
+    f.search.trim().length > 0 ||
+    f.minAmount != null ||
+    f.maxAmount != null ||
+    f.onlyUncategorized ||
+    f.onlyWithComment ||
+    f.onlyWithoutComment ||
+    f.onlyNew
+  );
+}
+
+/**
  * Compute the date window for the current filter state.
  *
  * Pass `monthStartDay` when the caller respects the user's reporting

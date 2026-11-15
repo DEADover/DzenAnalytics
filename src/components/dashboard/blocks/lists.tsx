@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { dayAndMonth } from "../../../lib/dayLabel";
 import { BlockTitle } from "./shared";
 import { pluralRu } from "../../../lib/plural";
@@ -28,8 +29,14 @@ export function AccountsBlock({
   offBalance,
   onOffBalanceChange,
   onAccount,
+  picked = false,
 }: {
   m: DashboardModel;
+  /**
+   * Счета уже отобраны снаружи (общим фильтром на «Обзоре месяца»): виджет
+   * показывает их как есть, а переключателя «в балансе / все» у него нет.
+   */
+  picked?: boolean;
   /** Выбор виджета; `undefined` — как в «Расчётах». */
   offBalance: boolean | undefined;
   onOffBalanceChange: (next: boolean) => void;
@@ -37,12 +44,17 @@ export function AccountsBlock({
 }) {
   const show = offBalance ?? m.includeOffBalance;
   const offSum = m.accountsAll.reduce((s, a) => (a.offBalance ? s + a.balanceBase : s), 0);
-  const hasOff = m.accountsAll.some((a) => a.offBalance);
-  const accounts = show ? m.accountsAll : m.accountsAll.filter((a) => !a.offBalance);
+  const hasOff = !picked && m.accountsAll.some((a) => a.offBalance);
+  const accounts = picked
+    ? m.accounts
+    : show
+      ? m.accountsAll
+      : m.accountsAll.filter((a) => !a.offBalance);
   // Совокупный баланс модели посчитан по настройке; виджет её поправляет на
   // сумму счетов вне баланса, если его выбор другой.
-  const total =
-    m.netWorth + (show === m.includeOffBalance ? 0 : show ? offSum : -offSum);
+  const total = picked
+    ? m.netWorth
+    : m.netWorth + (show === m.includeOffBalance ? 0 : show ? offSum : -offSum);
   return (
     <>
       <BlockTitle
@@ -171,15 +183,27 @@ export function AccountsList({
 export function CategoriesList({
   m,
   onCategory,
+  kind = "expense",
 }: {
-  m: DashboardModel;
+  m: Pick<DashboardModel, "categories" | "ym" | "base" | "month">;
   onCategory?: (name: string) => void;
+  /** Что показывать: расходы статей (как на главной) или их доходы. */
+  kind?: "expense" | "income";
 }) {
-  const rows = m.categories;
+  const rows = useMemo(
+    () =>
+      m.categories
+        .map((c) => ({ category: c.category, expense: c[kind] }))
+        .filter((c) => c.expense > 0)
+        .sort((a, b) => b.expense - a.expense),
+    [m.categories, kind]
+  );
   if (rows.length === 0) {
+    // «Ещё не было» — только про идущий месяц: у прошедшего ждать нечего.
+    const tail = m.month.running ? "ещё не было" : "не было";
     return (
       <SectionEmpty variant="compact">
-        За {monthLabel(m.ym)} расходов ещё не было
+        За {monthLabel(m.ym)} {kind === "expense" ? "расходов" : "доходов"} {tail}
       </SectionEmpty>
     );
   }
@@ -191,7 +215,7 @@ export function CategoriesList({
   const top = rows[0].expense || 1;
   const total = rows.reduce((sum, c) => sum + c.expense, 0) || 1;
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0" data-categories-list>
       <div className="scroll-soft flex flex-col gap-3 flex-1 min-h-0 -mx-2 px-2">
       {rows.map((c) => {
         const frac = c.expense / top;
@@ -222,7 +246,7 @@ export function CategoriesList({
               </div>
               <ProgressBar
                 value={frac}
-                tone="expense"
+                tone={kind}
                 fillStyle={{ opacity: 0.35 + 0.65 * frac }}
                 className="mt-1"
               />
@@ -410,7 +434,9 @@ export function ObservationsList({
   if (rows.length === 0) {
     return (
       <div className="text-sm text-muted py-3">
-        Ничего необычного — месяц идёт в своих обычных пределах
+        {m.month.running
+          ? "Ничего необычного — месяц идёт в своих обычных пределах"
+          : "Ничего необычного — месяц прошёл в своих обычных пределах"}
       </div>
     );
   }

@@ -55,7 +55,7 @@ import {
   type UpcomingPayment,
   type FreeMoney,
 } from "../lib/dashboardModel";
-import type { Currency } from "../types";
+import type { Currency, Transaction } from "../types";
 import { accountKeyOf } from "../lib/accountKey";
 import { useAccountDirectory } from "./useAccountDirectory";
 
@@ -179,8 +179,31 @@ export interface DashboardModel {
 /** Сколько месяцев истории берём для «обычного» расхода. */
 const AVG_WINDOW = 6;
 
-export function useDashboardModel(): DashboardModel {
-  const transactions = useAnalyticsTransactions();
+/**
+ * Чем «Обзор месяца» отличается от главной: месяц выбран, операции уже прошли
+ * общие фильтры, а капитал считается по счетам из фильтра.
+ */
+export interface DashboardModelOptions {
+  /** Месяц, о котором экран, YYYY-MM. Без него — текущий отчётный. */
+  ym?: string;
+  /** Свои операции вместо разреза аналитики — например, после общих фильтров. */
+  transactions?: Transaction[];
+  /**
+   * Счета, по которым считать капитал и показывать остатки. `null` — как на
+   * главной: счета «в балансе» по настройке.
+   */
+  accountKeys?: readonly string[] | null;
+  /**
+   * Операции для кривой капитала. Остаток счёта не зависит от того, какие
+   * статьи отмечены в фильтре, поэтому кривую считают по всем операциям.
+   */
+  capitalTransactions?: Transaction[];
+}
+
+export function useDashboardModel(opts: DashboardModelOptions = {}): DashboardModel {
+  const analytics = useAnalyticsTransactions();
+  const transactions = opts.transactions ?? analytics;
+  const accountKeys = opts.accountKeys ?? null;
   const rates = useDataStore((s) => s.rates);
   const base = rates.base;
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
@@ -212,7 +235,9 @@ export function useDashboardModel(): DashboardModel {
   // «накопительный» / «вне баланса», которых по одним операциям не восстановить.
   const liveAccounts = useLiveAccounts();
 
-  const ym = useMemo(() => currentPeriod(monthStartDay), [monthStartDay]);
+  // Идущий отчётный месяц — от него строится прогноз, какой бы месяц ни был выбран.
+  const nowYm = useMemo(() => currentPeriod(monthStartDay), [monthStartDay]);
+  const ym = opts.ym ?? nowYm;
   const month = useMemo(() => monthProgress(ym, new Date(), monthStartDay), [ym, monthStartDay]);
 
   const months = useMemo(
@@ -229,12 +254,12 @@ export function useDashboardModel(): DashboardModel {
       expense: b.expense,
       isForecast: false,
     }));
-    const complete = months.filter((b) => b.ym < ym);
+    const complete = months.filter((b) => b.ym < nowYm);
     // Прогноз начинается со следующего месяца после текущего: сам текущий уже
     // нарисован фактом, пусть и неполным.
-    return [...history, ...forecastMonths(complete, 3, 6, ym)];
-  }, [months, ym]);
-  const netWorthSeries = useNetWorthSeries(transactions);
+    return [...history, ...forecastMonths(complete, 3, 6, nowYm)];
+  }, [months, nowYm]);
+  const netWorthSeries = useNetWorthSeries(opts.capitalTransactions ?? transactions, accountKeys);
   const dayMap = useMemo(() => dailyExpenseMap(transactions), [transactions]);
   const recurring = useMemo(() => detectRecurring(transactions), [transactions]);
   const spikes = useMemo(
@@ -309,10 +334,15 @@ export function useDashboardModel(): DashboardModel {
       }))
       .sort((a, b) => Math.abs(b.balanceBase) - Math.abs(a.balanceBase));
   }, [liveAccounts, transactions, base, rates, dir]);
-  const accounts = useMemo(
-    () => (includeOffBalance ? accountsAll : accountsAll.filter((a) => !a.offBalance)),
-    [accountsAll, includeOffBalance]
-  );
+  const accounts = useMemo(() => {
+    // Счета из фильтра берём как есть: отметили счёт вне баланса — значит,
+    // хотят его видеть, что бы ни стояло в «Расчётах».
+    if (accountKeys) {
+      const picked = new Set(accountKeys);
+      return accountsAll.filter((a) => picked.has(a.key));
+    }
+    return includeOffBalance ? accountsAll : accountsAll.filter((a) => !a.offBalance);
+  }, [accountsAll, includeOffBalance, accountKeys]);
 
   const netWorth = netWorthSeries.length
     ? netWorthSeries[netWorthSeries.length - 1].net
@@ -433,20 +463,22 @@ export function useDashboardModel(): DashboardModel {
     return map;
   }, [budgetLines, ym]);
 
-  const notices = useMemo(
-    () =>
-      buildNotices({
-        ym,
-        base,
-        today,
-        spikes,
-        recurring,
-        planByCategory,
-        factByCategory,
-        insights,
-      }),
-    [ym, base, today, spikes, recurring, planByCategory, factByCategory, insights]
-  );
+  const notices = useMemo(() => {
+    const all = buildNotices({
+      ym,
+      base,
+      today,
+      spikes,
+      recurring,
+      planByCategory,
+      factByCategory,
+      insights,
+    });
+    // У прошедшего месяца остаётся только то, что про него самого: пробитый
+    // план и разогнавшиеся статьи. Пропущенные платежи, подорожавшие подписки
+    // и наблюдения за год считаются от сегодняшнего дня.
+    return ym === nowYm ? all : all.filter((n) => n.kind === "plan" || n.kind === "spike");
+  }, [ym, nowYm, base, today, spikes, recurring, planByCategory, factByCategory, insights]);
 
   const recurringMonthlyCount = useMemo(
     () => recurring.filter((r) => !r.stale && r.cadence === "monthly").length,
