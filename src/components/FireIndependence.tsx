@@ -6,7 +6,7 @@ import { useFireCapital, useFireExcluded } from "../hooks/useFireCapital";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
 import { groupByMonth } from "../lib/aggregations";
-import { formatMoney } from "../lib/format";
+import { formatMoney, formatPct } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { TooltipFacts } from "./TooltipFacts";
 import { CardHeader } from "./CardHeader";
@@ -151,7 +151,7 @@ export function FireIndependence({
         >
           <span className="tabular-nums cursor-help">
             <span className={`font-semibold ${fireAchieved ? "text-income" : "text-accent"}`}>
-              {(capitalProgress * 100).toFixed(capitalProgress >= 1 ? 0 : 1)}%
+              {formatPct(capitalProgress, capitalProgress >= 1 ? 0 : 1)}
             </span>{" "}
             <span className="text-muted border-b border-dotted border-muted/60">пути</span>
           </span>

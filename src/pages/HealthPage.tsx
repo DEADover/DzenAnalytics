@@ -19,7 +19,6 @@ import { HealthSummary } from "../components/HealthSummary";
 import { FireChart } from "../components/FireChart";
 import { FireIndependence } from "../components/FireIndependence";
 import { SectionDivider } from "../components/SectionDivider";
-import { SectionControls } from "../components/SectionControls";
 import { Tooltip } from "../components/Tooltip";
 import { HealthBenchmarks } from "../components/HealthBenchmarks";
 import { BenchmarkSettingsModal } from "../components/BenchmarkSettingsModal";
@@ -99,25 +98,24 @@ export function HealthPage() {
         }}
       />
 
-      <SectionControls>
-        <Tooltip content="Настроить ориентиры">
-          <button
-            type="button"
-            className="btn-ghost btn-square-lg"
-            aria-label="Настроить ориентиры"
-            onClick={() => setBenchmarkSetup(true)}
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-        </Tooltip>
-      </SectionControls>
-
       <SectionDivider
         label="Ориентиры"
         description="Известные правила личных финансов и ваши цифры рядом с ними. Считаются по последним 12 полным месяцам, на общую оценку не влияют."
+        right={
+          <Tooltip content="Настроить ориентиры">
+            <button
+              type="button"
+              className="btn-icon"
+              aria-label="Настроить ориентиры"
+              onClick={() => setBenchmarkSetup(true)}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+          </Tooltip>
+        }
       />
 
-      <HealthBenchmarks model={benchmarks} onSetup={() => setBenchmarkSetup(true)} />
+      <HealthBenchmarks model={benchmarks} />
       {benchmarkSetup && <BenchmarkSettingsModal onClose={() => setBenchmarkSetup(false)} />}
 
       <SectionDivider

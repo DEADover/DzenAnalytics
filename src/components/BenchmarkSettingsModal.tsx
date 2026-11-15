@@ -124,7 +124,7 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
       <ModalHeader
         icon={SlidersHorizontal}
         title="Ориентиры"
-        subtitle="Известные правила личных финансов. На общую оценку не влияют."
+        subtitle="Выключатель справа прячет карточку. На общую оценку ориентиры не влияют."
       />
       <ModalBody scroll gap={4}>
         <Group icon={Home} title="Расходы на жильё" on={s.housingOn} onToggle={(v) => void s.update({ housingOn: v })}>

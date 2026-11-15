@@ -158,7 +158,7 @@ export interface CushionGoal {
 }
 
 function cushionText(f: CushionForecast, base: string): string {
-  if (f.remaining <= 0) return "Цель набрана";
+  if (f.remaining <= 0) return "Цель достигнута";
   const need = `Ещё ${formatMoney(f.remaining, base)}`;
   if (f.months === null || !f.ym) return `${need} — при текущем темпе не наберётся`;
   return `${need} — при текущем темпе ${byMonth(f.ym)}`;

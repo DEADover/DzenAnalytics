@@ -20,20 +20,49 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-test("ненастроенные ориентиры зовут в настройки, окно открывается и закрывается", async ({ page }) => {
+test("ненастроенные ориентиры говорят, что отметить; настройки — значком у заголовка", async ({ page }) => {
   await connectZen(page, "/health");
   for (const id of ["housing", "debt", "invest", "doubling"]) {
-    await expect(card(page, id).getByRole("button", { name: "Настроить" })).toBeVisible();
+    await expect(card(page, id)).toContainText("Не настроен");
+    // Кнопки настройки на самих карточках нет — она одна, у заголовка блока.
+    await expect(card(page, id).getByRole("button", { name: "Настроить" })).toHaveCount(0);
   }
-  await card(page, "housing").getByRole("button", { name: "Настроить" }).click();
+  await page.getByRole("button", { name: "Настроить ориентиры" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Что относится к жилью");
   await expect(dialog).toContainText("Инвестиционные счета");
+  await expect(dialog).toContainText("Платежи по кредитам");
   await dialog.getByRole("button", { name: "Готово" }).click();
   await expect(dialog).toHaveCount(0);
-  // Та же настройка — кнопкой в шапке раздела.
+});
+
+test("карточку можно скрыть значком, «Отменить» и настройки её возвращают", async ({ page }) => {
+  await connectZen(page, "/health");
+  await card(page, "growth").getByRole("button", { name: "Скрыть «Рост расходов и доходов»" }).click();
+  await expect(card(page, "growth")).toHaveCount(0);
+  const toast = page.locator("[data-toast]");
+  await expect(toast).toContainText("«Рост расходов и доходов» скрыт");
+  await toast.getByRole("button", { name: "Отменить" }).click();
+  await expect(card(page, "growth")).toHaveCount(1);
+
+  // Скрыли все — блок говорит, где их вернуть.
+  await configure(page, {
+    housingOn: false, debtOn: false, investOn: false, doublingOn: false, growthOn: false, recurringOn: false,
+  });
+  await expect(page.locator("[data-benchmarks-empty]")).toContainText("Все ориентиры скрыты");
   await page.getByRole("button", { name: "Настроить ориентиры" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Платежи по кредитам");
+  await page.getByRole("dialog").getByRole("switch", { name: "Показывать «Расходы на жильё»" }).click();
+  await expect(card(page, "housing")).toHaveCount(1);
+});
+
+test("на узком экране название карточки не обрезается", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await connectZen(page, "/health");
+  for (const id of ["housing", "debt", "invest", "doubling", "growth", "recurring"]) {
+    const title = card(page, id).locator("[data-benchmark-title] span");
+    expect(await title.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test("настроенные ориентиры считают по завершённым месяцам", async ({ page }) => {
@@ -61,11 +90,6 @@ test("настроенные ориентиры считают по заверш
   await expect(card(page, "doubling")).toContainText("6 лет");
   await expect(card(page, "doubling")).toContainText("500 000");
 
-  // Заголовки карточек не обрезаны, статус не переносится.
-  for (const id of ["housing", "invest", "doubling"]) {
-    const title = card(page, id).locator("span.truncate").first();
-    expect(await title.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
-  }
 
   // Настройка сохранена.
   await expect
@@ -89,7 +113,7 @@ test("оценка: главный шаг, история по месяцам и
   // Подушка 7,9 месяца при цели 6: цель набрана, подтягивать нечего.
   const goal = page.locator("[data-cushion-goal]");
   const step = page.locator("[data-health-step]");
-  await expect(goal).toContainText("Цель набрана");
+  await expect(goal).toContainText("Цель достигнута");
   await expect(step).toHaveCount(0);
   const overallBefore = Number(await page.locator(".text-5xl").first().textContent());
 

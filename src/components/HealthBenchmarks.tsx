@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CreditCard, Home, PiggyBank, Repeat, Scale, TrendingUp, type LucideIcon } from "lucide-react";
+import { CreditCard, EyeOff, Home, PiggyBank, Repeat, Scale, TrendingUp, type LucideIcon } from "lucide-react";
 import type { BenchmarksModel } from "../hooks/useBenchmarks";
 import type { BenchmarkStatus, GrowthResult, ShareResult, TargetShareResult } from "../lib/benchmarks";
 import { SmoothNavLink } from "./SmoothNavLink";
@@ -9,6 +9,9 @@ import { pluralRu } from "../lib/plural";
 import { Badge, type BadgeTone } from "./Badge";
 import { ProgressBar } from "./ProgressBar";
 import { Slider } from "./Slider";
+import { Tooltip } from "./Tooltip";
+import { toast } from "../store/useToastStore";
+import type { BenchmarkSettings } from "../lib/benchmarks";
 
 const STATUS_TONE: Record<BenchmarkStatus, BadgeTone> = {
   good: "income",
@@ -23,7 +26,26 @@ const STATUS_FILL: Record<BenchmarkStatus, string> = {
   na: "bg-muted",
 };
 
-const years = (n: number) => pluralRu(Math.round(n), ["год", "года", "лет"]);
+/** «6 лет», «1 год», «7,2 года» — у дробного числа всегда «года». */
+const years = (n: number) => (n % 1 === 0 ? pluralRu(n, ["год", "года", "лет"]) : "года");
+
+/** Какой выключатель в настройках прячет карточку. */
+const HIDE_KEY = {
+  housing: "housingOn",
+  debt: "debtOn",
+  invest: "investOn",
+  doubling: "doublingOn",
+  growth: "growthOn",
+  recurring: "recurringOn",
+} as const satisfies Record<string, keyof BenchmarkSettings>;
+type BenchmarkId = keyof typeof HIDE_KEY;
+
+/** Спрятать карточку сразу, с «Отменить» на плашке; вернуть можно и в настройках. */
+function hideBenchmark(id: BenchmarkId, title: string) {
+  const { update } = useBenchmarksStore.getState();
+  void update({ [HIDE_KEY[id]]: false });
+  toast(`«${title}» скрыт`, { undo: () => update({ [HIDE_KEY[id]]: true }) });
+}
 const monthsOf = (n: number) => `${n} ${pluralRu(n, ["месяц", "месяца", "месяцев"])}`;
 
 /**
@@ -43,7 +65,7 @@ function BenchmarkCard({
   note,
   children,
 }: {
-  id: string;
+  id: BenchmarkId;
   icon: LucideIcon;
   title: string;
   badge?: string;
@@ -57,16 +79,29 @@ function BenchmarkCard({
 }) {
   return (
     <div className="card card-pad flex flex-col min-w-0" data-benchmark={id}>
-      <div className="flex items-center justify-between gap-2 min-h-6">
-        <div className="flex items-center gap-1.5 min-w-0 font-semibold text-sm">
-          <Icon className="w-4 h-4 shrink-0 text-accent" aria-hidden />
-          <span className="truncate">{title}</span>
+      {/* Название не обрезается: на узком экране статус уходит строкой ниже. */}
+      <div className="flex items-start gap-2 min-h-6">
+        <div className="flex flex-1 flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+          <div className="flex items-center gap-1.5 font-semibold text-sm" data-benchmark-title>
+            <Icon className="w-4 h-4 shrink-0 text-accent" aria-hidden />
+            <span>{title}</span>
+          </div>
+          {badge && (
+            <Badge tone={tone} className="shrink-0 ml-auto">
+              {badge}
+            </Badge>
+          )}
         </div>
-        {badge && (
-          <Badge tone={tone} className="shrink-0">
-            {badge}
-          </Badge>
-        )}
+        <Tooltip content="Скрыть карточку">
+          <button
+            type="button"
+            className="btn-icon btn-icon-xs shrink-0 -mr-1"
+            aria-label={`Скрыть «${title}»`}
+            onClick={() => hideBenchmark(id, title)}
+          >
+            <EyeOff className="w-4 h-4" />
+          </button>
+        </Tooltip>
       </div>
       {value != null && (
         <div className="stat-num text-2xl font-bold tabular-nums leading-tight mt-2">{value}</div>
@@ -88,26 +123,11 @@ function BenchmarkCard({
   );
 }
 
-/** Ориентир ещё не настроен: чем его наполнить и кнопка в настройки. */
-function SetupCard({
-  id,
-  icon,
-  title,
-  text,
-  onSetup,
-}: {
-  id: string;
-  icon: LucideIcon;
-  title: string;
-  text: string;
-  onSetup: () => void;
-}) {
+/** Ориентир ещё не настроен: что отметить в настройках блока. */
+function SetupCard({ id, icon, title, text }: { id: BenchmarkId; icon: LucideIcon; title: string; text: string }) {
   return (
-    <BenchmarkCard id={id} icon={icon} title={title}>
-      <p className="text-xs text-muted mt-2 leading-snug flex-1">{text}</p>
-      <button type="button" className="btn-ghost text-xs mt-3 self-start" onClick={onSetup}>
-        Настроить
-      </button>
+    <BenchmarkCard id={id} icon={icon} title={title} badge="Не настроен">
+      <p className="text-xs text-muted mt-2 leading-snug">{text}</p>
     </BenchmarkCard>
   );
 }
@@ -122,7 +142,7 @@ function ShareCard({
   empty,
   note,
 }: {
-  id: string;
+  id: BenchmarkId;
   icon: LucideIcon;
   title: string;
   model: { result: ShareResult };
@@ -173,16 +193,13 @@ function ShareCard({
  * «Ориентиры» (#134): правила, с которыми сверяют бюджет. В общую оценку не
  * входят — это справка, а не балл.
  */
-export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; onSetup: () => void }) {
+export function HealthBenchmarks({ model }: { model: BenchmarksModel }) {
   const { base, housing, debt, invest, doubling, growth, recurring } = model;
   const update = useBenchmarksStore((s) => s.update);
   if (!housing && !debt && !invest && !doubling && !growth && !recurring) {
     return (
-      <div className="card card-pad text-sm text-muted flex items-center justify-between gap-3">
-        <span>Все ориентиры выключены.</span>
-        <button type="button" className="btn-ghost text-xs" onClick={onSetup}>
-          Настроить
-        </button>
+      <div className="card card-pad text-sm text-muted" data-benchmarks-empty>
+        Все ориентиры скрыты. Вернуть их можно в настройках — значок справа от заголовка.
       </div>
     );
   }
@@ -203,8 +220,7 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             id="housing"
             icon={Home}
             title="Расходы на жильё"
-            text="Отметьте категории, в которых у вас жильё: аренда, ипотека, коммунальные платежи. Считается, что на жильё должно уходить не больше трети дохода."
-            onSetup={onSetup}
+            text="Отметьте в настройках категории, в которых у вас жильё: аренда, ипотека, коммунальные платежи. Считается, что на жильё должно уходить не больше трети дохода."
           />
         ))}
 
@@ -223,8 +239,7 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             id="debt"
             icon={CreditCard}
             title="Платежи по кредитам"
-            text="Кредитных счетов не нашлось. Если вы записываете платежи расходом или гасите кредитную карту, отметьте нужные категории или счета."
-            onSetup={onSetup}
+            text="Кредитных счетов не нашлось. Если вы записываете платежи расходом или гасите кредитную карту, отметьте в настройках нужные категории или счета."
           />
         ))}
 
@@ -236,8 +251,7 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             id="invest"
             icon={PiggyBank}
             title="Доля вложений в доходе"
-            text="Отметьте инвестиционные счета — увидите, какая часть дохода уходит во вложения. Обычно советуют вкладывать не меньше десятой части дохода."
-            onSetup={onSetup}
+            text="Отметьте в настройках инвестиционные счета — увидите, какая часть дохода уходит во вложения. Обычно советуют вкладывать не меньше десятой части дохода."
           />
         ))}
 
@@ -274,8 +288,7 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             id="doubling"
             icon={TrendingUp}
             title="Удвоение вложений"
-            text="Отметьте инвестиционные счета — увидите, за сколько лет деньги на них удвоятся при заданной доходности."
-            onSetup={onSetup}
+            text="Отметьте в настройках инвестиционные счета — увидите, за сколько лет деньги на них удвоятся при заданной доходности."
           />
         ))}
 
