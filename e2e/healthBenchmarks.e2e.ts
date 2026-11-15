@@ -160,3 +160,28 @@ test("подписки в доходе и рост расходов к дохо�
   await expect(card(page, "growth")).toHaveCount(0);
   await expect(subs).toHaveCount(0);
 });
+
+test("окно настроек: у каждого ориентира свой блок, вложения — общим блоком на две карточки", async ({ page }) => {
+  await connectZen(page, "/health");
+  await page.getByRole("button", { name: "Настроить ориентиры" }).click();
+  const dialog = page.getByRole("dialog");
+  const panel = (id: string) => dialog.locator(`[data-benchmark-settings="${id}"]`);
+
+  // Счета и категории вложений стоят рядом с двумя карточками, которые по ним считают.
+  const invest = panel("invest");
+  await expect(invest).toContainText("Инвестиционные счета");
+  await expect(invest.getByRole("switch", { name: "Показывать «Доля вложений в доходе»" })).toBeVisible();
+  await expect(invest.getByRole("switch", { name: "Показывать «Удвоение вложений»" })).toBeVisible();
+  await expect(invest).toContainText("Ожидаемая доходность");
+
+  // Выключенный ориентир сворачивает свои настройки; пояснение остаётся.
+  const housing = panel("housing");
+  await expect(housing).toContainText("Что относится к жилью");
+  await housing.getByRole("switch").click();
+  await expect(housing).not.toContainText("Что относится к жилью");
+  await expect(housing).toContainText("Какая часть дохода уходит на жильё");
+  await expect(card(page, "housing")).toHaveCount(0);
+
+  // Окно не шире экрана и без прокрутки вбок.
+  expect(await dialog.evaluate((d) => d.scrollWidth <= d.clientWidth + 1)).toBe(true);
+});

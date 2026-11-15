@@ -1,5 +1,15 @@
 import { useMemo, type ReactNode } from "react";
-import { CreditCard, Home, PiggyBank, Repeat, Scale, SlidersHorizontal, TrendingUp, type LucideIcon } from "lucide-react";
+import {
+  CreditCard,
+  Home,
+  Landmark,
+  PiggyBank,
+  Repeat,
+  Scale,
+  SlidersHorizontal,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
@@ -17,32 +27,50 @@ import { SettingRow } from "./SettingRow";
 import { Slider } from "./Slider";
 import { Switch } from "./Switch";
 
-/** Заголовок ориентира с выключателем; под ним — его настройки. */
-function Group({
+/** Заголовок с пояснением и выключателем карточки. */
+function Head({
   icon: Icon,
   title,
+  hint,
   on,
   onToggle,
-  children,
 }: {
   icon: LucideIcon;
   title: string;
-  on: boolean;
-  onToggle: (v: boolean) => void;
-  children: ReactNode;
+  /** Одной строкой: что показывает карточка. */
+  hint: string;
+  /** Без выключателя — у блока, который сам карточкой не является. */
+  on?: boolean;
+  onToggle?: (v: boolean) => void;
 }) {
   return (
-    <section>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 font-semibold text-sm">
-          <Icon className="w-4 h-4 text-accent" aria-hidden />
-          {title}
+    <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <Icon className={`w-4 h-4 shrink-0 mt-0.5 ${on === false ? "text-muted" : "text-accent"}`} aria-hidden />
+        <div className="min-w-0">
+          <div className={`font-semibold text-sm leading-tight ${on === false ? "text-muted" : ""}`}>{title}</div>
+          <div className="text-xs text-muted mt-0.5">{hint}</div>
         </div>
-        <Switch checked={on} onChange={onToggle} label={`Показывать «${title}»`} />
       </div>
-      {on && <div className="mt-1">{children}</div>}
+      {onToggle && on !== undefined && (
+        <Switch checked={on} onChange={onToggle} label={`Показывать «${title}»`} />
+      )}
+    </div>
+  );
+}
+
+/** Блок одного ориентира: заголовок с выключателем и его настройки под чертой. */
+function Panel({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-border divide-y divide-border" data-benchmark-settings={id}>
+      {children}
     </section>
   );
+}
+
+/** Настройки под заголовком — с отступом, как у заголовка. */
+function Body({ children }: { children: ReactNode }) {
+  return <div className="px-3.5 py-1.5">{children}</div>;
 }
 
 /**
@@ -91,7 +119,8 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
       control={
         <MultiSelect
           className="w-56"
-          label={label}
+          // В самом поле — коротко: полное название стоит слева в строке.
+          label="Счета"
           options={accounts}
           selected={listToSet(value, accounts)}
           onChange={(next) => onChange(setToList(next, accounts))}
@@ -120,63 +149,122 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
   );
 
   return (
-    <Modal onClose={onClose} width="lg">
+    <Modal onClose={onClose} width="xl">
       <ModalHeader
         icon={SlidersHorizontal}
         title="Ориентиры"
-        subtitle="Выключатель справа прячет карточку. На общую оценку ориентиры не влияют."
+        subtitle="Выключатель прячет карточку. На общую оценку ориентиры не влияют."
       />
-      <ModalBody scroll gap={4}>
-        <Group icon={Home} title="Расходы на жильё" on={s.housingOn} onToggle={(v) => void s.update({ housingOn: v })}>
-          {categories("Что относится к жилью", s.housingCategories, (v) => void s.update({ housingCategories: v }))}
-          {limit("Норма — не больше", s.housingLimit, (v) => void s.update({ housingLimit: v }))}
-        </Group>
-
-        <Group icon={CreditCard} title="Платежи по кредитам" on={s.debtOn} onToggle={(v) => void s.update({ debtOn: v })}>
-          {accountPicker("Кредитные счета", s.debtAccounts ?? loanKeys, (v) => void s.update({ debtAccounts: v }))}
-          {categories("Платежи, записанные расходом", s.debtCategories, (v) => void s.update({ debtCategories: v }))}
-          {limit("Норма — не больше", s.debtLimit, (v) => void s.update({ debtLimit: v }))}
-        </Group>
-
-        <Group icon={PiggyBank} title="Доля вложений в доходе" on={s.investOn} onToggle={(v) => void s.update({ investOn: v })}>
-          <Slider
-            className="py-1.5"
-            layout="stacked"
-            label="Цель — не меньше"
-            min={5}
-            max={50}
-            step={1}
-            value={s.investTarget}
-            format={(v) => `${v}% дохода`}
-            onChange={(v) => void s.update({ investTarget: v })}
+      <ModalBody scroll gap={3}>
+        <Panel id="housing">
+          <Head
+            icon={Home}
+            title="Расходы на жильё"
+            hint="Какая часть дохода уходит на жильё"
+            on={s.housingOn}
+            onToggle={(v) => void s.update({ housingOn: v })}
           />
-        </Group>
+          {s.housingOn && (
+            <Body>
+              {categories("Что относится к жилью", s.housingCategories, (v) => void s.update({ housingCategories: v }))}
+              {limit("Норма — не больше", s.housingLimit, (v) => void s.update({ housingLimit: v }))}
+            </Body>
+          )}
+        </Panel>
 
-        <Group icon={TrendingUp} title="Удвоение вложений" on={s.doublingOn} onToggle={(v) => void s.update({ doublingOn: v })}>
-          <p className="text-xs text-muted py-1.5">
-            Доходность меняется бегунком на самой карточке.
-          </p>
-        </Group>
+        <Panel id="debt">
+          <Head
+            icon={CreditCard}
+            title="Платежи по кредитам"
+            hint="Какая часть дохода уходит на кредиты"
+            on={s.debtOn}
+            onToggle={(v) => void s.update({ debtOn: v })}
+          />
+          {s.debtOn && (
+            <Body>
+              {accountPicker("Кредитные счета", s.debtAccounts ?? loanKeys, (v) => void s.update({ debtAccounts: v }))}
+              {categories("Платежи, записанные расходом", s.debtCategories, (v) => void s.update({ debtCategories: v }))}
+              {limit("Норма — не больше", s.debtLimit, (v) => void s.update({ debtLimit: v }))}
+            </Body>
+          )}
+        </Panel>
 
-        <Group icon={Scale} title="Рост расходов и доходов" on={s.growthOn} onToggle={(v) => void s.update({ growthOn: v })}>
-          <p className="text-xs text-muted py-1.5">
-            Сравниваются последние 12 полных месяцев и 12 месяцев до них. Настроек нет.
-          </p>
-        </Group>
+        {/* Вложения — один блок на две карточки: обе считают по одним счетам,
+            и выбирать их дважды незачем. */}
+        <Panel id="invest">
+          <Head icon={Landmark} title="Вложения" hint="Что считать вложениями — общее для двух карточек ниже" />
+          <Body>
+            {accountPicker("Инвестиционные счета", s.investAccounts, (v) => void s.update({ investAccounts: v }))}
+            {categories("Вложения, записанные расходом", s.investCategories, (v) => void s.update({ investCategories: v }))}
+          </Body>
+          <Head
+            icon={PiggyBank}
+            title="Доля вложений в доходе"
+            hint="Какую часть дохода вы вкладываете"
+            on={s.investOn}
+            onToggle={(v) => void s.update({ investOn: v })}
+          />
+          {s.investOn && (
+            <Body>
+              <Slider
+                className="py-1.5"
+                layout="stacked"
+                label="Цель — не меньше"
+                min={5}
+                max={50}
+                step={1}
+                value={s.investTarget}
+                format={(v) => `${v}% дохода`}
+                onChange={(v) => void s.update({ investTarget: v })}
+              />
+            </Body>
+          )}
+          <Head
+            icon={TrendingUp}
+            title="Удвоение вложений"
+            hint="За сколько лет вложения удвоятся — правило 72"
+            on={s.doublingOn}
+            onToggle={(v) => void s.update({ doublingOn: v })}
+          />
+          {s.doublingOn && (
+            <Body>
+              <Slider
+                className="py-1.5"
+                layout="stacked"
+                label="Ожидаемая доходность"
+                min={2}
+                max={30}
+                step={1}
+                value={s.investRate}
+                format={(v) => `${v}% годовых`}
+                onChange={(v) => void s.update({ investRate: v })}
+              />
+            </Body>
+          )}
+        </Panel>
 
-        <Group icon={Repeat} title="Расходы на подписки" on={s.recurringOn} onToggle={(v) => void s.update({ recurringOn: v })}>
-          {limit("Норма — не больше", s.recurringLimit, (v) => void s.update({ recurringLimit: v }))}
-        </Group>
+        <Panel id="recurring">
+          <Head
+            icon={Repeat}
+            title="Расходы на подписки"
+            hint="Какая часть дохода уходит на подписки"
+            on={s.recurringOn}
+            onToggle={(v) => void s.update({ recurringOn: v })}
+          />
+          {s.recurringOn && (
+            <Body>{limit("Норма — не больше", s.recurringLimit, (v) => void s.update({ recurringLimit: v }))}</Body>
+          )}
+        </Panel>
 
-        {(s.investOn || s.doublingOn) && (
-          <section>
-            <div className="font-semibold text-sm">Что считать вложениями</div>
-            <div className="mt-1">
-              {accountPicker("Инвестиционные счета", s.investAccounts, (v) => void s.update({ investAccounts: v }))}
-              {categories("Вложения, записанные расходом", s.investCategories, (v) => void s.update({ investCategories: v }))}
-            </div>
-          </section>
-        )}
+        <Panel id="growth">
+          <Head
+            icon={Scale}
+            title="Рост расходов и доходов"
+            hint="Что растёт быстрее за последний год. Настроек нет"
+            on={s.growthOn}
+            onToggle={(v) => void s.update({ growthOn: v })}
+          />
+        </Panel>
       </ModalBody>
       <ModalFooter>
         <button type="button" className="btn-primary text-sm" onClick={onClose}>

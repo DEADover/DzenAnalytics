@@ -292,8 +292,6 @@ export function HealthBenchmarks({ model }: { model: BenchmarksModel }) {
           />
         ))}
 
-      {growth && <GrowthCard r={growth} base={base} />}
-
       {recurring && (
         <ShareCard
           id="recurring"
@@ -313,6 +311,8 @@ export function HealthBenchmarks({ model }: { model: BenchmarksModel }) {
           }
         />
       )}
+
+      {growth && <GrowthCard r={growth} base={base} />}
     </div>
   );
 }
