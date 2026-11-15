@@ -30,9 +30,8 @@ import clsx from "clsx";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { txAccountKey } from "../lib/accountKey";
 import { useDataStore } from "../store/useDataStore";
-import { getZenCache } from "../lib/zenCacheMemo";
 import { memoLast } from "../lib/memoLast";
-import type { ZenTag } from "../lib/zenmoney";
+import { useCategoryFilterNodes } from "../hooks/useCategoryFilterNodes";
 import type { AccountDirectory } from "../lib/accountDirectory";
 import { accountOptions } from "../lib/accountOptions";
 import {
@@ -49,7 +48,6 @@ import { currentPeriod, periodRange, quarterOf, localToday } from "../lib/period
 import { formatDate } from "../lib/format";
 import type { PeriodController } from "../hooks/useLocalPeriod";
 import { FiltersMenu } from "./FiltersMenu";
-import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { currencyFlagEmoji } from "../lib/currencyFlag";
 import {
   membersInData,
@@ -122,27 +120,10 @@ const OP_TYPES: { value: string; label: string; hint?: string }[] = [
 const PICKER_PHONE =
   "shrink-0 max-sm:w-auto max-sm:flex-1 max-sm:basis-[calc(50%-0.25rem)] max-sm:min-w-0";
 
-/** Служебные категории, которые держим наверху списка без заголовка группы. */
-const PINNED_CATEGORIES = ["Корректировка"];
-
-type TagKinds = Map<string, "expense" | "income" | "both">;
-
 // ── Выборки для фильтров — общие на модуль ────────────────────────────────
 // Панель фильтров монтируется заново на каждой странице, а `useMemo` живёт
 // в компоненте: каждый переход проходил бы все операции заново. Здесь итог
 // помнится, пока не сменились операции или справочник (см. `memoLast`).
-
-/** Название корневой категории → её тип по справочнику Дзен-мани. */
-const tagKindsOf = memoLast((tags: readonly ZenTag[]): TagKinds => {
-  const m: TagKinds = new Map();
-  for (const t of tags) {
-    if (t.parent) continue; // тип задаёт корневая категория
-    m.set(t.title, t.showOutcome && t.showIncome ? "both" : t.showIncome ? "income" : "expense");
-  }
-  return m;
-});
-/** Последний разобранный справочник: новая панель берёт его сразу. */
-let lastTagKinds: TagKinds = new Map();
 
 const accountMetaOf = memoLast((dir: AccountDirectory) => {
   const liveEntries = dir.list.filter((e) => e.live);
@@ -173,82 +154,6 @@ const accountsOf = memoLast((transactions: Transaction[], dir: AccountDirectory)
   // «все сразу». Поэтому контрагенты идут ВЛОЖЕННЫМИ прямо под своим счётом —
   // теми же именами, что и в разбивке на странице «Счета».
   return withDebtCounterparties(base, debtAccounts, transactions);
-});
-
-// Parent categories each with their observed sub-categories — for the cascade
-// category filter (parent on the left, subs on the right).
-const categoryNodesOf = memoLast((transactions: Transaction[], tagKinds: TagKinds) => {
-    const map = new Map<
-      string,
-      { subs: Set<string>; hasBare: boolean; seenIncome: boolean; seenExpense: boolean }
-    >();
-    // Сначала — плоский список листьев: основная категория каждой операции и
-    // её вторые (#69). «Отпуск», стоящий всегда вторым, иначе в фильтре не
-    // появлялся бы вовсе.
-    const leaves: [Transaction["kind"], string, string | null][] = [];
-    for (const t of transactions) {
-      if (!t.category) continue;
-      leaves.push([t.kind, t.category, t.subcategory]);
-      for (const full of t.extraCategories ?? []) {
-        const [category, ...rest] = full.split(/\s*\/\s*/);
-        if (category) leaves.push([t.kind, category, rest.join(" / ") || null]);
-      }
-    }
-    for (const [kind, category, subcategory] of leaves) {
-      let e = map.get(category);
-      if (!e) {
-        e = { subs: new Set<string>(), hasBare: false, seenIncome: false, seenExpense: false };
-        map.set(category, e);
-      }
-      // A transaction tagged with just the parent (no sub) is "bare" — a
-      // distinct leaf from any «Category / Subcategory».
-      if (subcategory) e.subs.add(subcategory);
-      else e.hasBare = true;
-      if (kind === "income") e.seenIncome = true;
-      else if (kind === "expense" || kind === "refund") e.seenExpense = true;
-    }
-    // Тип берём из справочника Дзен-мани, а если его нет (режим CSV) — выводим
-    // из самих операций: категория, встреченная только в доходах, доходная.
-    const kindOf = (name: string, e: { seenIncome: boolean; seenExpense: boolean }) => {
-      const fromTags = tagKinds.get(name);
-      if (fromTags) return fromTags;
-      if (e.seenIncome && e.seenExpense) return "both" as const;
-      if (e.seenIncome) return "income" as const;
-      if (e.seenExpense) return "expense" as const;
-      return undefined;
-    };
-    // Доходных категорий обычно единицы, расходных — десятки, поэтому короткий
-    // список идёт первым. Смешанные («и расход, и доход») — в хвост: их мало и
-    // они не то, что ищут в первую очередь.
-    const ORDER = { income: 0, expense: 1, both: 2 } as const;
-    const real = [...map.entries()]
-      .filter(([name]) => name !== NO_CATEGORY)
-      .map(([name, e]) => ({
-        name,
-        hasBare: e.hasBare,
-        kind: kindOf(name, e),
-        subs: [...e.subs].sort((a, b) => a.localeCompare(b, "ru")),
-      }))
-      .sort(
-        (a, b) =>
-          (a.kind ? ORDER[a.kind] : 3) - (b.kind ? ORDER[b.kind] : 3) ||
-          a.name.localeCompare(b.name, "ru")
-      );
-    // Наверх и без заголовка группы — «Без категории» и «Корректировка».
-    // Первая всегда под рукой: по ней ищут операции, которым забыли категорию.
-    // Вторая формально «и расход, и доход» и заводила бы себе отдельную группу
-    // из одной строки — а по смыслу это служебная запись, а не статья бюджета.
-    const pinnedNames = new Set([NO_CATEGORY, ...PINNED_CATEGORIES]);
-    const pinned = real.filter((n) => pinnedNames.has(n.name)).map((n) => ({
-      ...n,
-      // Тип убираем намеренно: без него строка не получает заголовок группы.
-      kind: undefined,
-    }));
-    return [
-      { name: NO_CATEGORY, hasBare: true, subs: [] },
-      ...pinned,
-      ...real.filter((n) => !pinnedNames.has(n.name)),
-    ];
 });
 
 const memberIdsOf = memoLast((transactions: Transaction[]) => membersInData(transactions));
@@ -346,23 +251,6 @@ export function GlobalFilters({
   const additionalRef = useRef<HTMLDivElement>(null);
   const [additionalOpen, setAdditionalOpen] = useState(false);
 
-  /** Название категории → расходная она или доходная, по справочнику Дзен-мани.
-   *  Пусто в режиме CSV — тогда тип выводим из самих операций. Тот же объект,
-   *  пока справочник не менялся (см. `tagKindsOf`): новый на каждый переход
-   *  пересобирал дерево категорий второй раз. */
-  const [tagKinds, setTagKinds] = useState<TagKinds>(() => lastTagKinds);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getZenCache().then((cache) => {
-      if (cancelled || !cache) return;
-      lastTagKinds = tagKindsOf(cache.tags);
-      setTagKinds(lastTagKinds);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
   // Счета — по ключам справочника (номер счёта, а не название): два
   // «Т-Банка» в фильтре — две строки, у каждой своя подпись с уточнением.
   const dir = useAccountDirectory();
@@ -435,7 +323,7 @@ export function GlobalFilters({
 
   // Parent categories each with their observed sub-categories — for the cascade
   // category filter (parent on the left, subs on the right).
-  const categoryNodes = categoryNodesOf(transactions, tagKinds);
+  const categoryNodes = useCategoryFilterNodes(transactions);
 
   // Люди на аккаунте (#92). Считаем по самим операциям, а не по списку
   // аккаунта: на общем аккаунте человек мог не завести ни одной операции, и

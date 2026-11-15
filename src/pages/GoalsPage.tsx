@@ -1,3 +1,4 @@
+import { listToSet, setToList } from "../lib/selectionSet";
 import { localToday } from "../lib/period";
 import { FormField } from "../components/FormField";
 import { useEffect, useMemo, useState } from "react";
@@ -30,7 +31,6 @@ import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { MultiSelect } from "../components/MultiSelect";
 import { AccountLogo } from "../components/AccountLogo";
-import { FILTER_NONE } from "../store/useFiltersStore";
 import { getHistoricalRubRate } from "../lib/historicalRates";
 import {
   currenciesToQuote,
@@ -453,24 +453,6 @@ export function GoalsPage() {
   );
 }
 
-/**
- * Источники цели ↔ выбор в `MultiSelect`. У списка соглашение фильтров:
- * пусто = все, {FILTER_NONE} = ничего. У цели «ничего» — ручная сумма, а «все»
- * — это просто все счета поимённо.
- */
-function sourcesToSet(sources: readonly string[], all: readonly string[]): Set<string> {
-  const known = sources.filter((t) => all.includes(t));
-  if (known.length === 0) return new Set([FILTER_NONE]);
-  if (known.length >= all.length) return new Set();
-  return new Set(known);
-}
-
-function setToSources(next: Set<string>, all: readonly string[]): string[] {
-  if (next.has(FILTER_NONE)) return [];
-  if (next.size === 0) return [...all];
-  return all.filter((t) => next.has(t));
-}
-
 /** Shared add / edit field grid — identical layout in both places. */
 function GoalForm({
   fieldPicker,
@@ -551,8 +533,8 @@ function GoalForm({
           variant={fieldPicker ? "field" : "filter"}
           label=""
           options={accountTitles}
-          selected={sourcesToSet(sources, accountTitles)}
-          onChange={(next) => setSources(setToSources(next, accountTitles))}
+          selected={listToSet(sources, accountTitles)}
+          onChange={(next) => setSources(setToList(next, accountTitles))}
           renderIcon={(key) => <AccountLogo title={dir.byKey.get(key)?.title ?? key} size={18} />}
           labelOf={dir.label}
           unitForms={["счёт", "счёта", "счетов"]}
