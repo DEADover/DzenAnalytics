@@ -29,6 +29,7 @@ import { useDashboardLayoutStore } from "./useDashboardLayoutStore";
 import { useHeaderNavStore } from "./useHeaderNavStore";
 import { useQuickSettingsStore } from "./useQuickSettingsStore";
 import { useBudgetSettingsStore } from "./useBudgetSettingsStore";
+import { pickBenchmarks, useBenchmarksStore } from "./useBenchmarksStore";
 import { useReportPeriodStore } from "./useReportPeriodStore";
 import { useFireStore } from "./useFireStore";
 import { parseWhatIfState, pickWhatIf, useWhatIfStore } from "./useWhatIfStore";
@@ -115,6 +116,11 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
       if (v === null) return s.ownSet ? s.followZenDay() : undefined;
       return typeof v === "number" && Number.isFinite(v) ? s.setMonthStartDay(v) : undefined;
     }
+  ),
+  // «Ориентиры» в «Финансовом здоровье» — одним полем: категории, счета и
+  // пороги имеют смысл только вместе.
+  field(useBenchmarksStore, "health.benchmarks", (s) => pickBenchmarks(s), (v, s) =>
+    v && typeof v === "object" ? s.update(v as object) : undefined
   ),
   // Счета вне капитала FIRE — по названию, как везде в фильтрах сервиса.
   field(useFireStore, "fire.excluded", (s) => s.excluded, (v, s) =>

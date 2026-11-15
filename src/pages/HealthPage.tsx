@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { HeartPulse } from "lucide-react";
+import { useMemo, useState } from "react";
+import { HeartPulse, SlidersHorizontal } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
@@ -16,6 +16,11 @@ import { HealthSummary } from "../components/HealthSummary";
 import { FireChart } from "../components/FireChart";
 import { FireIndependence } from "../components/FireIndependence";
 import { SectionDivider } from "../components/SectionDivider";
+import { SectionControls } from "../components/SectionControls";
+import { Tooltip } from "../components/Tooltip";
+import { HealthBenchmarks } from "../components/HealthBenchmarks";
+import { BenchmarkSettingsModal } from "../components/BenchmarkSettingsModal";
+import { useBenchmarks } from "../hooks/useBenchmarks";
 
 export function HealthPage() {
   const transactions = useDataStore((s) => s.transactions);
@@ -26,6 +31,8 @@ export function HealthPage() {
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const score = useHealthScore();
+  const benchmarks = useBenchmarks();
+  const [benchmarkSetup, setBenchmarkSetup] = useState(false);
   const { capitalAccounts } = useFireCapital();
   const excluded = useFireExcluded();
   const liveAccounts = useLiveAccounts();
@@ -73,6 +80,27 @@ export function HealthPage() {
       />
 
       <HealthSummary score={score} hideHeading />
+
+      <SectionControls>
+        <Tooltip content="Настроить ориентиры">
+          <button
+            type="button"
+            className="btn-ghost btn-square-lg"
+            aria-label="Настроить ориентиры"
+            onClick={() => setBenchmarkSetup(true)}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      </SectionControls>
+
+      <SectionDivider
+        label="Ориентиры"
+        description="Правила, с которыми сверяют бюджет. Считаются по последним 12 завершённым месяцам и на общую оценку не влияют."
+      />
+
+      <HealthBenchmarks model={benchmarks} onSetup={() => setBenchmarkSetup(true)} />
+      {benchmarkSetup && <BenchmarkSettingsModal onClose={() => setBenchmarkSetup(false)} />}
 
       <SectionDivider
         label="Финансовая независимость"

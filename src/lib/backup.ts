@@ -100,6 +100,7 @@ export const BACKUP_META_KEYS = [
   "categoryRules",
   "duplicateExclusions",
   "budgetSettings", // периметр счетов, переводы, вид и прогноз бюджета
+  "healthBenchmarks", // «Ориентиры» в «Финансовом здоровье»: категории, счета, пороги
   "dataSlices", // разрезы данных
   "displaySettings", // оформление: размер текста в таблицах, копейки и т.п.
   "columnWidths", // свои ширины столбцов по таблицам

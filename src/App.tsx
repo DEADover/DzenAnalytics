@@ -102,6 +102,7 @@ import { useFreeMoneyStore } from "./store/useFreeMoneyStore";
 import { useTagModeStore } from "./store/useTagModeStore";
 import { useHeaderNavStore } from "./store/useHeaderNavStore";
 import { useBudgetSettingsStore } from "./store/useBudgetSettingsStore";
+import { useBenchmarksStore } from "./store/useBenchmarksStore";
 import { useGoalsStore } from "./store/useGoalsStore";
 import { useCounterpartyNotesStore } from "./store/useCounterpartyNotesStore";
 import { useSavedViewsStore } from "./store/useSavedViewsStore";
@@ -274,6 +275,7 @@ function App() {
       ["useTagModeStore", useTagModeStore],
       ["useHeaderNavStore", useHeaderNavStore],
       ["useBudgetSettingsStore", useBudgetSettingsStore],
+      ["useBenchmarksStore", useBenchmarksStore],
       ["useGoalsStore", useGoalsStore],
       ["useCounterpartyNotesStore", useCounterpartyNotesStore],
       ["useSavedViewsStore", useSavedViewsStore],
