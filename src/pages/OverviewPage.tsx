@@ -5,9 +5,11 @@
  * месяц выбирают — кликом по графику или в шапке, — а общие фильтры решают,
  * какие операции и счета считать: так личный бюджет отделяется от семейного.
  *
- * Раскладка постоянная: сверху график месяцев и статьи выбранного — пара, с
- * которой разбор и начинается; ниже то, что про сам месяц; в конце капитал и
- * счета — они к месяцу не привязаны, но слушают фильтр счетов.
+ * Раскладку собирает сам человек, как на главной (`WidgetBoard`), только
+ * хранится она отдельно. Стандартная — `OVERVIEW_BOARD`: сверху график месяцев
+ * и статьи выбранного — пара, с которой разбор и начинается; ниже то, что про
+ * сам месяц; в конце капитал и счета — они к месяцу не привязаны, но слушают
+ * фильтр счетов.
  *
  * Считает всё `useDashboardModel` — та же модель, что у главной, поэтому без
  * фильтров и на идущем месяце числа совпадают с ней.
@@ -15,8 +17,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import clsx from "clsx";
-import { Filter, PanelsTopLeft, Wallet } from "lucide-react";
+import { Filter, PanelsTopLeft } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { InfoPopover, InfoTerm } from "../components/InfoPopover";
@@ -27,9 +28,13 @@ import { PeriodStepper } from "../components/PeriodStepper";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { CategorySunburst } from "../components/CategorySunburst";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
-import { WidgetPlate } from "../components/dashboard/WidgetLayout";
+import { WidgetBoard } from "../components/dashboard/WidgetBoard";
+import { LinksRow } from "../components/dashboard/LinksRow";
+import { LayoutSurfaceContext, OVERVIEW_SURFACE } from "../components/dashboard/layoutSurface";
+import { useOverviewLayoutStore } from "../store/useDashboardLayoutStore";
+import { widgetMeta, widgetView, type WidgetPlacement } from "../lib/dashboardLayout";
 import { BlockTitle } from "../components/dashboard/blocks/shared";
-import { HeroOpen, MonthPill } from "../components/dashboard/blocks/monthHero";
+import { HeroOpen, HeroSplit, MonthPill } from "../components/dashboard/blocks/monthHero";
 import { CashflowBars } from "../components/dashboard/blocks/cashflow";
 import { CapitalBlock } from "../components/dashboard/blocks/capital";
 import { AccountsBlock, CategoriesList, ObservationsList } from "../components/dashboard/blocks/lists";
@@ -57,24 +62,14 @@ import { MONTHS_IN } from "../lib/months";
 
 type Kind = "expense" | "income";
 
-/** Плитка постоянной раскладки: тот же поддон и та же высота ряда, что на главной. */
-function Tile({
-  span = 1,
-  sunken,
-  name,
-  children,
-}: {
-  span?: 1 | 2;
-  sunken?: boolean;
-  /** Метка плитки — по ней её находят тесты. */
-  name: string;
-  children: ReactNode;
-}) {
-  return (
-    <div data-overview={name} className={clsx("min-w-0 lg:h-[30rem]", span === 2 && "lg:col-span-2")}>
-      <WidgetPlate sunken={sunken}>{children}</WidgetPlate>
-    </div>
-  );
+/** Капитал на конец дня `date` — последняя точка кривой не позже него. */
+function netWorthAt(series: readonly { date: string; net: number }[], date: string): number {
+  let net = 0;
+  for (const p of series) {
+    if (p.date > date) break;
+    net = p.net;
+  }
+  return net;
 }
 
 export function OverviewPage() {
@@ -144,13 +139,17 @@ export function OverviewPage() {
   });
 
   const [kind, setKind] = useState<Kind>("expense");
-  const [offBalance, setOffBalance] = useState<boolean | undefined>(undefined);
+  const layoutLoaded = useOverviewLayoutStore((s) => s.loaded);
+  const editing = useOverviewLayoutStore((s) => s.editing);
+  const setLinks = useOverviewLayoutStore((s) => s.setLinks);
+  const setOffBalance = useOverviewLayoutStore((s) => s.setOffBalance);
 
   const monthTx = useMemo(
     () => transactions.filter((t) => periodKey(t.date, monthStartDay) === ym),
     [transactions, monthStartDay, ym]
   );
-  const ring = useMemo(() => buildHierarchy(monthTx, kind), [monthTx, kind]);
+  const ringExpense = useMemo(() => buildHierarchy(monthTx, "expense"), [monthTx]);
+  const ringIncome = useMemo(() => buildHierarchy(monthTx, "income"), [monthTx]);
 
   // «Сегодня» для сравнения — последняя дата с данными, как на главной.
   const lastDate = useMemo(
@@ -167,6 +166,9 @@ export function OverviewPage() {
     const busy = !dataLoaded || syncStatus === "checking" || syncStatus === "syncing";
     return busy ? <DashboardSkeleton /> : <EmptyState />;
   }
+  // Своя раскладка поднимается из базы: до этого на экране была бы
+  // стандартная, и страница на кадр перескакивала бы из чужой в свою.
+  if (!layoutLoaded) return <DashboardSkeleton />;
 
   const matches = (t: (typeof monthTx)[number], k: Kind) =>
     k === "expense" ? affectsExpense(t.kind) : t.kind === "income";
@@ -181,13 +183,224 @@ export function OverviewPage() {
   const range = periodRange(ym, monthStartDay);
   // План бюджета считается по всем счетам и статьям — с отфильтрованным
   // фактом рядом он бы врал, поэтому под фильтрами его не показываем.
-  // Нулевой план — это «плана на месяц нет», а не «запланирован ноль».
+  // Нулевой план — это «плана на месяц нет», а не «запланирован ноль». Остаток
+  // на счетах у прошедшего месяца — на его последний день, а не сегодняшний.
   const hero = {
     ...m,
+    netWorth: ym === nowYm ? m.netWorth : netWorthAt(m.netWorthSeries, range.to),
     planIncome: narrowed ? null : m.planIncome || null,
     planExpense: narrowed ? null : m.planExpense || null,
   };
   const today = localToday();
+
+  /** Содержимое виджета — те же блоки, что на главной, за выбранный месяц. */
+  function widgetBody(p: WidgetPlacement): ReactNode {
+    switch (p.kind) {
+      case "month": {
+        const view = widgetView(widgetMeta("month"), p.view)?.id;
+        if (view === "split") return <HeroSplit m={hero} titleTag="h2" pill={<MonthPill m={m} size="sm" />} />;
+        return (
+          <HeroOpen m={hero} sunken={view === "framed"} titleTag="h2" pill={<MonthPill m={m} size="md" />} />
+        );
+      }
+
+      case "cashflow":
+        return (
+          <>
+            <BlockTitle
+              title="Доходы и расходы"
+              info={
+                <>
+                  <p>
+                    Клик по месяцу выбирает его — вся страница пересчитывается.
+                    Клик по зелёному или красному столбцу заодно показывает
+                    доходы или расходы этого месяца по категориям. Выбранный
+                    месяц яркий, остальные приглушены.
+                  </p>
+                  <p>
+                    Бледные столбцы с пунктиром — прогноз по типичному месяцу
+                    за последние полгода. Срезанный столбец несёт зубчатую
+                    кромку и подписан настоящей суммой.
+                  </p>
+                </>
+              }
+              to="/cashflow"
+              linkLabel="Cash-flow"
+            />
+            <CashflowBars
+              m={m}
+              height={260}
+              selectedYm={ym}
+              onMonth={(next, k) => {
+                setYm(next);
+                if (k) setKind(k);
+              }}
+            />
+          </>
+        );
+
+      case "categories":
+        return (
+          <>
+            <BlockTitle
+              title={kind === "expense" ? "Расходы по категориям" : "Доходы по категориям"}
+              info={
+                <p>
+                  Процент — доля статьи во всех {kind === "expense" ? "расходах" : "доходах"}{" "}
+                  месяца. Полоса меряется от самой крупной статьи. Клик открывает
+                  операции статьи за этот месяц.
+                </p>
+              }
+              right={<KindSwitcher kind={kind} onChange={setKind} />}
+            />
+            <CategoriesList m={m} kind={kind} onCategory={(name) => drillCategory(kind, name)} />
+          </>
+        );
+
+      case "monthOverMonth":
+        return (
+          <>
+            <BlockTitle
+              title="Месяц к месяцу"
+              info={
+                <p>
+                  Пока месяц идёт, от прошлого берётся <b>столько же дней</b>.
+                  У завершённого месяца сравнение полное. Норма сбережений —
+                  доля дохода, которая осталась.
+                </p>
+              }
+              to="/compare"
+              linkLabel="Сравнение"
+            />
+            <MonthOverMonthBlock mom={mom} base={m.base} prevLabel={prevMonthLabel} />
+          </>
+        );
+
+      case "observations":
+        return (
+          <>
+            <BlockTitle
+              title="Автонаблюдения"
+              info={
+                <p>
+                  Статьи, пробившие план или разогнавшиеся против обычного. У
+                  идущего месяца сюда же попадают подорожавшие подписки и
+                  пропущенные регулярные платежи.
+                </p>
+              }
+              to="/anomalies"
+              linkLabel="Аномалии"
+            />
+            <ObservationsList m={m} />
+          </>
+        );
+
+      case "activity":
+        return (
+          <>
+            <BlockTitle
+              title="Активность за месяц"
+              info={
+                <p>
+                  Чем темнее клетка, тем больше потрачено в этот день. Клик по
+                  дню открывает его операции.
+                </p>
+              }
+              to="/calendar"
+              linkLabel="Календарь"
+            />
+            <ActivityHeat
+              m={m}
+              onDay={(date) =>
+                showDrill(
+                  dayTitle(date),
+                  transactions.filter((t) => t.date.slice(0, 10) === date),
+                  "Операции за день"
+                )
+              }
+            />
+          </>
+        );
+
+      case "donutExpense":
+      case "donutIncome": {
+        const k: Kind = p.kind === "donutExpense" ? "expense" : "income";
+        return (
+          <>
+            <BlockTitle
+              title={k === "expense" ? "Кольцо расходов" : "Кольцо доходов"}
+              to={`/categories?kind=${k}`}
+              linkLabel="Категории"
+            />
+            <CategorySunburst
+              compact
+              data={k === "expense" ? ringExpense : ringIncome}
+              meta={categoryMeta}
+              base={m.base}
+              kind={k}
+              onOpenCategory={(name) => drillCategory(k, name)}
+              onOpenSubcategory={(full) => drillCategory(k, full, true)}
+            />
+          </>
+        );
+      }
+
+      case "capital":
+        return capitalKnown ? (
+          <CapitalBlock series={m.netWorthSeries} base={m.base} today={today} accounts={m.accounts} />
+        ) : (
+          <>
+            <BlockTitle title="Капитал" />
+            {capitalUnknown}
+          </>
+        );
+
+      case "accounts":
+        return capitalKnown ? (
+          <AccountsBlock
+            m={m}
+            picked={capitalKeys !== null}
+            offBalance={p.offBalance}
+            onOffBalanceChange={(v) => void setOffBalance(p.key, v)}
+            onAccount={(key, label) =>
+              showDrill(
+                label,
+                transactions.filter(
+                  (t) => txAccountKey(t) === key || txOutKey(t) === key || txInKey(t) === key
+                ),
+                "Операции по счёту"
+              )
+            }
+          />
+        ) : (
+          <>
+            <BlockTitle title="Балансы счетов" />
+            {capitalUnknown}
+          </>
+        );
+
+      case "links":
+        return (
+          <LinksRow
+            links={p.links ?? []}
+            editing={editing}
+            onChange={(links) => void setLinks(p.key, links)}
+          />
+        );
+
+      // «Свободных денег» и «Запланированных операций» на этой странице нет:
+      // они про идущий месяц, а здесь месяц выбирают (см. `OVERVIEW_BOARD`).
+      default:
+        return null;
+    }
+  }
+
+  // Без Дзен-мани остатков по счетам нет — под фильтром счетов считать нечего.
+  const capitalUnknown = (
+    <SectionEmpty variant="compact">
+      Остатки по выбранным счетам известны только при подключении к Дзен-мани
+    </SectionEmpty>
+  );
 
   return (
     <div className="space-y-6">
@@ -239,162 +452,9 @@ export function OverviewPage() {
       {transactions.length === 0 ? (
         <SectionEmpty icon={Filter} title="Под фильтры не попала ни одна операция" />
       ) : (
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
-          <Tile span={2} name="cashflow">
-            <BlockTitle
-              title="Доходы и расходы"
-              info={
-                <>
-                  <p>
-                    Клик по месяцу выбирает его — вся страница пересчитывается.
-                    Клик по зелёному или красному столбцу заодно показывает
-                    справа доходы или расходы этого месяца по категориям.
-                    Выбранный месяц яркий, остальные приглушены.
-                  </p>
-                  <p>
-                    Бледные столбцы с пунктиром — прогноз по типичному месяцу
-                    за последние полгода. Срезанный столбец несёт зубчатую
-                    кромку и подписан настоящей суммой.
-                  </p>
-                </>
-              }
-              to="/cashflow"
-              linkLabel="Cash-flow"
-            />
-            <CashflowBars
-              m={m}
-              height={260}
-              selectedYm={ym}
-              onMonth={(next, k) => {
-                setYm(next);
-                if (k) setKind(k);
-              }}
-            />
-          </Tile>
-
-          <Tile name="categories">
-            <BlockTitle
-              title={kind === "expense" ? "Расходы по категориям" : "Доходы по категориям"}
-              info={
-                <p>
-                  Процент — доля статьи во всех {kind === "expense" ? "расходах" : "доходах"}{" "}
-                  месяца. Полоса меряется от самой крупной статьи. Клик открывает
-                  операции статьи за этот месяц.
-                </p>
-              }
-              right={<KindSwitcher kind={kind} onChange={setKind} />}
-            />
-            <CategoriesList m={m} kind={kind} onCategory={(name) => drillCategory(kind, name)} />
-          </Tile>
-
-          <Tile sunken name="month">
-            <HeroOpen m={hero} sunken pill={<MonthPill m={m} size="md" />} />
-          </Tile>
-
-          <Tile name="monthOverMonth">
-            <BlockTitle
-              title="Месяц к месяцу"
-              info={
-                <p>
-                  Пока месяц идёт, от прошлого берётся <b>столько же дней</b>.
-                  У завершённого месяца сравнение полное. Норма сбережений —
-                  доля дохода, которая осталась.
-                </p>
-              }
-              to="/compare"
-              linkLabel="Сравнение"
-            />
-            <MonthOverMonthBlock mom={mom} base={m.base} prevLabel={prevMonthLabel} />
-          </Tile>
-
-          <Tile name="observations">
-            <BlockTitle
-              title="Автонаблюдения"
-              info={
-                <p>
-                  Статьи, пробившие план или разогнавшиеся против обычного. У
-                  идущего месяца сюда же попадают подорожавшие подписки и
-                  пропущенные регулярные платежи.
-                </p>
-              }
-              to="/anomalies"
-              linkLabel="Аномалии"
-            />
-            <ObservationsList m={m} />
-          </Tile>
-
-          <Tile span={2} name="activity">
-            <BlockTitle
-              title="Активность за месяц"
-              info={
-                <p>
-                  Чем темнее клетка, тем больше потрачено в этот день. Клик по
-                  дню открывает его операции.
-                </p>
-              }
-              to="/calendar"
-              linkLabel="Календарь"
-            />
-            <ActivityHeat
-              m={m}
-              onDay={(date) =>
-                showDrill(
-                  dayTitle(date),
-                  transactions.filter((t) => t.date.slice(0, 10) === date),
-                  "Операции за день"
-                )
-              }
-            />
-          </Tile>
-
-          <Tile name="ring">
-            <BlockTitle
-              title={kind === "expense" ? "Кольцо расходов" : "Кольцо доходов"}
-              to={`/categories?kind=${kind}`}
-              linkLabel="Категории"
-            />
-            <CategorySunburst
-              compact
-              data={ring}
-              meta={categoryMeta}
-              base={m.base}
-              kind={kind}
-              onOpenCategory={(name) => drillCategory(kind, name)}
-              onOpenSubcategory={(full) => drillCategory(kind, full, true)}
-            />
-          </Tile>
-
-          {capitalKnown ? (
-            <>
-              <Tile span={2} name="capital">
-                <CapitalBlock series={m.netWorthSeries} base={m.base} today={today} accounts={m.accounts} />
-              </Tile>
-              <Tile name="accounts">
-                <AccountsBlock
-                  m={m}
-                  picked={capitalKeys !== null}
-                  offBalance={offBalance}
-                  onOffBalanceChange={setOffBalance}
-                  onAccount={(key, label) =>
-                    showDrill(
-                      label,
-                      transactions.filter(
-                        (t) => txAccountKey(t) === key || txOutKey(t) === key || txInKey(t) === key
-                      ),
-                      "Операции по счёту"
-                    )
-                  }
-                />
-              </Tile>
-            </>
-          ) : (
-            <div className="lg:col-span-3">
-              <SectionEmpty icon={Wallet} title="Капитал по выбранным счетам">
-                Остатки счетов известны только при подключении к Дзен-мани
-              </SectionEmpty>
-            </div>
-          )}
-        </section>
+        <LayoutSurfaceContext.Provider value={OVERVIEW_SURFACE}>
+          <WidgetBoard body={widgetBody} />
+        </LayoutSurfaceContext.Provider>
       )}
     </div>
   );

@@ -26,7 +26,7 @@ import { popSurfaceProps, usePresence } from "../hooks/usePresence";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { useProfileLoginSync, useProfiles } from "../hooks/useProfiles";
 import { useSlicesStore } from "../store/useSlicesStore";
-import { useDashboardLayoutStore } from "../store/useDashboardLayoutStore";
+import { HOME_SURFACE, OVERVIEW_SURFACE } from "./dashboard/layoutSurface";
 import { useZenmoneyStore } from "../store/useZenmoneyStore";
 import { useSyncCommands } from "../hooks/useSyncCommands";
 import { useSmoothNavigate } from "../hooks/useSmoothNavigate";
@@ -105,12 +105,17 @@ export function TopNav({
   const [moreOpenState, setMoreOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
-  const editingLayout = useDashboardLayoutStore((s) => s.editing);
-  const setEditingLayout = useDashboardLayoutStore((s) => s.setEditing);
-  const onDashboard = loc.pathname === "/";
+  // Страниц с виджетами две — главная и «Обзор месяца»; кнопка настраивает
+  // ту, на которой стоит человек, и называется по ней.
+  const onOverview = loc.pathname === "/overview";
+  const layoutSurface = onOverview ? OVERVIEW_SURFACE : HOME_SURFACE;
+  const editingLayout = layoutSurface.useStore((s) => s.editing);
+  const setEditingLayout = layoutSurface.useStore((s) => s.setEditing);
+  const onDashboard = loc.pathname === "/" || onOverview;
   // Настраивать главную нечего, пока нет данных: на ней стоит экран «С чего
   // начнём?», а не виджеты.
   const canEditLayout = onDashboard && hasData;
+  const editLayoutLabel = layoutSurface.editLabel;
   // Переключатель разреза появляется только со второго разреза — от этого
   // зависит, нужен ли разделитель внутри панели.
   const hasSlices = useSlicesStore((s) => s.slices.length) > 1;
@@ -527,12 +532,12 @@ export function TopNav({
           aria-disabled={!canEditLayout}
           title={
             canEditLayout
-              ? "Настроить главную\nПорядок и состав виджетов"
+              ? `${editLayoutLabel}\nПорядок и состав виджетов`
               : !hasData
-                ? "Настроить главную\nДоступно, когда подключены данные или открыто демо"
-                : "Настроить главную\nДоступно на главной странице"
+                ? `${editLayoutLabel}\nДоступно, когда подключены данные или открыто демо`
+                : `${editLayoutLabel}\nДоступно на главной и в «Обзоре месяца»`
           }
-          aria-label="Настроить главную"
+          aria-label={editLayoutLabel}
           aria-pressed={canEditLayout && editingLayout}
           className={iconItem(canEditLayout && editingLayout)}
         >
@@ -820,9 +825,9 @@ export function TopNav({
               >
                 <LayoutTemplate className="w-4 h-4 shrink-0" />
                 <span>
-                  Настроить главную
+                  {editLayoutLabel}
                   {!canEditLayout && (
-                    <span className="block text-xs">{hasData ? "Доступно на главной" : "Доступно, когда есть данные"}</span>
+                    <span className="block text-xs">{hasData ? "Доступно на главной и в «Обзоре месяца»" : "Доступно, когда есть данные"}</span>
                   )}
                 </span>
               </button>

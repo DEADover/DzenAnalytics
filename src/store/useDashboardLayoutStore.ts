@@ -24,12 +24,15 @@ import {
   setWidgetHidden,
   setWidgetView,
   shiftWidget,
+  HOME_BOARD,
+  OVERVIEW_BOARD,
+  type LayoutBoard,
   type WidgetPlacement,
 } from "../lib/dashboardLayout";
 
-const KEY = "dashboardLayout";
-
 interface State {
+  /** Какая это страница: её стандартная раскладка и набор виджетов. */
+  board: LayoutBoard;
   layout: WidgetPlacement[];
   loaded: boolean;
   /** Идёт настройка раскладки: у виджетов появляются ручки. */
@@ -59,20 +62,29 @@ interface State {
   replaceLayout: (raw: unknown) => Promise<void>;
 }
 
-export const useDashboardLayoutStore = create<State>((set, get) => {
+export type LayoutState = State;
+
+/**
+ * Хранилище раскладки одной страницы с виджетами. Страниц две — главная и
+ * «Обзор месяца»: набор виджетов и стандартный порядок у каждой свои, а всё
+ * остальное (перестановка, снятие, запись на диск) одно и то же.
+ */
+function createLayoutStore(key: string, board: LayoutBoard) {
+  return create<State>((set, get) => {
   const apply = async (layout: WidgetPlacement[]) => {
     set({ layout });
-    await db.saveJSON(KEY, { layout });
+    await db.saveJSON(key, { layout });
   };
 
   return {
-    layout: defaultLayout(),
+    board,
+    layout: defaultLayout(board),
     loaded: false,
     editing: false,
 
     hydrate: async () => {
-      const stored = await db.loadJSON<{ layout?: unknown }>(KEY);
-      set({ layout: layoutFromStored(stored?.layout), loaded: true });
+      const stored = await db.loadJSON<{ layout?: unknown }>(key);
+      set({ layout: layoutFromStored(stored?.layout, board), loaded: true });
     },
 
     setEditing: (on) => set({ editing: on }),
@@ -90,7 +102,13 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     setView: (key, view) => apply(setWidgetView(get().layout, key, view)),
     setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),
     setOffBalance: (key, value) => apply(setWidgetOffBalance(get().layout, key, value)),
-    reset: () => apply(defaultLayout()),
-    replaceLayout: (raw) => apply(layoutFromStored(raw)),
+    reset: () => apply(defaultLayout(board)),
+    replaceLayout: (raw) => apply(layoutFromStored(raw, board)),
   };
-});
+  });
+}
+
+export type LayoutStore = ReturnType<typeof createLayoutStore>;
+
+export const useDashboardLayoutStore = createLayoutStore("dashboardLayout", HOME_BOARD);
+export const useOverviewLayoutStore = createLayoutStore("overviewLayout", OVERVIEW_BOARD);

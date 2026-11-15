@@ -25,7 +25,7 @@ import { useMembersStore } from "./useMembersStore";
 import { parseDupExclusions, useDuplicateExclusionsStore } from "./useDuplicateExclusionsStore";
 import { normalizeAccountsView, pickAccountsView, useAccountsViewStore } from "./useAccountsViewStore";
 import { useThemeStore } from "./useThemeStore";
-import { useDashboardLayoutStore } from "./useDashboardLayoutStore";
+import { useDashboardLayoutStore, useOverviewLayoutStore } from "./useDashboardLayoutStore";
 import { useHeaderNavStore } from "./useHeaderNavStore";
 import { useQuickSettingsStore } from "./useQuickSettingsStore";
 import { useBudgetSettingsStore } from "./useBudgetSettingsStore";
@@ -294,6 +294,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
 
   // ── Главная и меню ──
   field(useDashboardLayoutStore, "home.layout", (s) => s.layout, (v, s) =>
+    Array.isArray(v) ? s.replaceLayout(v) : undefined
+  ),
+  field(useOverviewLayoutStore, "home.overviewLayout", (s) => s.layout, (v, s) =>
     Array.isArray(v) ? s.replaceLayout(v) : undefined
   ),
   field(useHeaderNavStore, "home.headerNav", (s) => s.items, (v, s) =>

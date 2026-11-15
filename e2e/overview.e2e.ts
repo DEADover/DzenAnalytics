@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 const tile = (page: import("@playwright/test").Page, name: string) =>
-  page.locator(`[data-overview="${name}"]`);
+  page.locator(`[data-tour="widget-${name}"]`);
 
 test("открывается на идущем месяце, раздел есть в меню «Ещё»", async ({ page }) => {
   await connectZen(page, "/");
@@ -20,7 +20,7 @@ test("открывается на идущем месяце, раздел ест
   // Итоги — за идущий месяц, план из «Бюджета» стоит под расходом.
   await expect(tile(page, "month")).toContainText("Октябрь");
   await expect(tile(page, "month")).toContainText(/План\D*25\s000/);
-  for (const name of ["cashflow", "categories", "monthOverMonth", "observations", "activity", "ring", "capital", "accounts"]) {
+  for (const name of ["cashflow", "categories", "monthOverMonth", "observations", "activity", "donutExpense", "capital", "accounts"]) {
     await expect(tile(page, name)).toBeVisible();
   }
 });
@@ -32,7 +32,6 @@ test("столбец графика выбирает месяц и показы�
   await tile(page, "cashflow").locator(".recharts-bar-rectangle").first().click();
   await expect(page).toHaveURL(/\/overview\?month=\d{4}-\d{2}$/);
   await expect(tile(page, "categories")).toContainText("Доходы по категориям");
-  await expect(tile(page, "ring")).toContainText("Кольцо доходов");
   await expect(tile(page, "month")).toContainText("Месяц завершён");
   // Значок в дорожке периода возвращает к идущему месяцу.
   await page.getByRole("button", { name: /Вернуться к текущему месяцу/ }).click();
@@ -73,4 +72,40 @@ test("фильтр счетов пересчитывает статьи, ито�
   // Остатки — только по отмеченному счёту, без переключателя «в балансе / все».
   await expect(tile(page, "accounts")).toContainText("Наличные");
   await expect(tile(page, "accounts")).not.toContainText("Т-Банк");
+});
+
+test("раскладка обзора настраивается и хранится отдельно от главной", async ({ page }) => {
+  await connectZen(page, "/overview");
+  await expect(tile(page, "accounts")).toBeVisible();
+  // «Свободных денег» и «Запланированных операций» здесь не бывает.
+  await expect(tile(page, "upcoming")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Настроить обзор" }).first().click();
+  await tile(page, "accounts").getByRole("button", { name: "Убрать из обзора" }).click();
+  await expect(tile(page, "accounts")).toHaveCount(0);
+  // Снятый виджет ждёт в списке пустой клетки — вместе с «Кольцом доходов».
+  await page.getByRole("button", { name: "Поставить сюда виджет" }).last().click();
+  const picker = page.getByRole("dialog", { name: "Поставить виджет" });
+  await expect(picker).toContainText("Балансы счетов");
+  await expect(picker).toContainText("Кольцо доходов");
+  await expect(picker).not.toContainText("Свободные деньги");
+  await picker.getByRole("button", { name: /Кольцо доходов/ }).click();
+  await expect(tile(page, "donutIncome")).toBeVisible();
+  await page.getByRole("button", { name: "Готово" }).click();
+
+  // Раскладка пережила перезагрузку, а главная осталась прежней.
+  await page.reload();
+  await expect(tile(page, "donutIncome")).toBeVisible();
+  await expect(tile(page, "accounts")).toHaveCount(0);
+  await page.goto("/");
+  await expect(tile(page, "accounts")).toBeVisible();
+  await expect(tile(page, "donutIncome")).toHaveCount(0);
+
+  // «Сбросить» возвращает стандартный обзор.
+  await page.goto("/overview");
+  await expect(tile(page, "donutIncome")).toBeVisible();
+  await page.getByRole("button", { name: "Настроить обзор" }).first().click();
+  await page.getByRole("button", { name: "Сбросить", exact: true }).click();
+  await expect(tile(page, "accounts")).toBeVisible();
+  await expect(tile(page, "donutIncome")).toHaveCount(0);
 });

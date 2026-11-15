@@ -109,7 +109,7 @@ import { useCounterpartyNotesStore } from "./store/useCounterpartyNotesStore";
 import { useSavedViewsStore } from "./store/useSavedViewsStore";
 import { useFireStore } from "./store/useFireStore";
 import { useWhatIfStore } from "./store/useWhatIfStore";
-import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
+import { useDashboardLayoutStore, useOverviewLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
 import { endSwitch } from "./lib/switchOverlay";
@@ -265,6 +265,7 @@ function App() {
       ["usePlannedDeletionsStore", usePlannedDeletionsStore],
       ["usePlanActionsStore", usePlanActionsStore],
       ["useDashboardLayoutStore", useDashboardLayoutStore],
+      ["useOverviewLayoutStore", useOverviewLayoutStore],
       ["useFilterMemoryStore", useFilterMemoryStore],
       ["useCategoryRulesStore", useCategoryRulesStore],
       ["useCloudSettingsStore", useCloudSettingsStore],

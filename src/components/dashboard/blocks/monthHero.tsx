@@ -256,7 +256,18 @@ export function MonthHero({ m, view }: { m: DashboardModel; view: string | undef
  * В обойме с двойным кантом он читался бы как ещё одна карточка с числом, а это
  * заголовок всего экрана.
  */
-export function HeroOpen({ m, sunken, pill }: { m: DashboardModel; sunken?: boolean; pill: ReactNode }) {
+export function HeroOpen({
+  m,
+  sunken,
+  pill,
+  titleTag: Title = "h1",
+}: {
+  m: DashboardModel;
+  sunken?: boolean;
+  pill: ReactNode;
+  /** На странице со своим заголовком пилюля — заголовок второго уровня. */
+  titleTag?: "h1" | "h2";
+}) {
   const over = m.pace === null ? null : m.pace - 1;
   const past = isClosed(m);
   return (
@@ -281,13 +292,13 @@ export function HeroOpen({ m, sunken, pill }: { m: DashboardModel; sunken?: bool
           прежней: чем крупнее буквы, тем меньше её нужно. */}
       {/* На утопленной подложке пилюля и вторая кнопка залиты белым: их
           обычная заливка светлее подложки едва-едва, и на ней они пропадали. */}
-      <h1
+      <Title
         className={`self-start rounded-full px-4 py-1.5 text-[13px] uppercase tracking-[0.14em] border border-border text-text font-semibold ${
           sunken ? "bg-panel" : "bg-panel2"
         }`}
       >
         {pill}
-      </h1>
+      </Title>
 
       <div
         className={clsx(
@@ -430,17 +441,25 @@ function RailRow({ label, value, tone }: { label: string; value: string; tone?: 
  * пройдено: без неё низ колонки пустовал, а вопрос «много ли ещё впереди»
  * ровно тот, что задают, глядя на остаток.
  */
-function HeroSplit({ m, pill }: { m: DashboardModel; pill: ReactNode }) {
+export function HeroSplit({
+  m,
+  pill,
+  titleTag: Title = "h1",
+}: {
+  m: DashboardModel;
+  pill: ReactNode;
+  titleTag?: "h1" | "h2";
+}) {
   const over = m.pace === null ? null : m.pace - 1;
   const short = m.free.value < 0;
   const past = isClosed(m);
   return (
     <>
-      <h1
+      <Title
         className="self-start rounded-full px-3.5 py-1 text-[11px] uppercase tracking-[0.14em] bg-panel2 border border-border text-text font-semibold"
       >
         {pill}
-      </h1>
+      </Title>
 
       {/* Разворот раскрывается только там, где колонка достаточно широка. На
           экранах до 1280 треть сетки — около 320 пикселей, и рядом с рейкой

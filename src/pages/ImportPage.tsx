@@ -996,6 +996,7 @@ export function ImportPage() {
                     "columnWidths",
                     "diffModes",
                     "dashboardLayout",
+                    "overviewLayout",
                     "reportPeriod",
                     "includeOffBalance",
                     "backupInterval",

@@ -360,9 +360,47 @@ export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) => {
   return placement;
 });
 
+/**
+ * Страница с виджетами: её стандартная раскладка — она же список того, что на
+ * ней вообще бывает. Виджета, которого в стандартной раскладке нет, на странице
+ * нет вовсе; исключение — полоски с кнопками, их заводят сколько угодно.
+ */
+export interface LayoutBoard {
+  defaults: readonly WidgetPlacement[];
+}
+
+/** Главная: все виджеты в порядке списка. */
+export const HOME_BOARD: LayoutBoard = { defaults: DEFAULT_LAYOUT };
+
+/**
+ * «Обзор месяца»: сверху график и статьи выбранного месяца — пара, с которой
+ * разбор начинается; потом то, что про сам месяц; в конце капитал и счета.
+ * «Свободных денег» и «Запланированных операций» здесь нет: они про идущий
+ * месяц и про будущее, а месяц на этой странице выбирают.
+ */
+export const OVERVIEW_BOARD: LayoutBoard = {
+  defaults: [
+    { key: "cashflow", kind: "cashflow" },
+    { key: "categories", kind: "categories" },
+    { key: "month", kind: "month", view: "framed" },
+    { key: "monthOverMonth", kind: "monthOverMonth" },
+    { key: "observations", kind: "observations" },
+    { key: "activity", kind: "activity" },
+    { key: "donutExpense", kind: "donutExpense" },
+    { key: "capital", kind: "capital" },
+    { key: "accounts", kind: "accounts" },
+    { key: "donutIncome", kind: "donutIncome", hidden: true },
+  ],
+};
+
 /** Свежая копия стандартной раскладки: списки кнопок в ней свои, не общие. */
-export function defaultLayout(): WidgetPlacement[] {
-  return DEFAULT_LAYOUT.map((p) => (p.links ? { ...p, links: p.links.slice() } : { ...p }));
+export function defaultLayout(board: LayoutBoard = HOME_BOARD): WidgetPlacement[] {
+  return board.defaults.map((p) => (p.links ? { ...p, links: p.links.slice() } : { ...p }));
+}
+
+/** Бывает ли такой виджет на этой странице. */
+function onBoard(board: LayoutBoard, meta: WidgetMeta): boolean {
+  return meta.multi === true || board.defaults.some((d) => d.kind === meta.kind);
 }
 
 /* ─────────────────────────────  разбор  ───────────────────────────── */
@@ -400,7 +438,7 @@ function cleanLinks(raw: unknown): LinkSlots | null {
  * касается: снятую полоску возвращать против воли человека нельзя, их и
  * заводят по одной.
  */
-export function normalizeLayout(raw: unknown): WidgetPlacement[] {
+export function normalizeLayout(raw: unknown, board: LayoutBoard = HOME_BOARD): WidgetPlacement[] {
   const arr = Array.isArray(raw) ? raw : [];
   const out: WidgetPlacement[] = [];
   const keys = new Set<string>();
@@ -418,7 +456,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       offBalance?: unknown;
     };
     const kind = typeof rec.kind === "string" ? BY_KIND.get(rec.kind) : undefined;
-    if (!kind) continue;
+    if (!kind || !onBoard(board, kind)) continue;
     // У одиночного виджета вид и есть ключ: второй такой же — уже повтор.
     if (!kind.multi && kinds.has(kind.kind)) continue;
     const key = typeof rec.key === "string" && rec.key ? rec.key : kind.kind;
@@ -447,21 +485,23 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
     out.push(placement);
   }
 
-  WIDGETS.forEach((meta, i) => {
+  board.defaults.forEach((std, i) => {
+    const meta = widgetMeta(std.kind);
     if (meta.multi || kinds.has(meta.kind)) return;
     // Ищем ближайшего соседа слева по стандартному порядку: за ним и встанем.
     let at = 0;
     for (let j = i - 1; j >= 0; j--) {
-      const anchor = out.findIndex((p) => p.kind === WIDGETS[j].kind);
+      const anchor = out.findIndex((p) => p.kind === board.defaults[j].kind);
       if (anchor !== -1) {
         at = anchor + 1;
         break;
       }
     }
     const fresh: WidgetPlacement = { key: meta.kind, kind: meta.kind };
+    if (std.view) fresh.view = std.view;
     // Стандартно снятый и в чужую раскладку приходит снятым: незнакомый виджет,
     // сам собой вставший посреди собранной главной, читается как сбой.
-    if (meta.offByDefault) fresh.hidden = true;
+    if (std.hidden) fresh.hidden = true;
     out.splice(at, 0, fresh);
     keys.add(meta.kind);
     kinds.add(meta.kind);
@@ -478,8 +518,8 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
  * настраивал, и главная должна открыться стандартной, с полоской быстрых
  * переходов. Во втором полоску сняли руками, и возвращать её нельзя.
  */
-export function layoutFromStored(raw: unknown): WidgetPlacement[] {
-  if (!Array.isArray(raw) || raw.length === 0) return defaultLayout();
+export function layoutFromStored(raw: unknown, board: LayoutBoard = HOME_BOARD): WidgetPlacement[] {
+  if (!Array.isArray(raw) || raw.length === 0) return defaultLayout(board);
   // Если в сохранённом не узнан НИ ОДИН виджет, это не «человек всё убрал», а
   // раскладка из другой версии или испорченная запись. Молча выдать половину
   // главной хуже, чем собрать её заново.
@@ -490,7 +530,7 @@ export function layoutFromStored(raw: unknown): WidgetPlacement[] {
       typeof (item as { kind?: unknown }).kind === "string" &&
       BY_KIND.has((item as { kind: string }).kind)
   );
-  return known ? normalizeLayout(raw) : defaultLayout();
+  return known ? normalizeLayout(raw, board) : defaultLayout(board);
 }
 
 /* ─────────────────────────────  порядок  ───────────────────────────── */
@@ -881,11 +921,14 @@ export function setWidgetView(
 }
 
 /** Совпадает ли раскладка со стандартной — по ней гаснет кнопка «Сбросить». */
-export function isDefaultLayout(layout: readonly WidgetPlacement[]): boolean {
-  if (layout.length !== DEFAULT_LAYOUT.length) return false;
+export function isDefaultLayout(
+  layout: readonly WidgetPlacement[],
+  board: LayoutBoard = HOME_BOARD
+): boolean {
+  if (layout.length !== board.defaults.length) return false;
   return layout.every((p, i) => {
-    const d = DEFAULT_LAYOUT[i];
-    if (p.key !== d.key || p.kind !== d.kind || p.view) return false;
+    const d = board.defaults[i];
+    if (p.key !== d.key || p.kind !== d.kind || (p.view ?? "") !== (d.view ?? "")) return false;
     // Снятость сверяем со стандартной: часть виджетов стандартно снята.
     if (Boolean(p.hidden) !== Boolean(d.hidden)) return false;
     return String(p.links ?? []) === String(d.links ?? []);

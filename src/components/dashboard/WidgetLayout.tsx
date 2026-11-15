@@ -37,7 +37,7 @@ import {
   type WidgetPlacement,
 } from "../../lib/dashboardLayout";
 import { navSection } from "../../lib/navSections";
-import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
+import { useLayoutSurface } from "./layoutSurface";
 import { pluralRu } from "../../lib/plural";
 import { SectionEmpty } from "../SectionEmpty";
 
@@ -107,9 +107,10 @@ export function WidgetShell({
   canForward: boolean;
   children: ReactNode;
 }) {
-  const setHidden = useDashboardLayoutStore((s) => s.setHidden);
-  const remove = useDashboardLayoutStore((s) => s.remove);
-  const setView = useDashboardLayoutStore((s) => s.setView);
+  const surface = useLayoutSurface();
+  const setHidden = surface.useStore((s) => s.setHidden);
+  const remove = surface.useStore((s) => s.remove);
+  const setView = surface.useStore((s) => s.setView);
 
   const drag = editing
     ? {
@@ -196,8 +197,8 @@ export function WidgetShell({
       <button
         type="button"
         className="btn-icon-danger shrink-0"
-        title={meta.multi ? `Удалить: ${meta.title}` : "Убрать с главной"}
-        aria-label={meta.multi ? `Удалить: ${meta.title}` : "Убрать с главной"}
+        title={meta.multi ? `Удалить: ${meta.title}` : surface.removeLabel}
+        aria-label={meta.multi ? `Удалить: ${meta.title}` : surface.removeLabel}
         onClick={() =>
           void (meta.multi ? remove(placement.key) : setHidden(placement.key, true))
         }
@@ -432,8 +433,9 @@ function WidgetPicker({
   onClose: () => void;
   onAdded: (key: string) => void;
 }) {
-  const setHidden = useDashboardLayoutStore((s) => s.setHidden);
-  const addLinks = useDashboardLayoutStore((s) => s.addLinks);
+  const surface = useLayoutSurface();
+  const setHidden = surface.useStore((s) => s.setHidden);
+  const addLinks = surface.useStore((s) => s.addLinks);
   const { hidden, fresh, total } = available(layout);
 
   // Escape закрывает список — по всему сервису он закрывает любой слой поверх.
@@ -456,7 +458,7 @@ function WidgetPicker({
         title={
           total > 0
             ? "Поставить сюда виджет"
-            : "Ставить нечего: на главной уже всё, что есть"
+            : surface.nothingToAdd
         }
         aria-label="Поставить сюда виджет"
         disabled={total === 0}
@@ -604,9 +606,11 @@ function WidgetPicker({
  * какой была до всей этой затеи.
  */
 export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }) {
-  const editing = useDashboardLayoutStore((s) => s.editing);
-  const setEditing = useDashboardLayoutStore((s) => s.setEditing);
-  const reset = useDashboardLayoutStore((s) => s.reset);
+  const surface = useLayoutSurface();
+  const editing = surface.useStore((s) => s.editing);
+  const setEditing = surface.useStore((s) => s.setEditing);
+  const reset = surface.useStore((s) => s.reset);
+  const board = surface.useStore((s) => s.board);
 
   if (!editing) return null;
 
@@ -623,7 +627,7 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
           type="button"
           className="btn-ghost text-sm"
           onClick={() => void reset()}
-          disabled={isDefaultLayout(layout)}
+          disabled={isDefaultLayout(layout, board)}
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
           Сбросить
@@ -663,20 +667,23 @@ function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
 
 /** Когда с главной сняли всё: экран не должен выглядеть сломанным. */
 export function EmptyDashboard() {
-  const editing = useDashboardLayoutStore((s) => s.editing);
-  const setEditing = useDashboardLayoutStore((s) => s.setEditing);
-  const reset = useDashboardLayoutStore((s) => s.reset);
+  const surface = useLayoutSurface();
+  const editing = surface.useStore((s) => s.editing);
+  const setEditing = surface.useStore((s) => s.setEditing);
+  const reset = surface.useStore((s) => s.reset);
+  // Сколько виджетов на этой странице бывает — без полосок, их заводят сами.
+  const count = surface.useStore((s) => s.board.defaults.length);
   return (
     <SectionEmpty
       icon={LayoutTemplate}
-      title="На главной ничего не осталось"
+      title={surface.emptyTitle}
       action={
         <>
           {/* В самом режиме кнопка звала бы туда, где человек уже стоит. */}
           {!editing && (
             <button type="button" className="btn-ghost text-sm" onClick={() => setEditing(true)}>
               <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
-              Настроить главную
+              {surface.editLabel}
             </button>
           )}
           <button type="button" className="btn-primary text-sm" onClick={() => void reset()}>
@@ -686,8 +693,8 @@ export function EmptyDashboard() {
         </>
       }
     >
-      Все {WIDGETS.length} {pluralRu(WIDGETS.length, ["виджет", "виджета", "виджетов"])} убраны.
-      Верните нужные или соберите главную заново.
+      Все {count} {pluralRu(count, ["виджет", "виджета", "виджетов"])} убраны.{" "}
+      {surface.rebuildHint}
     </SectionEmpty>
   );
 }
