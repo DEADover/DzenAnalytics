@@ -39,6 +39,13 @@ export interface BenchmarkSettings {
   /** Ожидаемая доходность, % годовых. */
   investRate: number;
 
+  /** «Рост расходов к доходам»: настроек нет, только выключатель. */
+  growthOn: boolean;
+
+  /** «Подписки в доходе». */
+  recurringOn: boolean;
+  recurringLimit: number;
+
   /** Цель по подушке безопасности, месяцев расходов. В отличие от ориентиров,
    *  входит в общую оценку: подушка считается к этой цели. */
   cushionTarget: CushionTarget;
@@ -62,6 +69,9 @@ export const DEFAULT_BENCHMARKS: BenchmarkSettings = {
   investAccounts: [],
   investCategories: [],
   investRate: 12,
+  growthOn: true,
+  recurringOn: true,
+  recurringLimit: 10,
   cushionTarget: 6,
 };
 
@@ -91,6 +101,9 @@ export function parseBenchmarks(raw: unknown): BenchmarkSettings {
     investAccounts: strings(r.investAccounts) ?? d.investAccounts,
     investCategories: strings(r.investCategories) ?? d.investCategories,
     investRate: num(r.investRate, 1, 40) ?? d.investRate,
+    growthOn: bool(r.growthOn) ?? d.growthOn,
+    recurringOn: bool(r.recurringOn) ?? d.recurringOn,
+    recurringLimit: num(r.recurringLimit, 5, 80) ?? d.recurringLimit,
     cushionTarget: CUSHION_TARGETS.find((t) => t === r.cushionTarget) ?? d.cushionTarget,
   };
 }
@@ -212,10 +225,8 @@ export function shareBenchmark(
     if (i > 0 ? a / i > limit : a > 0) monthsOver++;
   }
   const share = income > 0 ? amount / income : null;
-  const status: BenchmarkStatus =
-    share === null ? "na" : share <= limit ? "good" : share <= limit * WARN_BAND ? "warn" : "bad";
   return {
-    status,
+    status: shareStatus(share, limit),
     share,
     limit,
     amount: months > 0 ? amount / months : 0,
@@ -223,6 +234,78 @@ export function shareBenchmark(
     months,
     monthsOver,
   };
+}
+
+/** Статус доли против порога — один на все «доли в доходе». */
+function shareStatus(share: number | null, limit: number): BenchmarkStatus {
+  return share === null ? "na" : share <= limit ? "good" : share <= limit * WARN_BAND ? "warn" : "bad";
+}
+
+/**
+ * Доля готовой месячной суммы в среднем доходе окна — для «Регулярных
+ * платежей»: они известны сразу суммой в месяц, а не рядом по месяцам.
+ */
+export function flatShareBenchmark(
+  window: BenchmarkWindow,
+  monthlyAmount: number,
+  limitPct: number
+): ShareResult {
+  const limit = limitPct / 100;
+  const months = window.yms.length;
+  const income = months > 0 ? window.yms.reduce((s, ym) => s + (window.income.get(ym) ?? 0), 0) / months : 0;
+  const share = income > 0 ? monthlyAmount / income : null;
+  return { status: shareStatus(share, limit), share, limit, amount: monthlyAmount, income, months, monthsOver: 0 };
+}
+
+/**
+ * Похож ли регулярный платёж на подписку: платится раз в месяц или реже и
+ * почти одной суммой. Раздел «Регулярные» берёт шире — туда попадает и
+ * привычный магазин у дома, а это не подписка.
+ */
+export function isSubscription(c: { cadence: string; consistency: number; stale: boolean }): boolean {
+  return !c.stale && c.cadence !== "weekly" && c.consistency >= 0.7;
+}
+
+export interface GrowthResult {
+  status: BenchmarkStatus;
+  /** Месяцев в каждой половине сравнения; меньше трёх — сравнивать не с чем. */
+  months: number;
+  /** Рост к предыдущему отрезку, доли; `null` — прежде было ноль. */
+  incomeGrowth: number | null;
+  expenseGrowth: number | null;
+  /** На сколько рост расходов обгоняет рост доходов, доли. */
+  gap: number | null;
+  /** В среднем в месяц: сейчас и прежде. */
+  income: { now: number; prev: number };
+  expense: { now: number; prev: number };
+}
+
+/**
+ * Растут ли расходы быстрее доходов: последние 12 завершённых месяцев против
+ * предыдущих 12. Истории меньше двух лет — делим её пополам; меньше полугода —
+ * сравнивать не с чем.
+ */
+export function growthBenchmark(
+  analyticsTx: Transaction[],
+  monthStartDay: number,
+  today: string
+): GrowthResult {
+  const current = periodKey(today, monthStartDay);
+  const done = groupByMonth(analyticsTx, { monthStartDay }).filter((m) => m.ym < current);
+  const n = Math.min(BENCHMARK_MONTHS, Math.floor(done.length / 2));
+  const avg = (list: typeof done, pick: (m: (typeof done)[number]) => number) =>
+    list.length > 0 ? list.reduce((s, m) => s + pick(m), 0) / list.length : 0;
+  const now = n > 0 ? done.slice(-n) : [];
+  const prev = n > 0 ? done.slice(-2 * n, -n) : [];
+  const income = { now: avg(now, (m) => m.income), prev: avg(prev, (m) => m.income) };
+  const expense = { now: avg(now, (m) => m.expense), prev: avg(prev, (m) => m.expense) };
+  const growth = (x: { now: number; prev: number }) => (x.prev > 0 ? x.now / x.prev - 1 : null);
+  const incomeGrowth = growth(income);
+  const expenseGrowth = growth(expense);
+  const gap = incomeGrowth !== null && expenseGrowth !== null ? expenseGrowth - incomeGrowth : null;
+  const status: BenchmarkStatus =
+    n < 3 || gap === null ? "na" : gap <= 0 ? "good" : gap <= 0.05 ? "warn" : "bad";
+  return { status, months: n, incomeGrowth, expenseGrowth, gap, income, expense };
 }
 
 export interface RatioResult {

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { CreditCard, Gem, Home, TrendingUp, type LucideIcon } from "lucide-react";
+import { CreditCard, Gem, Home, Repeat, Scale, TrendingUp, type LucideIcon } from "lucide-react";
 import type { BenchmarksModel } from "../hooks/useBenchmarks";
-import type { BenchmarkStatus } from "../lib/benchmarks";
+import type { BenchmarkStatus, GrowthResult, ShareResult } from "../lib/benchmarks";
+import { SmoothNavLink } from "./SmoothNavLink";
 import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { formatFixed, formatMoney, formatPct } from "../lib/format";
 import { pluralRu } from "../lib/plural";
@@ -119,14 +120,17 @@ function ShareCard({
   model,
   base,
   empty,
+  note,
 }: {
   id: string;
   icon: LucideIcon;
   title: string;
-  model: NonNullable<BenchmarksModel["housing"]>;
+  model: { result: ShareResult };
   base: string;
   /** Что написать, когда расхода нет вовсе. */
   empty: string;
+  /** Своё примечание вместо «выше нормы N из 12 месяцев». */
+  note?: ReactNode;
 }) {
   const r = model.result;
   if (r.share === null) {
@@ -155,7 +159,9 @@ function ShareCard({
       note={
         r.amount <= 0
           ? empty
-          : r.monthsOver === 0
+          : note !== undefined
+            ? note
+            : r.monthsOver === 0
             ? `Ни разу не выше нормы за ${monthsOf(r.months)}`
             : `Выше нормы ${r.monthsOver} из ${monthsOf(r.months)}`
       }
@@ -168,9 +174,9 @@ function ShareCard({
  * входят — это справка, а не балл.
  */
 export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; onSetup: () => void }) {
-  const { base, housing, debt, luxury, doubling } = model;
+  const { base, housing, debt, luxury, doubling, growth, recurring } = model;
   const update = useBenchmarksStore((s) => s.update);
-  if (!housing && !debt && !luxury && !doubling) {
+  if (!housing && !debt && !luxury && !doubling && !growth && !recurring) {
     return (
       <div className="card card-pad text-sm text-muted flex items-center justify-between gap-3">
         <span>Все ориентиры выключены.</span>
@@ -181,7 +187,7 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
     );
   }
   return (
-    <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
       {housing &&
         (housing.configured ? (
           <ShareCard
@@ -272,7 +278,71 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             onSetup={onSetup}
           />
         ))}
+
+      {growth && <GrowthCard r={growth} base={base} />}
+
+      {recurring && (
+        <ShareCard
+          id="recurring"
+          icon={Repeat}
+          title="Подписки в доходе"
+          model={recurring}
+          base={base}
+          empty="Действующих подписок не найдено."
+          note={
+            <>
+              {recurring.count} {pluralRu(recurring.count, ["подписка", "подписки", "подписок"])} — платежи
+              раз в месяц или реже одной суммой, без жилья и кредитов ·{" "}
+              <SmoothNavLink to="/recurring" className="text-accent hover:underline">
+                Регулярные
+              </SmoothNavLink>
+            </>
+          }
+        />
+      )}
     </div>
+  );
+}
+
+/** «+15%», «−3%» — рост к предыдущему отрезку. */
+const growthPct = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${formatPct(v, 0)}`);
+
+function GrowthCard({ r, base }: { r: GrowthResult; base: string }) {
+  const title = "Рост расходов к доходам";
+  if (r.status === "na" || r.gap === null) {
+    return (
+      <BenchmarkCard
+        id="growth"
+        icon={Scale}
+        title={title}
+        badge="Мало данных"
+        value="—"
+        note="Нужно хотя бы полгода завершённых месяцев с доходом и расходом: сравниваются две равные половины истории."
+      />
+    );
+  }
+  const points = Math.round(r.gap * 100);
+  return (
+    <BenchmarkCard
+      id="growth"
+      icon={Scale}
+      title={title}
+      badge={r.status === "good" ? "В норме" : r.status === "warn" ? "Чуть быстрее" : "Расходы быстрее"}
+      tone={STATUS_TONE[r.status]}
+      value={`${points > 0 ? "+" : points < 0 ? "−" : ""}${Math.abs(points)} п.п.`}
+      sub={
+        <>
+          Расход {growthPct(r.expenseGrowth)}, доход {growthPct(r.incomeGrowth)} · {monthsOf(r.months)} к
+          предыдущим {r.months}
+        </>
+      }
+      note={
+        <>
+          Расход в месяц: {formatMoney(r.expense.prev, base)} → {formatMoney(r.expense.now, base)}. Доход:{" "}
+          {formatMoney(r.income.prev, base)} → {formatMoney(r.income.now, base)}.
+        </>
+      }
+    />
   );
 }
 

@@ -13,11 +13,16 @@ import {
   benchmarkWindow,
   categoryFlow,
   doublingYears,
+  flatShareBenchmark,
+  growthBenchmark,
+  isSubscription,
   ratioBenchmark,
   shareBenchmark,
+  type GrowthResult,
   type RatioResult,
   type ShareResult,
 } from "../lib/benchmarks";
+import { detectRecurring, recurringMonthly } from "../lib/aggregations";
 
 export interface BenchmarksModel {
   base: string;
@@ -35,6 +40,9 @@ export interface BenchmarksModel {
     rate: number;
     years: number | null;
   } | null;
+  growth: GrowthResult | null;
+  /** Подписки без жилья и кредитов — у тех свои ориентиры. */
+  recurring: { result: ShareResult; count: number } | null;
 }
 
 /** Ключи счетов-кредитов — их берут «Платежи по кредитам», пока счета не выбраны. */
@@ -63,6 +71,23 @@ export function useBenchmarks(): BenchmarksModel {
     const invested = addFlows(moves(s.investAccounts, true), cats(s.investCategories));
     const investSet = new Set(s.investAccounts);
     const investLive = (live ?? []).filter((a) => investSet.has(accountKeyOf(a)));
+
+    // Подписки — действующие регулярные платежи с ровной суммой. Жильё и
+    // кредиты не берём: аренда тоже платится каждый месяц одной суммой, но у
+    // неё свой ориентир, и здесь она задвоилась бы.
+    let recurringSum = 0;
+    let recurringCount = 0;
+    if (s.recurringOn) {
+      const own = new Set([...s.housingCategories, ...s.debtCategories]);
+      const fullOf = new Map(analyticsTx.map((t) => [t.id, t.categoryFull]));
+      for (const c of detectRecurring(analyticsTx)) {
+        if (!isSubscription(c)) continue;
+        const full = fullOf.get(c.txIds[c.txIds.length - 1]);
+        if (full && own.has(full)) continue;
+        recurringSum += toBase(recurringMonthly(c), c.currency, rates);
+        recurringCount++;
+      }
+    }
 
     return {
       base: rates.base,
@@ -99,6 +124,10 @@ export function useBenchmarks(): BenchmarksModel {
             rate: s.investRate,
             years: doublingYears(s.investRate),
           }
+        : null,
+      growth: s.growthOn ? growthBenchmark(analyticsTx, monthStartDay, localToday()) : null,
+      recurring: s.recurringOn
+        ? { result: flatShareBenchmark(window, recurringSum, s.recurringLimit), count: recurringCount }
         : null,
     };
   }, [analyticsTx, transactions, monthStartDay, rates, live, loanKeys, s]);

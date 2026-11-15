@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useDrillStore } from "../store/useDrillStore";
-import { detectRecurring, type RecurringCandidate } from "../lib/aggregations";
+import { detectRecurring, recurringMonthly, type RecurringCandidate } from "../lib/aggregations";
 import { usePlannedCache } from "../hooks/useZenPlanned";
 import { plannedOps, ownPlannedOps } from "../lib/plannedOps";
 
@@ -226,10 +226,7 @@ export function RecurringPage() {
 
   const totalMonthly = useMemo(
     () =>
-      candidates.reduce((s, c) => {
-        if (c.avgIntervalDays > 0) return s + (c.avgAmount * 30) / c.avgIntervalDays;
-        return s;
-      }, 0),
+      candidates.reduce((s, c) => s + recurringMonthly(c), 0),
     [candidates]
   );
 

@@ -2173,6 +2173,11 @@ export interface RecurringCandidate {
   };
 }
 
+/** Сколько регулярный платёж стоит в месяц — в его валюте; 0, если ритм неизвестен. */
+export function recurringMonthly(c: Pick<RecurringCandidate, "avgAmount" | "avgIntervalDays">): number {
+  return c.avgIntervalDays > 0 ? (c.avgAmount * 30) / c.avgIntervalDays : 0;
+}
+
 export function detectRecurring(
   txs: Transaction[],
   minOccurrences = 3,

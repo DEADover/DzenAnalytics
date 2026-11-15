@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { CreditCard, Gem, Home, SlidersHorizontal, TrendingUp, type LucideIcon } from "lucide-react";
+import { CreditCard, Gem, Home, Repeat, Scale, SlidersHorizontal, TrendingUp, type LucideIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
@@ -157,6 +157,16 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
           <p className="text-xs text-muted py-1.5">
             Доходность задаётся бегунком в самой карточке.
           </p>
+        </Group>
+
+        <Group icon={Scale} title="Рост расходов к доходам" on={s.growthOn} onToggle={(v) => void s.update({ growthOn: v })}>
+          <p className="text-xs text-muted py-1.5">
+            Последние 12 завершённых месяцев против предыдущих 12. Настраивать нечего.
+          </p>
+        </Group>
+
+        <Group icon={Repeat} title="Подписки в доходе" on={s.recurringOn} onToggle={(v) => void s.update({ recurringOn: v })}>
+          {limit("Норма — не больше", s.recurringLimit, (v) => void s.update({ recurringLimit: v }))}
         </Group>
 
         {(s.luxuryOn || s.doublingOn) && (

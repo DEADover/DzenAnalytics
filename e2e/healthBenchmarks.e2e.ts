@@ -110,3 +110,27 @@ test("оценка: главный шаг, история по месяцам и
     .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
   expect(Math.max(...mids) - Math.min(...mids)).toBeLessThanOrEqual(2);
 });
+
+test("подписки в доходе и рост расходов к доходам", async ({ page }) => {
+  await connectZen(page, "/health");
+  // Истории три месяца — сравнивать половины не с чем.
+  await expect(card(page, "growth")).toContainText("Мало данных");
+
+  // Подписки: кинотеатр и аренда — оба платятся раз в месяц одной суммой.
+  const subs = card(page, "recurring");
+  await expect(subs).toContainText("норма до 10%");
+  await expect(subs).toContainText("Высоко");
+  const count = async () => Number((await subs.textContent())!.match(/(\d+) подпис/)![1]);
+  const before = await count();
+  expect(before).toBeGreaterThanOrEqual(2);
+  // Аренда — жильё: отмеченная как жильё, из подписок она уходит.
+  await configure(page, { housingCategories: ["Дом"] });
+  await expect.poll(count).toBe(before - 1);
+  await expect(subs).toContainText("В норме");
+  await expect(subs.getByRole("link", { name: "Регулярные" })).toHaveAttribute("href", "/recurring");
+
+  // Оба выключаются в настройках.
+  await configure(page, { growthOn: false, recurringOn: false });
+  await expect(card(page, "growth")).toHaveCount(0);
+  await expect(subs).toHaveCount(0);
+});

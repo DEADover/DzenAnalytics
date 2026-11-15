@@ -7,6 +7,9 @@ import {
   categoryFlow,
   DEFAULT_BENCHMARKS,
   doublingYears,
+  flatShareBenchmark,
+  growthBenchmark,
+  isSubscription,
   parseBenchmarks,
   ratioBenchmark,
   shareBenchmark,
@@ -159,5 +162,64 @@ describe("правило 72 и настройки", () => {
     expect(p.debtAccounts).toEqual(["a"]);
     expect(p.investRate).toBe(12);
     expect(parseBenchmarks({ debtAccounts: null }).debtAccounts).toBeNull();
+  });
+});
+
+describe("рост расходов к доходам", () => {
+  /** `n` месяцев назад от октября 2026 с доходом и расходом. */
+  const months = (list: [number, number][]) =>
+    list.flatMap(([inc, exp], i) => {
+      const d = new Date(2026, 9 - (list.length - 1 - i), 10);
+      const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-10`;
+      return [income(date, inc), spend(date, exp, "Еда")];
+    });
+
+  it("расходы растут быстрее доходов", () => {
+    const txs = months([...Array(12).fill([100, 50]), ...Array(12).fill([110, 60])]);
+    const r = growthBenchmark(txs, 1, "2026-11-15");
+    expect(r.months).toBe(12);
+    expect(r.incomeGrowth).toBeCloseTo(0.1);
+    expect(r.expenseGrowth).toBeCloseTo(0.2);
+    expect(r.gap).toBeCloseTo(0.1);
+    expect(r.status).toBe("bad");
+  });
+
+  it("чуть быстрее — предупреждение, не быстрее — норма", () => {
+    const warn = months([...Array(6).fill([100, 50]), ...Array(6).fill([110, 57])]);
+    expect(growthBenchmark(warn, 1, "2026-11-15")).toMatchObject({ months: 6, status: "warn" });
+    const good = months([...Array(6).fill([100, 50]), ...Array(6).fill([120, 55])]);
+    expect(growthBenchmark(good, 1, "2026-11-15").status).toBe("good");
+  });
+
+  it("истории меньше полугода — сравнивать не с чем; идущий месяц не считается", () => {
+    const r = growthBenchmark(months(Array(5).fill([100, 50])), 1, "2026-11-15");
+    expect(r).toMatchObject({ months: 2, status: "na" });
+    // Те же шесть месяцев, но «сегодня» — октябрь: завершённых пять.
+    expect(growthBenchmark(months(Array(6).fill([100, 50])), 1, "2026-10-20").months).toBe(2);
+  });
+});
+
+describe("доля готовой месячной суммы", () => {
+  const w = { yms: ["2026-09", "2026-10"], income: new Map([["2026-09", 100_000], ["2026-10", 140_000]]) };
+
+  it("делит на средний доход окна", () => {
+    const r = flatShareBenchmark(w, 12_000, 15);
+    expect(r.share).toBeCloseTo(0.1);
+    expect(r.status).toBe("good");
+    expect(flatShareBenchmark(w, 20_000, 15).status).toBe("warn");
+    expect(flatShareBenchmark(w, 30_000, 15).status).toBe("bad");
+  });
+
+  it("подписка — раз в месяц или реже, ровной суммой и действующая", () => {
+    const c = { cadence: "monthly", consistency: 0.9, stale: false };
+    expect(isSubscription(c)).toBe(true);
+    expect(isSubscription({ ...c, cadence: "quarterly" })).toBe(true);
+    expect(isSubscription({ ...c, cadence: "weekly" })).toBe(false);
+    expect(isSubscription({ ...c, consistency: 0.5 })).toBe(false);
+    expect(isSubscription({ ...c, stale: true })).toBe(false);
+  });
+
+  it("без дохода доли нет", () => {
+    expect(flatShareBenchmark({ yms: [], income: new Map() }, 5_000, 15)).toMatchObject({ share: null, status: "na" });
   });
 });
