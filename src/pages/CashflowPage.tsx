@@ -674,7 +674,10 @@ export function CashflowPage() {
           />
           <div className="h-72">
             <ChartContainer>
-              <ComposedChart data={yoyData}>
+              {/* Пара столбцов месяца — вплотную, как в «Доходах и расходах
+                  по месяцам». Прошлый год — тот же цвет, но бледнее: один
+                  показатель в два года, а не два разных показателя (#133). */}
+              <ComposedChart data={yoyData} barCategoryGap="30%" barGap={0}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis dataKey="monthName" stroke={chartAxisStroke} fontSize={11} />
                 <YAxis
@@ -686,11 +689,16 @@ export function CashflowPage() {
                   {...chartTooltipProps}
                   content={<SeriesTooltip formatValue={(v) => formatMoney(v, base)} />}
                 />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {/* Подписи — цветом текста: бледный цвет прошлого года для
+                    подписи слишком слаб. */}
+                <Legend
+                  wrapperStyle={{ fontSize: 12 }}
+                  formatter={(v) => <span className="text-muted">{v}</span>}
+                />
                 <Bar
                   dataKey="lastYear"
                   name={`${yoyYear - 1}`}
-                  fill={chartColor.accent2}
+                  fill={`color-mix(in srgb, ${yoyKind === "expense" ? chartColor.expense : chartColor.income} 38%, rgb(var(--c-panel2)))`}
                   radius={[4, 4, 0, 0]}
                   activeBar={false}
                 />
