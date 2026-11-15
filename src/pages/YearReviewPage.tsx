@@ -21,6 +21,10 @@ import {
   PiggyBank,
   Coins,
   Receipt,
+  Wallet,
+  Flag,
+  ArrowUpToLine,
+  ArrowDownToLine,
 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
@@ -33,7 +37,9 @@ import {
 } from "../lib/yearReview";
 import { affectsExpense } from "../lib/txKindStyle";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { periodKey, periodRange, yearRange, type DayRange } from "../lib/period";
+import { localToday, periodKey, periodRange, yearRange, type DayRange } from "../lib/period";
+import { yearBalance } from "../lib/yearBalance";
+import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import {
   formatDate,
   formatMoney,
@@ -133,6 +139,14 @@ export function YearReviewPage() {
   const yearSpan = useMemo(
     () => yearRange(year, monthStartDay),
     [year, monthStartDay]
+  );
+
+  // Баланс за год (#132) — по тому же ряду, что «Капитал» на главной: счета
+  // «в балансе», каждый день по курсу этого дня.
+  const netWorth = useNetWorthSeries(transactions);
+  const balance = useMemo(
+    () => yearBalance(netWorth, yearSpan.from, yearSpan.to, localToday()),
+    [netWorth, yearSpan]
   );
 
   /** Операции года — основа всех проваливаний со страницы. */
@@ -317,6 +331,42 @@ export function YearReviewPage() {
           icon={<Receipt className="w-4 h-4" />}
         />
       </StatRow>
+
+      {/* Баланс за год: с чем пришли, с чем ушли и крайние точки по пути. */}
+      {balance && (
+        <StatRow>
+          <StatCell
+            label="Баланс на начало года"
+            value={formatMoney(balance.start.value, baseCurrency)}
+            note={
+              balance.start.fromHistoryStart
+                ? `с начала истории, ${dayLabel(balance.start.date)}`
+                : `на ${dayLabel(balance.start.date)}`
+            }
+            icon={<Wallet className="w-4 h-4" />}
+            tooltip="Сумма остатков счетов «в балансе», как «Капитал» на главной"
+          />
+          <StatCell
+            label={partial ? "Баланс сейчас" : "Баланс на конец года"}
+            value={formatMoney(balance.end.value, baseCurrency)}
+            note={`${formatMoney(balance.end.value - balance.start.value, baseCurrency, { signed: true })} за год`}
+            noteCls={balance.end.value >= balance.start.value ? "text-income" : "text-expense"}
+            icon={<Flag className="w-4 h-4" />}
+          />
+          <StatCell
+            label="Максимум за год"
+            value={formatMoney(balance.max.value, baseCurrency)}
+            note={dayLabel(balance.max.date)}
+            icon={<ArrowUpToLine className="w-4 h-4" />}
+          />
+          <StatCell
+            label="Минимум за год"
+            value={formatMoney(balance.min.value, baseCurrency)}
+            note={dayLabel(balance.min.date)}
+            icon={<ArrowDownToLine className="w-4 h-4" />}
+          />
+        </StatRow>
+      )}
 
       {/* Год по месяцам и профиль недели — половина ширины каждому: на широком
           мониторе двенадцать столбцов растягивались в пустое поле. */}
