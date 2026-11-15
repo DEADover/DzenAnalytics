@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { CreditCard, Gem, Home, Repeat, Scale, TrendingUp, type LucideIcon } from "lucide-react";
+import { CreditCard, Home, PiggyBank, Repeat, Scale, TrendingUp, type LucideIcon } from "lucide-react";
 import type { BenchmarksModel } from "../hooks/useBenchmarks";
-import type { BenchmarkStatus, GrowthResult, ShareResult } from "../lib/benchmarks";
+import type { BenchmarkStatus, GrowthResult, ShareResult, TargetShareResult } from "../lib/benchmarks";
 import { SmoothNavLink } from "./SmoothNavLink";
 import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { formatFixed, formatMoney, formatPct } from "../lib/format";
@@ -174,9 +174,9 @@ function ShareCard({
  * входят — это справка, а не балл.
  */
 export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; onSetup: () => void }) {
-  const { base, housing, debt, luxury, doubling, growth, recurring } = model;
+  const { base, housing, debt, invest, doubling, growth, recurring } = model;
   const update = useBenchmarksStore((s) => s.update);
-  if (!housing && !debt && !luxury && !doubling && !growth && !recurring) {
+  if (!housing && !debt && !invest && !doubling && !growth && !recurring) {
     return (
       <div className="card card-pad text-sm text-muted flex items-center justify-between gap-3">
         <span>Все ориентиры выключены.</span>
@@ -228,15 +228,15 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
           />
         ))}
 
-      {luxury &&
-        (luxury.configured ? (
-          <LuxuryCard model={luxury} base={base} />
+      {invest &&
+        (invest.configured ? (
+          <InvestCard r={invest.result} base={base} />
         ) : (
           <SetupCard
-            id="luxury"
-            icon={Gem}
-            title="Вложения и роскошь"
-            text="Отметьте, какие траты вы считаете роскошью и на какие счета откладываете. Есть правило: вкладывать вдвое больше, чем тратишь на роскошь."
+            id="invest"
+            icon={PiggyBank}
+            title="Доля вложений в доходе"
+            text="Отметьте инвестиционные счета — увидите, какая часть дохода уходит во вложения. Обычно советуют вкладывать не меньше десятой части дохода."
             onSetup={onSetup}
           />
         ))}
@@ -304,11 +304,6 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
   );
 }
 
-/** «в 2 раза», «в 5 раз», «в 1,4 раза». */
-function timesWord(v: number, digits: number): string {
-  return digits === 0 && (v === 1 || v >= 5) ? "раз" : "раза";
-}
-
 /** «выросли на 8%», «упали на 3%» — словами, для строки под числом. */
 function growthWords(v: number | null): string {
   if (v === null) return "сравнить не с чем";
@@ -363,44 +358,45 @@ function GrowthCard({ r, base }: { r: GrowthResult; base: string }) {
   );
 }
 
-function LuxuryCard({ model, base }: { model: NonNullable<BenchmarksModel["luxury"]>; base: string }) {
-  const r = model.result;
-  const times = (v: number, digits = v % 1 === 0 ? 0 : 1) => `в ${formatFixed(v, digits)} ${timesWord(v, digits)}`;
-  if (r.ratio === null) {
+/** «Доля вложений в доходе»: чем больше, тем лучше; отметка на шкале — цель. */
+function InvestCard({ r, base }: { r: TargetShareResult; base: string }) {
+  const title = "Доля вложений в доходе";
+  if (r.share === null) {
     return (
       <BenchmarkCard
-        id="luxury"
-        icon={Gem}
-        title="Вложения и роскошь"
-        badge={r.status === "good" ? "В норме" : "Нет данных"}
-        tone={STATUS_TONE[r.status]}
+        id="invest"
+        icon={PiggyBank}
+        title={title}
+        badge="Нет данных"
         value="—"
-        sub={<>Вкладываете {formatMoney(r.invested, base)} в месяц</>}
-        note="На роскошь за эти месяцы вы не тратили."
+        note="За эти месяцы нет доходов — долю считать не от чего."
       />
     );
   }
-  // Шкала — до 1,25 цели: отметка цели стоит на четырёх пятых.
-  const scale = r.target * 1.25;
+  // Шкала — до полутора целей: отметка цели стоит на двух третях.
+  const scale = r.target * 1.5;
+  const share = Math.max(0, r.share);
   return (
     <BenchmarkCard
-      id="luxury"
-      icon={Gem}
-      title="Вложения и роскошь"
+      id="invest"
+      icon={PiggyBank}
+      title={title}
       badge={r.status === "good" ? "Цель выполнена" : r.status === "warn" ? "Меньше цели" : "Намного меньше цели"}
       tone={STATUS_TONE[r.status]}
-      value={times(Math.max(0, r.ratio), 1)}
+      value={formatPct(share, 0)}
       sub={
         <>
-          Вкладываете {formatMoney(r.invested, base)} в месяц, на роскошь уходит{" "}
-          {formatMoney(r.luxury, base)} · цель — вкладывать {times(r.target)} больше
+          {r.amount >= 0 ? "Вкладываете" : "Забираете"} {formatMoney(Math.abs(r.amount), base)} в месяц при доходе{" "}
+          {formatMoney(r.income, base)} · цель — от {formatPct(r.target, 0)}
         </>
       }
-      meter={{ fill: Math.max(0, r.ratio) / scale, mark: r.target / scale, status: r.status }}
+      meter={{ fill: share / scale, mark: r.target / scale, status: r.status }}
       note={
-        r.gap > 0
-          ? `До цели не хватает ${formatMoney(r.gap, base)} в месяц`
-          : "Вкладываете больше, чем требует правило"
+        r.amount < 0
+          ? "За эти месяцы вы забрали с инвестиционных счетов больше, чем внесли."
+          : r.gap > 0
+            ? `До цели не хватает ${formatMoney(r.gap, base)} в месяц`
+            : "Вкладываете не меньше, чем наметили"
       }
     />
   );

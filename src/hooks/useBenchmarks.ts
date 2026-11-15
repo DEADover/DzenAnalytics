@@ -16,11 +16,11 @@ import {
   flatShareBenchmark,
   growthBenchmark,
   isSubscription,
-  ratioBenchmark,
   shareBenchmark,
+  targetShareBenchmark,
   type GrowthResult,
-  type RatioResult,
   type ShareResult,
+  type TargetShareResult,
 } from "../lib/benchmarks";
 import { detectRecurring, recurringMonthly } from "../lib/aggregations";
 
@@ -31,7 +31,7 @@ export interface BenchmarksModel {
   /** `null` — ориентир выключен. `configured` — есть из чего считать. */
   housing: { configured: boolean; result: ShareResult } | null;
   debt: { configured: boolean; result: ShareResult } | null;
-  luxury: { configured: boolean; result: RatioResult } | null;
+  invest: { configured: boolean; result: TargetShareResult } | null;
   doubling: {
     configured: boolean;
     /** Сколько сейчас на счетах инвестиций, в базовой валюте. */
@@ -108,12 +108,10 @@ export function useBenchmarks(): BenchmarksModel {
             ),
           }
         : null,
-      luxury: s.luxuryOn
+      invest: s.investOn
         ? {
-            configured:
-              s.luxuryCategories.length > 0 &&
-              (s.investAccounts.length > 0 || s.investCategories.length > 0),
-            result: ratioBenchmark(window, invested, cats(s.luxuryCategories), s.luxuryRatio),
+            configured: s.investAccounts.length > 0 || s.investCategories.length > 0,
+            result: targetShareBenchmark(window, invested, s.investTarget),
           }
         : null,
       doubling: s.doublingOn

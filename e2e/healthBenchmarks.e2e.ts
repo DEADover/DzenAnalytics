@@ -1,6 +1,6 @@
 /**
  * «Ориентиры» в «Финансовом здоровье» (#134): жильё и кредиты в доходе,
- * инвестиции к роскоши, удвоение вложений. Настраиваются в своём окне.
+ * доля вложений в доходе, удвоение вложений. Настраиваются в своём окне.
  */
 import { test, expect, connectZen, readMeta } from "./harness";
 import type { Page } from "@playwright/test";
@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
 
 test("ненастроенные ориентиры зовут в настройки, окно открывается и закрывается", async ({ page }) => {
   await connectZen(page, "/health");
-  for (const id of ["housing", "debt", "luxury", "doubling"]) {
+  for (const id of ["housing", "debt", "invest", "doubling"]) {
     await expect(card(page, id).getByRole("button", { name: "Настроить" })).toBeVisible();
   }
   await card(page, "housing").getByRole("button", { name: "Настроить" }).click();
@@ -40,7 +40,6 @@ test("настроенные ориентиры считают по заверш
   await connectZen(page, "/health");
   await configure(page, {
     housingCategories: ["Дом"],
-    luxuryCategories: ["Еда вне дома"],
     investAccounts: ["acc-save"],
     investRate: 12,
   });
@@ -51,16 +50,19 @@ test("настроенные ориентиры считают по заверш
   await expect(card(page, "housing")).toContainText("35 000");
 
   // Вложения — переводы на накопительный счёт, 20 000 ₽ в месяц.
-  await expect(card(page, "luxury")).toContainText("Вкладываете");
-  await expect(card(page, "luxury")).toContainText("20 000");
-  await expect(card(page, "luxury")).toContainText("цель — вкладывать в 2 раза больше");
+  await expect(card(page, "invest")).toContainText("Вкладываете");
+  await expect(card(page, "invest")).toContainText("20 000");
+  // 20 000 из 150 000 ₽ — 13%, цель по умолчанию 10%.
+  await expect(card(page, "invest")).toContainText("13%");
+  await expect(card(page, "invest")).toContainText("цель — от 10%");
+  await expect(card(page, "invest")).toContainText("Цель выполнена");
 
   // Правило 72: 12% годовых — 6 лет, 250 000 ₽ станут 500 000 ₽.
   await expect(card(page, "doubling")).toContainText("6 лет");
   await expect(card(page, "doubling")).toContainText("500 000");
 
   // Заголовки карточек не обрезаны, статус не переносится.
-  for (const id of ["housing", "luxury", "doubling"]) {
+  for (const id of ["housing", "invest", "doubling"]) {
     const title = card(page, id).locator("span.truncate").first();
     expect(await title.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
   }
@@ -73,9 +75,9 @@ test("настроенные ориентиры считают по заверш
 
 test("выключенный ориентир пропадает, порог меняет статус", async ({ page }) => {
   await connectZen(page, "/health");
-  await configure(page, { housingCategories: ["Дом"], housingLimit: 10, doublingOn: false, luxuryOn: false });
+  await configure(page, { housingCategories: ["Дом"], housingLimit: 10, doublingOn: false, investOn: false });
   await expect(card(page, "doubling")).toHaveCount(0);
-  await expect(card(page, "luxury")).toHaveCount(0);
+  await expect(card(page, "invest")).toHaveCount(0);
   await expect(card(page, "housing")).toContainText("Намного выше нормы");
   await expect(card(page, "housing")).toContainText("норма — до 10%");
 });

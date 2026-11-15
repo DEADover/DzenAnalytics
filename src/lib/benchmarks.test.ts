@@ -11,7 +11,7 @@ import {
   growthBenchmark,
   isSubscription,
   parseBenchmarks,
-  ratioBenchmark,
+  targetShareBenchmark,
   shareBenchmark,
 } from "./benchmarks";
 
@@ -126,24 +126,33 @@ describe("переводы на счета", () => {
   });
 });
 
-describe("вложения к роскоши", () => {
-  const w = { yms: ["2026-09", "2026-10"], income: new Map() };
+describe("доля вложений в доходе", () => {
+  const w = { yms: ["2026-09", "2026-10"], income: new Map([["2026-09", 100_000], ["2026-10", 100_000]]) };
   const flow = (a: number, b: number) => new Map([["2026-09", a], ["2026-10", b]]);
 
-  it("отношение, цель и нехватка", () => {
-    const r = ratioBenchmark(w, flow(10_000, 18_000), flow(15_000, 20_000), 2);
-    expect(r.ratio).toBeCloseTo(0.8);
-    expect(r.status).toBe("bad");
-    expect(r.gap).toBe(21_000);
-    expect(ratioBenchmark(w, flow(20_000, 20_000), flow(15_000, 20_000), 2).status).toBe("warn");
-    const ok = ratioBenchmark(w, flow(40_000, 40_000), flow(15_000, 20_000), 2);
+  it("доля, цель и нехватка в месяц", () => {
+    const r = targetShareBenchmark(w, flow(4_000, 8_000), 10);
+    expect(r.share).toBeCloseTo(0.06);
+    expect(r.status).toBe("warn");
+    expect(r.amount).toBe(6_000);
+    expect(r.gap).toBe(4_000);
+    expect(targetShareBenchmark(w, flow(2_000, 2_000), 10).status).toBe("bad");
+    const ok = targetShareBenchmark(w, flow(12_000, 10_000), 10);
     expect(ok.status).toBe("good");
     expect(ok.gap).toBe(0);
   });
 
-  it("на роскошь не тратили", () => {
-    expect(ratioBenchmark(w, flow(5_000, 5_000), flow(0, 0), 2)).toMatchObject({ ratio: null, status: "good" });
-    expect(ratioBenchmark(w, flow(0, 0), flow(0, 0), 2).status).toBe("na");
+  it("забрали больше, чем внесли, — доля отрицательная", () => {
+    const r = targetShareBenchmark(w, flow(-5_000, 1_000), 10);
+    expect(r.share).toBeCloseTo(-0.02);
+    expect(r.status).toBe("bad");
+  });
+
+  it("без дохода доли нет", () => {
+    expect(targetShareBenchmark({ yms: ["2026-10"], income: new Map() }, flow(0, 5_000), 10)).toMatchObject({
+      share: null,
+      status: "na",
+    });
   });
 });
 

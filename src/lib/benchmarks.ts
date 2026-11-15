@@ -1,7 +1,7 @@
 /**
  * «Ориентиры» в «Финансовом здоровье» (#134): правила, с которыми сверяют
- * бюджет, — доля жилья и платежей по кредитам в доходе, вложения против трат
- * на роскошь, срок удвоения вложений. На общую оценку не влияют.
+ * бюджет, — доля жилья, платежей по кредитам и вложений в доходе, срок
+ * удвоения вложений. На общую оценку не влияют.
  *
  * Здесь только расчёт; настройки — `useBenchmarksStore`, сборка из данных
  * сервиса — `useBenchmarks`.
@@ -26,10 +26,10 @@ export interface BenchmarkSettings {
   debtCategories: string[];
   debtLimit: number;
 
-  luxuryOn: boolean;
-  luxuryCategories: string[];
-  /** Во сколько раз вложений должно быть больше трат на роскошь. */
-  luxuryRatio: number;
+  /** «Доля вложений в доходе». */
+  investOn: boolean;
+  /** Цель, % дохода: вкладывать не меньше. */
+  investTarget: number;
 
   doublingOn: boolean;
   /** Счета инвестиций: вложение — перевод на такой счёт. */
@@ -62,9 +62,8 @@ export const DEFAULT_BENCHMARKS: BenchmarkSettings = {
   debtAccounts: null,
   debtCategories: [],
   debtLimit: 30,
-  luxuryOn: true,
-  luxuryCategories: [],
-  luxuryRatio: 2,
+  investOn: true,
+  investTarget: 10,
   doublingOn: true,
   investAccounts: [],
   investCategories: [],
@@ -94,9 +93,8 @@ export function parseBenchmarks(raw: unknown): BenchmarkSettings {
     debtAccounts: r.debtAccounts === null ? null : (strings(r.debtAccounts) ?? d.debtAccounts),
     debtCategories: strings(r.debtCategories) ?? d.debtCategories,
     debtLimit: num(r.debtLimit, 5, 80) ?? d.debtLimit,
-    luxuryOn: bool(r.luxuryOn) ?? d.luxuryOn,
-    luxuryCategories: strings(r.luxuryCategories) ?? d.luxuryCategories,
-    luxuryRatio: num(r.luxuryRatio, 0.5, 5) ?? d.luxuryRatio,
+    investOn: bool(r.investOn) ?? d.investOn,
+    investTarget: num(r.investTarget, 1, 80) ?? d.investTarget,
     doublingOn: bool(r.doublingOn) ?? d.doublingOn,
     investAccounts: strings(r.investAccounts) ?? d.investAccounts,
     investCategories: strings(r.investCategories) ?? d.investCategories,
@@ -308,45 +306,47 @@ export function growthBenchmark(
   return { status, months: n, incomeGrowth, expenseGrowth, gap, income, expense };
 }
 
-export interface RatioResult {
+export interface TargetShareResult {
   status: BenchmarkStatus;
-  /** Вложено ÷ потрачено на роскошь; `null` — на роскошь не тратили. */
-  ratio: number | null;
+  /** Доля в доходе; `null` — дохода в окне нет. Отрицательная — забрали больше, чем внесли. */
+  share: number | null;
+  /** Цель долей (0,1). */
   target: number;
   /** В среднем в месяц. */
-  invested: number;
-  luxury: number;
+  amount: number;
+  income: number;
   /** Сколько в месяц не хватает до цели; 0 — цель выполнена. */
   gap: number;
   months: number;
 }
 
-/** Вложения против трат на роскошь: цель — вкладывать в `target` раз больше. */
-export function ratioBenchmark(
+/** Доля в доходе против цели «не меньше» — вложения: чем больше, тем лучше. */
+export function targetShareBenchmark(
   window: BenchmarkWindow,
-  invested: Map<string, number>,
-  luxury: Map<string, number>,
-  target: number
-): RatioResult {
+  flow: Map<string, number>,
+  targetPct: number
+): TargetShareResult {
+  const target = targetPct / 100;
   const months = window.yms.length;
-  const sum = (m: Map<string, number>) => window.yms.reduce((s, ym) => s + (m.get(ym) ?? 0), 0);
-  const inv = months > 0 ? sum(invested) / months : 0;
-  const lux = months > 0 ? Math.max(0, sum(luxury)) / months : 0;
-  const ratio = lux > 0 ? inv / lux : null;
-  const gap = Math.max(0, lux * target - inv);
+  let amount = 0;
+  let income = 0;
+  for (const ym of window.yms) {
+    amount += flow.get(ym) ?? 0;
+    income += window.income.get(ym) ?? 0;
+  }
+  const share = income > 0 ? amount / income : null;
   const status: BenchmarkStatus =
-    months === 0
-      ? "na"
-      : ratio === null
-        ? inv > 0
-          ? "good"
-          : "na"
-        : ratio >= target
-          ? "good"
-          : ratio >= target / 2
-            ? "warn"
-            : "bad";
-  return { status, ratio, target, invested: inv, luxury: lux, gap, months };
+    share === null ? "na" : share >= target ? "good" : share >= target / 2 ? "warn" : "bad";
+  const perMonth = (v: number) => (months > 0 ? v / months : 0);
+  return {
+    status,
+    share,
+    target,
+    amount: perMonth(amount),
+    income: perMonth(income),
+    gap: Math.max(0, perMonth(income * target - amount)),
+    months,
+  };
 }
 
 /** Правило 72: за сколько лет сумма удвоится при доходности `ratePct` % годовых. */

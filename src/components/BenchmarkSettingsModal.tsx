@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { CreditCard, Gem, Home, Repeat, Scale, SlidersHorizontal, TrendingUp, type LucideIcon } from "lucide-react";
+import { CreditCard, Home, PiggyBank, Repeat, Scale, SlidersHorizontal, TrendingUp, type LucideIcon } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
@@ -138,18 +138,17 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
           {limit("Норма — не больше", s.debtLimit, (v) => void s.update({ debtLimit: v }))}
         </Group>
 
-        <Group icon={Gem} title="Вложения и роскошь" on={s.luxuryOn} onToggle={(v) => void s.update({ luxuryOn: v })}>
-          {categories("Что считать роскошью", s.luxuryCategories, (v) => void s.update({ luxuryCategories: v }))}
+        <Group icon={PiggyBank} title="Доля вложений в доходе" on={s.investOn} onToggle={(v) => void s.update({ investOn: v })}>
           <Slider
             className="py-1.5"
             layout="stacked"
-            label="Вкладывать больше, чем уходит на роскошь"
-            min={1.5}
-            max={5}
-            step={0.5}
-            value={s.luxuryRatio}
-            format={(v) => `в ${String(v).replace(".", ",")} ${v >= 5 ? "раз" : "раза"}`}
-            onChange={(v) => void s.update({ luxuryRatio: v })}
+            label="Цель — не меньше"
+            min={5}
+            max={50}
+            step={1}
+            value={s.investTarget}
+            format={(v) => `${v}% дохода`}
+            onChange={(v) => void s.update({ investTarget: v })}
           />
         </Group>
 
@@ -169,7 +168,7 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
           {limit("Норма — не больше", s.recurringLimit, (v) => void s.update({ recurringLimit: v }))}
         </Group>
 
-        {(s.luxuryOn || s.doublingOn) && (
+        {(s.investOn || s.doublingOn) && (
           <section>
             <div className="font-semibold text-sm">Что считать вложениями</div>
             <div className="mt-1">
