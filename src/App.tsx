@@ -90,6 +90,7 @@ import { usePlanActionsStore } from "./store/usePlanActionsStore";
 import { useFilterMemoryStore } from "./store/useFilterMemoryStore";
 import { useSplitGroupsStore } from "./store/useSplitGroupsStore";
 import { useAccountDirectorySync } from "./hooks/useAccountDirectory";
+import { useAccountRefUpgrade } from "./hooks/useAccountRefUpgrade";
 import { startCrossTabSync } from "./lib/crossTab";
 import { ContentWidthGuide } from "./components/ContentWidthGuide";
 import { ScrollTopButton } from "./components/ScrollTopButton";
@@ -149,6 +150,7 @@ function PlainLayout() {
 function App() {
   // Справочник счетов — один на приложение (ключи и подписи тёзок).
   useAccountDirectorySync();
+  useAccountRefUpgrade();
   // Другая вкладка того же аккаунта что-то записала — подхватываем, чтобы не
   // затереть её правки своими (см. lib/crossTab).
   useEffect(() => startCrossTabSync(), []);

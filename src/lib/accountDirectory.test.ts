@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildAccountDirectory, type DirAccount } from "./accountDirectory";
+import { buildAccountDirectory, upgradeAccountRefs, type DirAccount } from "./accountDirectory";
 
 const acc = (p: Partial<DirAccount> & Pick<DirAccount, "id" | "title">): DirAccount => ({
   type: "ccard",
@@ -84,5 +84,38 @@ describe("тёзки одного банка, валюты и вида", () => {
     ]);
     expect([...d.resolve(["Т-Банк"])].sort()).toEqual(["a", "b"]);
     expect([...d.resolve(["b", "Пропавший"])]).toEqual(["b", "Пропавший"]);
+  });
+});
+
+describe("upgradeAccountRefs", () => {
+  const d = buildAccountDirectory([
+    acc({ id: "a", title: "Т-Банк", bank: "Т-Банк" }),
+    acc({ id: "b", title: "Т-Банк", bank: "Альфа-Банк" }),
+    acc({ id: "c", title: "Сбер" }),
+  ]);
+
+  it("название заменяется ключом", () => {
+    expect(upgradeAccountRefs(["Сбер"], d)).toEqual(["c"]);
+  });
+
+  it("название тёзок — ключами всех, без повторов", () => {
+    expect(upgradeAccountRefs(["a", "Т-Банк"], d)).toEqual(["a", "b"]);
+  });
+
+  it("одни ключи — менять нечего", () => {
+    expect(upgradeAccountRefs(["a", "c"], d)).toBeNull();
+    expect(upgradeAccountRefs([], d)).toBeNull();
+  });
+
+  it("неизвестное остаётся как есть", () => {
+    expect(upgradeAccountRefs(["Закрытый вклад"], d)).toBeNull();
+    expect(upgradeAccountRefs(["Закрытый вклад", "Сбер"], d)).toEqual(["Закрытый вклад", "c"]);
+  });
+
+  it("после перевода на ключ переименование счёта ссылку не рвёт", () => {
+    const refs = upgradeAccountRefs(["Сбер"], d)!;
+    const renamed = buildAccountDirectory([acc({ id: "c", title: "Сбер Накопительный" })]);
+    expect([...renamed.resolve(refs)]).toEqual(["c"]);
+    expect(renamed.label(refs[0])).toBe("Сбер Накопительный");
   });
 });

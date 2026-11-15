@@ -178,3 +178,35 @@ export function buildAccountDirectory(
     },
   };
 }
+
+/**
+ * Перевести сохранённые ссылки на счета с названий на ключи.
+ *
+ * Запись прежних версий помнит счёт названием и находит его, только пока
+ * название прежнее: переименовали счёт — ссылка повисла (#131). Ключ от
+ * названия не зависит, поэтому, пока название ещё совпадает, заменяем его
+ * ключами всех счетов с этим названием — так запись и читалась. Неизвестное
+ * остаётся как есть.
+ *
+ * `null` — менять нечего.
+ */
+export function upgradeAccountRefs(refs: readonly string[], dir: AccountDirectory): string[] | null {
+  let changed = false;
+  const out: string[] = [];
+  const push = (k: string) => {
+    if (!out.includes(k)) out.push(k);
+  };
+  for (const r of refs) {
+    if (dir.byKey.has(r)) {
+      push(r);
+      continue;
+    }
+    const keys = dir.keysByTitle(r);
+    if (keys.length === 0) push(r);
+    else {
+      changed = true;
+      for (const k of keys) push(k);
+    }
+  }
+  return changed ? out : null;
+}
