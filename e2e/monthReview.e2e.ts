@@ -67,3 +67,42 @@ test("«Без категории» сразу за всё время и общ�
   await page.getByRole("link", { name: "Операции", exact: true }).click();
   await expect.poll(opsCount).toBe(before);
 });
+
+test("график месяцев выбирает месяц, а столбец — его доходы или расходы", async ({ page }) => {
+  await connectZen(page, "/digest?month=2026-10");
+  await expect(page.getByText("Главное за Октябрь 2026")).toBeVisible();
+  const top = page.locator("[data-digest-top]");
+  await expect(top.getByText("Расходы по категориям")).toBeVisible();
+  // Статьи месяца стоят рядом с графиком, и список не пуст.
+  await expect(top.locator("[data-digest-categories] button").first()).toBeVisible();
+
+  // Первый столбец доходов — самый старый месяц на графике.
+  await top.locator("[data-digest-months] .recharts-bar-rectangle").first().click();
+  await expect(page.getByText("Главное за Октябрь 2026")).toHaveCount(0);
+  await expect(page.getByText(/^Главное за /)).toBeVisible();
+  await expect(top.getByText("Доходы по категориям")).toBeVisible();
+});
+
+test("фильтр счетов пересчитывает разбор и капитал, план с фактом честно молчит", async ({ page }) => {
+  await connectZen(page, "/digest?month=2026-10");
+  // Без фильтров: план бюджета рядом с фактом, капитал — по счетам в балансе.
+  await expect(page.locator("[data-plan-fact]")).toContainText(/из\D*25\s000/);
+  await expect(page.getByText("Капитал сейчас")).toBeVisible();
+  await expect(page.getByText("по счетам в балансе")).toBeVisible();
+  // С наличных в этом месяце одна трата; без фильтра статей больше.
+  const rows = page.locator("[data-digest-categories] button");
+  await expect.poll(() => rows.count()).toBeGreaterThan(1);
+
+  await page.evaluate(async () => {
+    type S = { getState: () => { setSet: (kind: string, values: Set<string>) => void } };
+    const store = (window as unknown as { __store: (n: string) => Promise<Record<string, S>> }).__store;
+    const { useFiltersStore } = await store("useFiltersStore");
+    useFiltersStore.getState().setSet("accounts", new Set(["acc-cash"]));
+  });
+
+  await expect(page.getByText("по 1 счёту из фильтра")).toBeVisible();
+  await expect(page.locator("[data-plan-fact-note]")).toBeVisible();
+  await expect(page.locator("[data-plan-fact]")).toHaveCount(0);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Еда вне дома");
+});

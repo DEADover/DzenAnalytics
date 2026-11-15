@@ -1,5 +1,5 @@
 import type { TipProps } from "./shared";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { clickedRow } from "../../../lib/chartClick";
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { ChartContainer } from "../../ChartContainer";
@@ -95,6 +95,8 @@ function CashBar(props: CashBarProps) {
   const row = props.payload ?? {};
   const clipped = !!row[props.clipFlag];
   const forecast = !!row.isForecast;
+  // Выбран другой месяц — столбец уходит на второй план.
+  const dim = !!row.dim;
   const real = Number(row[props.realKey] ?? 0);
   const step = width / 4;
   return (
@@ -102,7 +104,7 @@ function CashBar(props: CashBarProps) {
       <path
         d={topRoundedPath(x, y, width, height, 3)}
         fill={fill}
-        fillOpacity={forecast ? 0.28 : 1}
+        fillOpacity={forecast ? 0.28 : dim ? 0.38 : 1}
         stroke={forecast ? fill : undefined}
         strokeDasharray={forecast ? "3 3" : undefined}
       />
@@ -147,15 +149,32 @@ export function CashflowBars({
   m,
   height = 240,
   window = 12,
+  selectedYm,
   onMonth,
 }: {
-  m: DashboardModel;
+  /** Ряд месяцев (с прогнозом или без) и валюта — модель главной подходит целиком. */
+  m: Pick<DashboardModel, "forecast" | "base">;
   height?: number;
+  /** Сколько месяцев истории показать; прогнозные идут сверх этого числа. */
   window?: number;
+  /**
+   * Выбранный месяц: его столбцы остаются яркими, остальные приглушаются, а
+   * окно сдвигается так, чтобы он был виден. Для страниц, где график сам
+   * выбирает месяц.
+   */
+  selectedYm?: string;
   /** Клик по месяцу. `kind` — если попали в столбец: доходы или расходы. */
   onMonth?: (ym: string, kind?: "income" | "expense") => void;
 }) {
-  const tail = m.forecast.slice(-(window + 3));
+  const tail = useMemo(() => {
+    const ahead = m.forecast.filter((p) => p.isForecast).length;
+    const size = window + ahead;
+    const at = selectedYm ? m.forecast.findIndex((p) => p.ym === selectedYm) : -1;
+    // Выбранный месяц старше окна — окно отъезжает к нему, оставляя после
+    // него пару месяцев: видно, чем он сменился.
+    const end = at >= 0 && at < m.forecast.length - size ? Math.min(m.forecast.length, at + 3) : m.forecast.length;
+    return m.forecast.slice(Math.max(0, end - size), end);
+  }, [m.forecast, window, selectedYm]);
   // Клик по столбцу доходит и до самого графика; столбец успевает первым и
   // помечает, что клик уже разобран, — иначе поверх шторки доходов тут же
   // открылась бы шторка всего месяца.
@@ -180,6 +199,7 @@ export function CashflowBars({
       ym: p.ym,
       month: monthLabel(p.ym),
       isForecast: !!p.isForecast,
+      dim: !!selectedYm && p.ym !== selectedYm,
       income: draw(inc),
       expense: draw(exp),
       incomeReal: inc,

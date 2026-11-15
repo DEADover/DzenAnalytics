@@ -1,5 +1,5 @@
 import { WEEKDAYS_SHORT_BY_JS_DAY } from "../lib/weekdays";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CounterpartyName, CounterpartyNoteMark } from "../components/CounterpartyNote";
 import { pluralRu } from "../lib/plural";
@@ -15,6 +15,9 @@ import {
   Store,
   Sparkles,
   Download,
+  BarChart3,
+  Target,
+  Tags,
 } from "lucide-react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip } from "recharts";
 import { ChartContainer } from "../components/ChartContainer";
@@ -63,6 +66,22 @@ import { DigestReportModal } from "../components/DigestReportModal";
 import { Tooltip } from "../components/Tooltip";
 import type { ReportSpec } from "../hooks/usePeriodReport";
 import { buildObservations, type DigestObservation } from "../lib/digestObservations";
+import { GlobalFilters } from "../components/GlobalFilters";
+import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
+import { CashflowBars } from "../components/dashboard/blocks/cashflow";
+import { KindSwitcher } from "../components/KindSwitcher";
+import { ProgressBar } from "../components/ProgressBar";
+import { CtaLink } from "../components/CtaLink";
+import { groupByCategory } from "../lib/aggregations";
+import { useBudgetsStore } from "../store/useBudgetsStore";
+import { planTotals } from "../lib/budgets";
+import { capitalAccountKeys, planFactRow, type PlanFactRow } from "../lib/monthReview";
+import { yearBalance, type YearBalance } from "../lib/yearBalance";
+import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
+import { useBalanceValuation } from "../hooks/useBalanceValuation";
+import { useLiveAccounts } from "../hooks/useLiveAccounts";
+import { accountKeyOf } from "../lib/accountKey";
+import { localToday } from "../lib/period";
 
 
 type Tab = "week" | "month";
@@ -70,11 +89,38 @@ type Tab = "week" | "month";
 export function DigestPage() {
   // Digest summaries are pure income/expense analytics → strip turnover /
   // off-balance flows the user excluded (#14).
-  const transactions = useAnalyticsTransactions();
+  const analytics = useAnalyticsTransactions();
+  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
+  // Общие фильтры действуют все, кроме периода: период здесь выбирают в
+  // списке и на графике, и «текущий месяц» из фильтра оставил бы от истории
+  // один месяц (#130).
+  const filters = useFiltersStore();
+  const digestFilters = useMemo(
+    () => ({ ...filters, preset: "all" as const, from: null, to: null }),
+    [filters]
+  );
+  const transactions = useMemo(
+    () => applyFilters(analytics, digestFilters, monthStartDay),
+    [analytics, digestFilters, monthStartDay]
+  );
+  // Фильтры оставили не все операции — план бюджета, который считается по
+  // всем счетам и статьям, с таким фактом сравнивать нельзя.
+  const narrowed =
+    filters.accounts.size > 0 ||
+    filters.categories.size > 0 ||
+    filters.currencies.size > 0 ||
+    filters.users.size > 0 ||
+    filters.types.size > 0 ||
+    filters.search.trim().length > 0 ||
+    filters.minAmount != null ||
+    filters.maxAmount != null ||
+    filters.onlyUncategorized ||
+    filters.onlyWithComment ||
+    filters.onlyWithoutComment ||
+    filters.onlyNew;
   const baseCurrency = useDataStore((s) => s.rates.base);
   const showDrill = useDrillStore((s) => s.show);
 
-  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const all = useMemo(
     () => buildDigestHistory(transactions, new Date(), monthStartDay),
     [transactions, monthStartDay]
@@ -138,7 +184,73 @@ export function DigestPage() {
     [current, observations]
   );
 
-  if (transactions.length === 0) return <EmptyState />;
+  // ── Разбор месяца (#130) ──────────────────────────────────────────────
+  // Месяцы для графика — те же записи, что в списке, от старых к новым.
+  const monthBars = useMemo(
+    () =>
+      all
+        .filter((e) => e.period === "month")
+        .map((e) => ({ ym: e.id.slice("month-".length), income: e.income, expense: e.expense, isForecast: false }))
+        .reverse(),
+    [all]
+  );
+  const [catKind, setCatKind] = useState<"expense" | "income">("expense");
+  const periodTxs = useMemo(
+    () => (current ? transactions.filter((t) => t.date >= current.start && t.date <= current.end) : []),
+    [transactions, current]
+  );
+  const categoryRows = useMemo(
+    () =>
+      groupByCategory(periodTxs, "top")
+        .map((c) => ({ category: c.category, amount: c[catKind] }))
+        .filter((c) => c.amount > 0)
+        .sort((a, b) => b.amount - a.amount),
+    [periodTxs, catKind]
+  );
+
+  // План бюджета выбранного месяца — те же строки и то же правило, что на
+  // главной и в «Бюджете».
+  const budgetLines = useBudgetsStore((s) => s.lines);
+  const budgetsLoaded = useBudgetsStore((s) => s.loaded);
+  const budgetsHydrate = useBudgetsStore((s) => s.hydrate);
+  useEffect(() => {
+    if (!budgetsLoaded) void budgetsHydrate();
+  }, [budgetsLoaded, budgetsHydrate]);
+  const plan = useMemo(() => {
+    if (!current || current.period !== "month" || budgetLines.length === 0) return null;
+    const totals = planTotals(budgetLines, current.id.slice("month-".length));
+    const expense = planFactRow(totals.expense, current.expense);
+    const income = planFactRow(totals.income, current.income);
+    return expense || income ? { expense, income } : null;
+  }, [current, budgetLines]);
+
+  // Капитал — по счетам из фильтра; без фильтра — по счетам «в балансе», как
+  // на главной. Остатки считаются по всем операциям счёта, а не по
+  // отфильтрованным: остаток счёта не зависит от того, какие статьи отмечены.
+  const allTransactions = useDataStore((s) => s.transactions);
+  const liveAccounts = useLiveAccounts();
+  const valuation = useBalanceValuation();
+  const capitalKeys = useMemo(
+    () =>
+      liveAccounts && valuation?.universe
+        ? capitalAccountKeys({
+            accounts: liveAccounts.map((a) => ({ key: accountKeyOf(a), member: a.member })),
+            universe: valuation.universe,
+            pickedAccounts: filters.accounts,
+            pickedUsers: filters.users,
+          })
+        : null,
+    [liveAccounts, valuation, filters.accounts, filters.users]
+  );
+  const netWorth = useNetWorthSeries(allTransactions, capitalKeys);
+  // Без Дзен-мани остатков по счетам нет — с фильтром счетов капитал не показать.
+  const capitalKnown = !!liveAccounts || (filters.accounts.size === 0 && filters.users.size === 0);
+  const capital = useMemo(
+    () => (current && capitalKnown ? yearBalance(netWorth, current.start, current.end, localToday()) : null),
+    [current, capitalKnown, netWorth]
+  );
+
+  if (analytics.length === 0) return <EmptyState />;
 
   return (
     <div className="space-y-6">
@@ -164,8 +276,11 @@ export function DigestPage() {
               оттуда же: насколько потратили больше или меньше, чем в прошлый раз.
             </p>
             <p>
-              Общие фильтры сверху здесь не применяются, но операции, исключённые
-              из аналитики на странице «Категории», в дайджест не попадают.
+              <InfoTerm>Общие фильтры</InfoTerm> действуют все, кроме периода:
+              отметьте свои счета или статьи — и весь разбор, от графика до
+              капитала, пересчитается по ним. Период выбирается здесь же: в
+              списке или кликом по месяцу на графике. Операции, исключённые из
+              аналитики на странице «Категории», в дайджест не попадают.
             </p>
           </InfoPopover>
         }
@@ -198,9 +313,69 @@ export function DigestPage() {
         </Tooltip>
       </SectionControls>
       {reportOpen && reportSpec && <DigestReportModal spec={reportSpec} onClose={() => setReportOpen(false)} />}
+      <GlobalFilters showDateRange={false} dateRangeHint="Период выбирается ниже: в списке или на графике" />
+
+      {/* График месяцев и статьи выбранного месяца — рядом: клик по месяцу
+          выбирает его, клик по столбцу сразу показывает его доходы или расходы. */}
+      {tab === "month" && current && monthBars.length > 0 && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" data-digest-top>
+          <SectionCard
+            icon={BarChart3}
+            title="Доходы и расходы по месяцам"
+            info={
+              <p>
+                Клик по месяцу открывает его разбор, клик по зелёному или красному
+                столбцу — заодно показывает справа доходы или расходы этого месяца
+                по категориям. Выбранный месяц — яркий, остальные приглушены.
+                Суммы считаются по общим фильтрам.
+              </p>
+            }
+            right={<CtaLink to="/cashflow" variant="secondary">Cash-flow</CtaLink>}
+          >
+            <div data-digest-months className="flex flex-col flex-1 min-h-0">
+              <CashflowBars
+                m={{ forecast: monthBars, base: baseCurrency }}
+                window={18}
+                height={236}
+                selectedYm={current.id.slice("month-".length)}
+                onMonth={(ym, kind) => {
+                  setSelected(`month-${ym}`);
+                  if (kind) setCatKind(kind);
+                }}
+              />
+            </div>
+          </SectionCard>
+          <SectionCard
+            icon={Tags}
+            title={catKind === "expense" ? "Расходы по категориям" : "Доходы по категориям"}
+            subtitle={current.label}
+            right={<KindSwitcher kind={catKind} onChange={setCatKind} />}
+          >
+            <CategoryShares
+              rows={categoryRows}
+              kind={catKind}
+              base={baseCurrency}
+              onCategory={(category) =>
+                showDrill(
+                  category,
+                  periodTxs.filter(
+                    (t) =>
+                      t.category === category &&
+                      (catKind === "income" ? t.kind === "income" : t.kind === "expense" || t.kind === "refund")
+                  ),
+                  current.label
+                )
+              }
+            />
+          </SectionCard>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
-        <SectionEmpty icon={Newspaper} title="Нет периодов для дайджеста" />
+        <SectionEmpty
+          icon={Newspaper}
+          title={narrowed ? "Под фильтры не попала ни одна операция" : "Нет периодов для дайджеста"}
+        />
       ) : (
         <div className="grid md:grid-cols-[260px_minmax(0,1fr)] gap-4">
           {/* Список периодов. На широком экране панель тянется во всю высоту
@@ -249,6 +424,19 @@ export function DigestPage() {
               entry={current}
               observations={observations}
               baseCurrency={baseCurrency}
+              afterHeadline={
+                <>
+                  {plan && <PlanFactCard plan={plan} narrowed={narrowed} base={baseCurrency} />}
+                  {capital && (
+                    <CapitalRow
+                      balance={capital}
+                      running={!!current.running}
+                      picked={capitalKeys?.length ?? null}
+                      base={baseCurrency}
+                    />
+                  )}
+                </>
+              }
               onOpenTx={(txs, title) => showDrill(title, txs, "Дайджест")}
               onOpenDay={(date) =>
                 showDrill(
@@ -295,10 +483,13 @@ function DigestDetail({
   entry,
   observations,
   baseCurrency,
+  afterHeadline,
   onOpenTx,
   onOpenDay,
   onOpenCategory,
 }: {
+  /** Блоки сразу под «Главным»: план с фактом и капитал. */
+  afterHeadline?: ReactNode;
   entry: DigestEntry;
   /** Наблюдения периода — см. lib/digestObservations. */
   observations: DigestObservation[];
@@ -403,6 +594,8 @@ function DigestDetail({
       >
         <p className="text-sm leading-relaxed">{digestHeadline(entry, baseCurrency)}</p>
       </SectionCard>
+
+      {afterHeadline}
 
       <SectionCard
         icon={CalendarDays}
@@ -692,5 +885,183 @@ function PayeeList({ payees, base, empty }: { payees: DigestPayee[]; base: strin
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * Статьи выбранного месяца: доля от итога и сумма, клик — операции статьи.
+ * Полоса меряется от самой крупной статьи, процент — от всех, как на главной.
+ */
+function CategoryShares({
+  rows,
+  kind,
+  base,
+  onCategory,
+}: {
+  rows: { category: string; amount: number }[];
+  kind: "expense" | "income";
+  base: string;
+  onCategory: (category: string) => void;
+}) {
+  if (rows.length === 0)
+    return (
+      <SectionEmpty variant="compact">
+        {kind === "expense" ? "Расходов за этот месяц нет" : "Доходов за этот месяц нет"}
+      </SectionEmpty>
+    );
+  const top = rows[0].amount || 1;
+  const total = rows.reduce((s, r) => s + r.amount, 0) || 1;
+  return (
+    // Список листается внутри карточки: статей бывает и двадцать, а карточка
+    // стоит в одном ряду с графиком и выше него быть не должна.
+    <div className="scroll-soft space-y-0.5 lg:max-h-[252px]" data-digest-categories>
+      {rows.map((r) => (
+        <MeterRow
+          key={r.category}
+          bar="track"
+          leadIcon={<CategoryDot category={r.category} size="w-7 h-7" />}
+          label={r.category}
+          share={r.amount / top}
+          barCls={kind === "expense" ? "bg-expense" : "bg-income"}
+          cells={[
+            { text: formatPct(r.amount / total, 0), width: "3rem", muted: true },
+            { text: formatMoney(r.amount, base), width: "7rem" },
+          ]}
+          onClick={() => onCategory(r.category)}
+          title="Показать операции статьи за месяц"
+        />
+      ))}
+    </div>
+  );
+}
+
+/** План бюджета месяца рядом с фактом — расход и доход. */
+function PlanFactCard({
+  plan,
+  narrowed,
+  base,
+}: {
+  plan: { expense: PlanFactRow | null; income: PlanFactRow | null };
+  /** Заданы фильтры: факт на странице уже не весь, с планом его не сравнить. */
+  narrowed: boolean;
+  base: string;
+}) {
+  return (
+    <SectionCard
+      icon={Target}
+      title="План и факт"
+      info={
+        <p>
+          План — из раздела «Бюджет», по всем его статьям за этот месяц. Факт —
+          доход и расход месяца с этой страницы. У идущего месяца факт — на
+          сегодня.
+        </p>
+      }
+      right={<CtaLink to="/budgets" variant="secondary">Бюджет</CtaLink>}
+    >
+      {narrowed ? (
+        <p className="text-sm text-muted" data-plan-fact-note>
+          План бюджета считается по всем счетам и статьям, поэтому с фактом по
+          фильтрам его не сравнить. Сбросьте фильтры, чтобы увидеть сравнение.
+        </p>
+      ) : (
+        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2" data-plan-fact>
+          {plan.expense && <PlanFactLine label="Расход" row={plan.expense} kind="expense" base={base} />}
+          {plan.income && <PlanFactLine label="Доход" row={plan.income} kind="income" base={base} />}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function PlanFactLine({
+  label,
+  row,
+  kind,
+  base,
+}: {
+  label: string;
+  row: PlanFactRow;
+  kind: "expense" | "income";
+  base: string;
+}) {
+  const over = row.left < 0;
+  // У расхода превышение плана — плохо, у дохода — хорошо.
+  const tone = kind === "expense" ? (over ? "expense" : "accent") : "income";
+  const note =
+    kind === "expense"
+      ? over
+        ? `Перерасход ${formatMoney(-row.left, base)}`
+        : `Осталось ${formatMoney(row.left, base)}`
+      : over
+        ? `Сверх плана ${formatMoney(-row.left, base)}`
+        : `До плана ${formatMoney(row.left, base)}`;
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="tabular-nums text-right">
+          {formatMoney(row.fact, base)}
+          <span className="text-muted"> из {formatMoney(row.plan, base)}</span>
+        </span>
+      </div>
+      <ProgressBar value={row.ratio ?? 0} tone={tone} className="mt-1.5" label={`${label}: факт к плану`} />
+      <div
+        className={`mt-1 text-xs tabular-nums ${
+          kind === "expense" && over ? "text-expense" : kind === "income" && over ? "text-income" : "text-muted"
+        }`}
+      >
+        {formatPct(row.ratio ?? 0, 0)} плана · {note}
+      </div>
+    </div>
+  );
+}
+
+/** Капитал за период: на начало, на конец, наибольший и наименьший. */
+function CapitalRow({
+  balance,
+  running,
+  picked,
+  base,
+}: {
+  balance: YearBalance;
+  running: boolean;
+  /** Сколько счетов дал фильтр; `null` — фильтр не задан, счета «в балансе». */
+  picked: number | null;
+  base: string;
+}) {
+  const diff = balance.end.value - balance.start.value;
+  const scope =
+    picked == null
+      ? "по счетам в балансе"
+      : `по ${formatNum(picked)} ${pluralRu(picked, ["счёту", "счетам", "счетам"])} из фильтра`;
+  return (
+    <StatRow>
+      <StatCell
+        label="Капитал на начало"
+        value={formatMoney(balance.start.value, base)}
+        note={
+          balance.start.fromHistoryStart
+            ? `с начала истории, ${formatDate(balance.start.date, "full")}`
+            : scope
+        }
+      />
+      <StatCell
+        label={running ? "Капитал сейчас" : "Капитал на конец"}
+        value={formatMoney(balance.end.value, base)}
+        note={`${formatMoney(diff, base, { signed: true })} за период`}
+        noteCls={diff >= 0 ? "text-income" : "text-expense"}
+      />
+      <StatCell
+        label="Наибольший"
+        value={formatMoney(balance.max.value, base)}
+        note={formatDate(balance.max.date, "full")}
+      />
+      <StatCell
+        label="Наименьший"
+        value={formatMoney(balance.min.value, base)}
+        note={formatDate(balance.min.date, "full")}
+      />
+    </StatRow>
   );
 }
