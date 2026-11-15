@@ -135,10 +135,10 @@ function ShareCard({
   const r = model.result;
   if (r.share === null) {
     return (
-      <BenchmarkCard id={id} icon={icon} title={title} badge="Нет данных" value="—" note="В расчётных месяцах нет дохода." />
+      <BenchmarkCard id={id} icon={icon} title={title} badge="Нет данных" value="—" note="За эти месяцы нет доходов — долю считать не от чего." />
     );
   }
-  const badge = r.status === "good" ? "В норме" : r.status === "warn" ? "Выше нормы" : "Высоко";
+  const badge = r.status === "good" ? "В норме" : r.status === "warn" ? "Выше нормы" : "Намного выше нормы";
   // Шкала — до полутора порогов: отметка нормы стоит на двух третях.
   const scale = r.limit * 1.5;
   return (
@@ -151,7 +151,7 @@ function ShareCard({
       value={formatPct(r.share, 0)}
       sub={
         <>
-          {formatMoney(r.amount, base)} из {formatMoney(r.income, base)} в месяц · норма до{" "}
+          {formatMoney(r.amount, base)} в месяц при доходе {formatMoney(r.income, base)} · норма — до{" "}
           {formatPct(r.limit, 0)}
         </>
       }
@@ -162,8 +162,8 @@ function ShareCard({
           : note !== undefined
             ? note
             : r.monthsOver === 0
-            ? `Ни разу не выше нормы за ${monthsOf(r.months)}`
-            : `Выше нормы ${r.monthsOver} из ${monthsOf(r.months)}`
+            ? `За ${monthsOf(r.months)} норма ни разу не превышена`
+            : `Норма превышена в ${r.monthsOver} ${pluralRu(r.monthsOver, ["месяце", "месяцах", "месяцах"])} из ${r.months}`
       }
     />
   );
@@ -193,17 +193,17 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
           <ShareCard
             id="housing"
             icon={Home}
-            title="Жильё в доходе"
+            title="Расходы на жильё"
             model={housing}
             base={base}
-            empty="По выбранным категориям трат нет."
+            empty="В отмеченных категориях за эти месяцы трат нет."
           />
         ) : (
           <SetupCard
             id="housing"
             icon={Home}
-            title="Жильё в доходе"
-            text="Отметьте категории жилья — аренду, ипотеку, коммунальные услуги. Обычно советуют тратить на него не больше трети дохода."
+            title="Расходы на жильё"
+            text="Отметьте категории, в которых у вас жильё: аренда, ипотека, коммунальные платежи. Считается, что на жильё должно уходить не больше трети дохода."
             onSetup={onSetup}
           />
         ))}
@@ -216,14 +216,14 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             title="Платежи по кредитам"
             model={debt}
             base={base}
-            empty="Платежей по кредитам нет."
+            empty="Платежей по кредитам за эти месяцы нет."
           />
         ) : (
           <SetupCard
             id="debt"
             icon={CreditCard}
             title="Платежи по кредитам"
-            text="Счетов-кредитов нет. Если платежи записаны расходом или идут на кредитку — отметьте категории или счета."
+            text="Кредитных счетов не нашлось. Если вы записываете платежи расходом или гасите кредитную карту, отметьте нужные категории или счета."
             onSetup={onSetup}
           />
         ))}
@@ -235,8 +235,8 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
           <SetupCard
             id="luxury"
             icon={Gem}
-            title="Инвестиции к роскоши"
-            text="Отметьте категории роскоши и счета инвестиций. Совет — вкладывать вдвое больше, чем уходит на роскошь."
+            title="Вложения и роскошь"
+            text="Отметьте, какие траты вы считаете роскошью и на какие счета откладываете. Есть правило: вкладывать вдвое больше, чем тратишь на роскошь."
             onSetup={onSetup}
           />
         ))}
@@ -251,11 +251,11 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             value={`${formatFixed(doubling.years, doubling.years % 1 === 0 ? 0 : 1)} ${years(doubling.years)}`}
             sub={
               <>
-                {formatMoney(doubling.capital, base)} станут {formatMoney(doubling.capital * 2, base)} к{" "}
+                {formatMoney(doubling.capital, base)} вырастут до {formatMoney(doubling.capital * 2, base)} к{" "}
                 {new Date().getFullYear() + Math.ceil(doubling.years)} году
               </>
             }
-            note={`Без пополнений · ${doubling.accounts} ${pluralRu(doubling.accounts, ["счёт", "счёта", "счетов"])} инвестиций`}
+            note={`Если не пополнять · ${doubling.accounts} ${pluralRu(doubling.accounts, ["инвестиционный счёт", "инвестиционных счёта", "инвестиционных счетов"])}`}
           >
             <Slider
               className="mt-3"
@@ -274,7 +274,7 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
             id="doubling"
             icon={TrendingUp}
             title="Удвоение вложений"
-            text="Отметьте счета инвестиций — покажем, за сколько лет сумма на них удвоится при выбранной доходности."
+            text="Отметьте инвестиционные счета — увидите, за сколько лет деньги на них удвоятся при заданной доходности."
             onSetup={onSetup}
           />
         ))}
@@ -285,14 +285,14 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
         <ShareCard
           id="recurring"
           icon={Repeat}
-          title="Подписки в доходе"
+          title="Расходы на подписки"
           model={recurring}
           base={base}
           empty="Действующих подписок не найдено."
           note={
             <>
-              {recurring.count} {pluralRu(recurring.count, ["подписка", "подписки", "подписок"])} — платежи
-              раз в месяц или реже одной суммой, без жилья и кредитов ·{" "}
+              {recurring.count} {pluralRu(recurring.count, ["подписка", "подписки", "подписок"])}: платежи одной и
+              той же суммой раз в месяц или реже. Жильё и кредиты не считаются.{" "}
               <SmoothNavLink to="/recurring" className="text-accent hover:underline">
                 Регулярные
               </SmoothNavLink>
@@ -304,11 +304,23 @@ export function HealthBenchmarks({ model, onSetup }: { model: BenchmarksModel; o
   );
 }
 
+/** «в 2 раза», «в 5 раз», «в 1,4 раза». */
+function timesWord(v: number, digits: number): string {
+  return digits === 0 && (v === 1 || v >= 5) ? "раз" : "раза";
+}
+
+/** «выросли на 8%», «упали на 3%» — словами, для строки под числом. */
+function growthWords(v: number | null): string {
+  if (v === null) return "сравнить не с чем";
+  const pct = formatPct(Math.abs(v), 0);
+  return Math.round(v * 100) === 0 ? "не изменились" : v > 0 ? `выросли на ${pct}` : `упали на ${pct}`;
+}
+
 /** «+15%», «−3%» — рост к предыдущему отрезку. */
 const growthPct = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${formatPct(v, 0)}`);
 
 function GrowthCard({ r, base }: { r: GrowthResult; base: string }) {
-  const title = "Рост расходов к доходам";
+  const title = "Рост расходов и доходов";
   if (r.status === "na" || r.gap === null) {
     return (
       <BenchmarkCard
@@ -317,29 +329,34 @@ function GrowthCard({ r, base }: { r: GrowthResult; base: string }) {
         title={title}
         badge="Мало данных"
         value="—"
-        note="Нужно хотя бы полгода завершённых месяцев с доходом и расходом: сравниваются две равные половины истории."
+        note="Нужно хотя бы полгода истории: сравниваются две её равные половины."
       />
     );
   }
-  const points = Math.round(r.gap * 100);
   return (
     <BenchmarkCard
       id="growth"
       icon={Scale}
       title={title}
-      badge={r.status === "good" ? "В норме" : r.status === "warn" ? "Чуть быстрее" : "Расходы быстрее"}
+      badge={
+        r.status === "good"
+          ? "Доходы не отстают"
+          : r.status === "warn"
+            ? "Расходы чуть быстрее"
+            : "Расходы растут быстрее"
+      }
       tone={STATUS_TONE[r.status]}
-      value={`${points > 0 ? "+" : points < 0 ? "−" : ""}${Math.abs(points)} п.п.`}
+      value={growthPct(r.expenseGrowth)}
       sub={
         <>
-          Расход {growthPct(r.expenseGrowth)}, доход {growthPct(r.incomeGrowth)} · {monthsOf(r.months)} к
-          предыдущим {r.months}
+          Расходы {growthWords(r.expenseGrowth)}, доходы {growthWords(r.incomeGrowth)} · последние{" "}
+          {monthsOf(r.months)} к предыдущим {r.months}
         </>
       }
       note={
         <>
-          Расход в месяц: {formatMoney(r.expense.prev, base)} → {formatMoney(r.expense.now, base)}. Доход:{" "}
-          {formatMoney(r.income.prev, base)} → {formatMoney(r.income.now, base)}.
+          В среднем за месяц: расходы {formatMoney(r.expense.prev, base)} → {formatMoney(r.expense.now, base)},
+          доходы {formatMoney(r.income.prev, base)} → {formatMoney(r.income.now, base)}.
         </>
       }
     />
@@ -348,18 +365,18 @@ function GrowthCard({ r, base }: { r: GrowthResult; base: string }) {
 
 function LuxuryCard({ model, base }: { model: NonNullable<BenchmarksModel["luxury"]>; base: string }) {
   const r = model.result;
-  const target = `×${formatFixed(r.target, r.target % 1 === 0 ? 0 : 1)}`;
+  const times = (v: number, digits = v % 1 === 0 ? 0 : 1) => `в ${formatFixed(v, digits)} ${timesWord(v, digits)}`;
   if (r.ratio === null) {
     return (
       <BenchmarkCard
         id="luxury"
         icon={Gem}
-        title="Инвестиции к роскоши"
+        title="Вложения и роскошь"
         badge={r.status === "good" ? "В норме" : "Нет данных"}
         tone={STATUS_TONE[r.status]}
         value="—"
-        sub={<>Вложено {formatMoney(r.invested, base)} в месяц</>}
-        note="На роскошь за расчётные месяцы не тратили."
+        sub={<>Вкладываете {formatMoney(r.invested, base)} в месяц</>}
+        note="На роскошь за эти месяцы вы не тратили."
       />
     );
   }
@@ -369,21 +386,21 @@ function LuxuryCard({ model, base }: { model: NonNullable<BenchmarksModel["luxur
     <BenchmarkCard
       id="luxury"
       icon={Gem}
-      title="Инвестиции к роскоши"
-      badge={r.status === "good" ? "В норме" : r.status === "warn" ? "Маловато" : "Не хватает"}
+      title="Вложения и роскошь"
+      badge={r.status === "good" ? "Цель выполнена" : r.status === "warn" ? "Меньше цели" : "Намного меньше цели"}
       tone={STATUS_TONE[r.status]}
-      value={`×${formatFixed(Math.max(0, r.ratio), 1)}`}
+      value={times(Math.max(0, r.ratio), 1)}
       sub={
         <>
-          Вложено {formatMoney(r.invested, base)} при {formatMoney(r.luxury, base)} на роскошь в месяц ·
-          цель {target}
+          Вкладываете {formatMoney(r.invested, base)} в месяц, на роскошь уходит{" "}
+          {formatMoney(r.luxury, base)} · цель — вкладывать {times(r.target)} больше
         </>
       }
       meter={{ fill: Math.max(0, r.ratio) / scale, mark: r.target / scale, status: r.status }}
       note={
         r.gap > 0
-          ? `До цели — ещё ${formatMoney(r.gap, base)} в месяц`
-          : `Цель выполнена: вложений в ${formatFixed(r.ratio, 1)} раза больше`
+          ? `До цели не хватает ${formatMoney(r.gap, base)} в месяц`
+          : "Вкладываете больше, чем требует правило"
       }
     />
   );

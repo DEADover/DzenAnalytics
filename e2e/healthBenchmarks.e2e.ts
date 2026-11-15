@@ -27,8 +27,8 @@ test("ненастроенные ориентиры зовут в настрой
   }
   await card(page, "housing").getByRole("button", { name: "Настроить" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText("Категории жилья");
-  await expect(dialog).toContainText("Счета инвестиций");
+  await expect(dialog).toContainText("Что относится к жилью");
+  await expect(dialog).toContainText("Инвестиционные счета");
   await dialog.getByRole("button", { name: "Готово" }).click();
   await expect(dialog).toHaveCount(0);
   // Та же настройка — кнопкой в шапке раздела.
@@ -47,13 +47,13 @@ test("настроенные ориентиры считают по заверш
 
   // Жильё: аренда 35 000 ₽ в месяц — ниже трети дохода.
   await expect(card(page, "housing")).toContainText("В норме");
-  await expect(card(page, "housing")).toContainText("норма до 33%");
+  await expect(card(page, "housing")).toContainText("норма — до 33%");
   await expect(card(page, "housing")).toContainText("35 000");
 
   // Вложения — переводы на накопительный счёт, 20 000 ₽ в месяц.
-  await expect(card(page, "luxury")).toContainText("Вложено");
+  await expect(card(page, "luxury")).toContainText("Вкладываете");
   await expect(card(page, "luxury")).toContainText("20 000");
-  await expect(card(page, "luxury")).toContainText("цель ×2");
+  await expect(card(page, "luxury")).toContainText("цель — вкладывать в 2 раза больше");
 
   // Правило 72: 12% годовых — 6 лет, 250 000 ₽ станут 500 000 ₽.
   await expect(card(page, "doubling")).toContainText("6 лет");
@@ -76,8 +76,8 @@ test("выключенный ориентир пропадает, порог м�
   await configure(page, { housingCategories: ["Дом"], housingLimit: 10, doublingOn: false, luxuryOn: false });
   await expect(card(page, "doubling")).toHaveCount(0);
   await expect(card(page, "luxury")).toHaveCount(0);
-  await expect(card(page, "housing")).toContainText("Высоко");
-  await expect(card(page, "housing")).toContainText("норма до 10%");
+  await expect(card(page, "housing")).toContainText("Намного выше нормы");
+  await expect(card(page, "housing")).toContainText("норма — до 10%");
 });
 
 test("оценка: главный шаг, история по месяцам и цель по подушке", async ({ page }) => {
@@ -118,8 +118,8 @@ test("подписки в доходе и рост расходов к дохо�
 
   // Подписки: кинотеатр и аренда — оба платятся раз в месяц одной суммой.
   const subs = card(page, "recurring");
-  await expect(subs).toContainText("норма до 10%");
-  await expect(subs).toContainText("Высоко");
+  await expect(subs).toContainText("норма — до 10%");
+  await expect(subs).toContainText("Намного выше нормы");
   const count = async () => Number((await subs.textContent())!.match(/(\d+) подпис/)![1]);
   const before = await count();
   expect(before).toBeGreaterThanOrEqual(2);

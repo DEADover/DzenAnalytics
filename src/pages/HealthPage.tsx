@@ -114,7 +114,7 @@ export function HealthPage() {
 
       <SectionDivider
         label="Ориентиры"
-        description="Правила, с которыми сверяют бюджет. Считаются по последним 12 завершённым месяцам и на общую оценку не влияют."
+        description="Известные правила личных финансов и ваши цифры рядом с ними. Считаются по последним 12 полным месяцам, на общую оценку не влияют."
       />
 
       <HealthBenchmarks model={benchmarks} onSetup={() => setBenchmarkSetup(true)} />

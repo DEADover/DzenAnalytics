@@ -124,57 +124,57 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
       <ModalHeader
         icon={SlidersHorizontal}
         title="Ориентиры"
-        subtitle="Правила, с которыми сверяют бюджет. На общую оценку не влияют."
+        subtitle="Известные правила личных финансов. На общую оценку не влияют."
       />
       <ModalBody scroll gap={4}>
-        <Group icon={Home} title="Жильё в доходе" on={s.housingOn} onToggle={(v) => void s.update({ housingOn: v })}>
-          {categories("Категории жилья", s.housingCategories, (v) => void s.update({ housingCategories: v }))}
+        <Group icon={Home} title="Расходы на жильё" on={s.housingOn} onToggle={(v) => void s.update({ housingOn: v })}>
+          {categories("Что относится к жилью", s.housingCategories, (v) => void s.update({ housingCategories: v }))}
           {limit("Норма — не больше", s.housingLimit, (v) => void s.update({ housingLimit: v }))}
         </Group>
 
         <Group icon={CreditCard} title="Платежи по кредитам" on={s.debtOn} onToggle={(v) => void s.update({ debtOn: v })}>
-          {accountPicker("Счета кредитов", s.debtAccounts ?? loanKeys, (v) => void s.update({ debtAccounts: v }))}
-          {categories("Категории платежей", s.debtCategories, (v) => void s.update({ debtCategories: v }))}
+          {accountPicker("Кредитные счета", s.debtAccounts ?? loanKeys, (v) => void s.update({ debtAccounts: v }))}
+          {categories("Платежи, записанные расходом", s.debtCategories, (v) => void s.update({ debtCategories: v }))}
           {limit("Норма — не больше", s.debtLimit, (v) => void s.update({ debtLimit: v }))}
         </Group>
 
-        <Group icon={Gem} title="Инвестиции к роскоши" on={s.luxuryOn} onToggle={(v) => void s.update({ luxuryOn: v })}>
-          {categories("Категории роскоши", s.luxuryCategories, (v) => void s.update({ luxuryCategories: v }))}
+        <Group icon={Gem} title="Вложения и роскошь" on={s.luxuryOn} onToggle={(v) => void s.update({ luxuryOn: v })}>
+          {categories("Что считать роскошью", s.luxuryCategories, (v) => void s.update({ luxuryCategories: v }))}
           <Slider
             className="py-1.5"
             layout="stacked"
-            label="Цель — вкладывать больше в"
-            min={1}
-            max={4}
+            label="Вкладывать больше, чем уходит на роскошь"
+            min={1.5}
+            max={5}
             step={0.5}
             value={s.luxuryRatio}
-            format={(v) => `${String(v).replace(".", ",")} раза`}
+            format={(v) => `в ${String(v).replace(".", ",")} ${v >= 5 ? "раз" : "раза"}`}
             onChange={(v) => void s.update({ luxuryRatio: v })}
           />
         </Group>
 
         <Group icon={TrendingUp} title="Удвоение вложений" on={s.doublingOn} onToggle={(v) => void s.update({ doublingOn: v })}>
           <p className="text-xs text-muted py-1.5">
-            Доходность задаётся бегунком в самой карточке.
+            Доходность меняется бегунком на самой карточке.
           </p>
         </Group>
 
-        <Group icon={Scale} title="Рост расходов к доходам" on={s.growthOn} onToggle={(v) => void s.update({ growthOn: v })}>
+        <Group icon={Scale} title="Рост расходов и доходов" on={s.growthOn} onToggle={(v) => void s.update({ growthOn: v })}>
           <p className="text-xs text-muted py-1.5">
-            Последние 12 завершённых месяцев против предыдущих 12. Настраивать нечего.
+            Сравниваются последние 12 полных месяцев и 12 месяцев до них. Настроек нет.
           </p>
         </Group>
 
-        <Group icon={Repeat} title="Подписки в доходе" on={s.recurringOn} onToggle={(v) => void s.update({ recurringOn: v })}>
+        <Group icon={Repeat} title="Расходы на подписки" on={s.recurringOn} onToggle={(v) => void s.update({ recurringOn: v })}>
           {limit("Норма — не больше", s.recurringLimit, (v) => void s.update({ recurringLimit: v }))}
         </Group>
 
         {(s.luxuryOn || s.doublingOn) && (
           <section>
-            <div className="font-semibold text-sm">Что считать инвестициями</div>
+            <div className="font-semibold text-sm">Что считать вложениями</div>
             <div className="mt-1">
-              {accountPicker("Счета инвестиций", s.investAccounts, (v) => void s.update({ investAccounts: v }))}
-              {categories("Категории вложений", s.investCategories, (v) => void s.update({ investCategories: v }))}
+              {accountPicker("Инвестиционные счета", s.investAccounts, (v) => void s.update({ investAccounts: v }))}
+              {categories("Вложения, записанные расходом", s.investCategories, (v) => void s.update({ investCategories: v }))}
             </div>
           </section>
         )}
