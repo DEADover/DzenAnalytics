@@ -141,7 +141,7 @@ describe("computeHealthScore — остальные метрики показы�
   it("без данных цифры не приписываются", () => {
     expect(detailOf("emergency_fund")).not.toContain("Откуда цифра");
     expect(detailOf("uncategorized")).not.toContain("Откуда цифра");
-    expect(detailOf("fixed_load")).not.toContain("Средние за 6 месяцев");
+    expect(detailOf("fixed_load")).not.toContain("Средние за 6 полных месяцев");
   });
 });
 
@@ -223,5 +223,42 @@ describe("цель по подушке и история оценки", () => {
   it("не больше заданного числа месяцев; без операций — пусто", () => {
     expect(healthHistory(base, 3).map((p) => p.ym)).toEqual(["2026-04", "2026-05", "2026-06"]);
     expect(healthHistory({ ...base, transactions: [] })).toEqual([]);
+  });
+});
+
+describe("оценка считается по полным месяцам", () => {
+  // Пять полных месяцев: доход 10 000, расход 6 000. В идущем июне зарплаты
+  // ещё не было, а 5 000 уже потрачено.
+  const full = ["01", "02", "03", "04", "05"].flatMap((m, i) => [
+    tx({ id: `fi${i}`, date: `2026-${m}-10`, kind: "income", amount: 10000, amountBase: 10000 }),
+    tx({ id: `fe${i}`, date: `2026-${m}-15`, kind: "expense", amount: 6000, amountBase: 6000 }),
+  ]);
+  const txs = [...full, tx({ id: "june", date: "2026-06-03", kind: "expense", amount: 5000, amountBase: 5000 })];
+  const base = { transactions: txs, baseCurrency: "RUB", calibration: null, categoryMeta: {} };
+  const rate = (opts: Parameters<typeof computeHealthScore>[0]) =>
+    computeHealthScore(opts).components.find((c) => c.id === "savings_rate")!.value!;
+
+  it("идущий месяц не занижает норму сбережений", () => {
+    expect(rate({ ...base, today: "2026-06-05" })).toBeCloseTo(0.4);
+    // Без «сегодня» — прежний счёт по всем месяцам, с неполным июнем.
+    expect(rate(base)).toBeLessThan(0.4);
+  });
+
+  it("свой первый день месяца: идущий отчётный месяц тоже не берётся", () => {
+    // День 10: операция 03.06 относится к майскому отчётному месяцу, и он идущий до 09.06.
+    expect(rate({ ...base, monthStartDay: 10, today: "2026-06-05" })).toBeCloseTo(0.4);
+  });
+
+  it("полных месяцев нет — считаем по идущему", () => {
+    const only = { ...base, transactions: [txs[0], txs[1]] };
+    expect(rate({ ...only, today: "2026-01-20" })).toBeCloseTo(0.4);
+  });
+
+  it("история: прошлая точка берёт свой месяц целиком, последняя — сегодняшняя оценка", () => {
+    const opts = { ...base, today: "2026-06-05" };
+    const h = healthHistory(opts);
+    expect(h[h.length - 1].overall).toBe(computeHealthScore(opts).overall);
+    const may = computeHealthScore({ ...base, transactions: full, today: "2026-06-01" }).overall;
+    expect(h[h.length - 2]).toEqual({ ym: "2026-05", overall: may });
   });
 });

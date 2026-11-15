@@ -54,6 +54,23 @@ export function groupByMonth(
   return Array.from(map.values()).sort((a, b) => a.ym.localeCompare(b.ym));
 }
 
+/**
+ * Только полные отчётные месяцы — без идущего. В нём зарплата могла ещё не
+ * прийти, а аренда уже уйти: средние с таким месяцем гуляют от числа к числу.
+ * Полных месяцев нет вовсе (первый месяц истории) — остаётся идущий.
+ *
+ * `months` — по возрастанию, как отдаёт `groupByMonth`.
+ */
+export function completeMonths<T extends { ym: string }>(
+  months: readonly T[],
+  monthStartDay: number,
+  today: string
+): T[] {
+  const current = periodKey(today, monthStartDay);
+  const done = months.filter((m) => m.ym < current);
+  return done.length > 0 ? done : months.filter((m) => m.ym <= current);
+}
+
 export interface CategoryBucket {
   category: string;
   expense: number;

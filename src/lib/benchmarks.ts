@@ -7,7 +7,7 @@
  * сервиса — `useBenchmarks`.
  */
 import type { Transaction } from "../types";
-import { groupByMonth } from "./aggregations";
+import { completeMonths, groupByMonth } from "./aggregations";
 import { txInKey, txOutKey } from "./accountKey";
 import { periodKey } from "./period";
 import { expenseDelta } from "./txKindStyle";
@@ -126,10 +126,9 @@ export function benchmarkWindow(
   monthStartDay: number,
   today: string
 ): BenchmarkWindow {
-  const months = groupByMonth(analyticsTx, { monthStartDay });
-  const current = periodKey(today, monthStartDay);
-  const done = months.filter((m) => m.ym < current);
-  const picked = (done.length > 0 ? done : months.filter((m) => m.ym <= current)).slice(-BENCHMARK_MONTHS);
+  const picked = completeMonths(groupByMonth(analyticsTx, { monthStartDay }), monthStartDay, today).slice(
+    -BENCHMARK_MONTHS
+  );
   return { yms: picked.map((m) => m.ym), income: new Map(picked.map((m) => [m.ym, m.income])) };
 }
 

@@ -400,9 +400,10 @@ function ScoreTrend({ history, overall }: { history: HealthHistoryPoint[]; overa
       }
       placement="bottom"
     >
-      <div className="flex items-center gap-2 cursor-help" data-health-trend>
-        <Sparkline data={history.map((p) => p.overall)} color={overallVar(overall)} width={96} height={26} zeroBased={false} />
-        <span className="text-xs text-muted tabular-nums">
+      {/* Столбиком: «без изменений за 12 мес» рядом с линией в колонку оценки не влезает. */}
+      <div className="flex flex-col items-center gap-1 cursor-help" data-health-trend>
+        <Sparkline data={history.map((p) => p.overall)} color={overallVar(overall)} width={120} height={26} zeroBased={false} />
+        <span className="text-xs text-muted tabular-nums whitespace-nowrap">
           {diff === 0 ? "без изменений" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)}`} за {n} мес
         </span>
       </div>

@@ -16,6 +16,7 @@ import {
   type HealthScore,
 } from "../lib/health";
 import { useBenchmarksStore } from "../store/useBenchmarksStore";
+import { localToday } from "../lib/period";
 import { stripFromAnalytics } from "../lib/aggregations";
 
 /**
@@ -109,6 +110,7 @@ function useHealthInputs(): HealthOptions | null {
       extraLiquid,
       monthStartDay,
       cushionTarget,
+      today: localToday(),
     };
   }, [
     cushionTarget,

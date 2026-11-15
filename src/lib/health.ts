@@ -2,6 +2,7 @@ import type { Transaction } from "../types";
 import { pluralRu } from "./plural";
 import { formatMoney, formatNum } from "./format";
 import {
+  completeMonths,
   groupByMonth,
   netWorthSeries,
   splitByObligation,
@@ -59,6 +60,11 @@ interface ComputeOptions {
   extraLiquid?: number;
   /** Первый день отчётного месяца (1–31). По умолчанию 1 — календарный месяц. */
   monthStartDay?: number;
+  /**
+   * Сегодня, «2026-11-15». Задано — средние считаются по полным отчётным
+   * месяцам, без идущего (`completeMonths`). Не задано — по всем месяцам.
+   */
+  today?: string;
   /** Цель по подушке, месяцев расходов. По умолчанию 6. */
   cushionTarget?: number;
   /** Накопления, заданные снаружи, — для оценки на прошлую дату
@@ -74,7 +80,9 @@ export type HealthOptions = ComputeOptions;
  * ни одна из пяти составляющих не осталась на календаре по недосмотру.
  */
 function monthsOf(opts: ComputeOptions) {
-  return groupByMonth(opts.transactions, { monthStartDay: opts.monthStartDay ?? 1 });
+  const startDay = opts.monthStartDay ?? 1;
+  const months = groupByMonth(opts.transactions, { monthStartDay: startDay });
+  return opts.today ? completeMonths(months, startDay, opts.today) : months;
 }
 
 /** Попадает ли операция в один из отчётных месяцев `set`. */
@@ -142,7 +150,7 @@ function computeSavingsRate(opts: ComputeOptions): HealthComponent {
     // и три суммы под собой читаются с одного взгляда.
     detail:
       "Какую долю дохода вы откладываете: (доход − расход) ÷ доход.\n" +
-      "Считаем за последние 6 месяцев. Хорошо — от 20%." +
+      "Считаем за последние 6 полных месяцев. Хорошо — от 20%." +
       (recent.length
         ? `\n\nСредние за период:\n` +
           `· доход — ${formatMoney(avgIncome, opts.baseCurrency)}\n` +
@@ -205,7 +213,7 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
       (avgExpense > 0
         ? "\n\nОткуда цифра:\n" +
           `· накопления — ${formatMoney(liquid, opts.baseCurrency)}\n` +
-          `· средний расход — ${formatMoney(avgExpense, opts.baseCurrency)} в месяц (за 6 мес)\n` +
+          `· средний расход — ${formatMoney(avgExpense, opts.baseCurrency)} в месяц (за 6 полных мес)\n` +
           `· хватит на — ${coverage.toFixed(1)} мес`
         : ""),
     extra:
@@ -353,7 +361,7 @@ function computeFixedLoad(opts: ComputeOptions): HealthComponent {
     detail:
       "Какая часть дохода уходит на то, без чего не обойтись: жильё, продукты, кредиты, транспорт. Чем меньше — тем больше остаётся на цели и накопления. Хорошо — меньше 50%. Отметить обязательные категории можно на странице «Категории»." +
       (avgIncome > 0
-        ? "\n\nСредние за 6 месяцев:\n" +
+        ? "\n\nСредние за 6 полных месяцев:\n" +
           `· доход — ${formatMoney(avgIncome, opts.baseCurrency)} в месяц\n` +
           `· обязательные траты — ${formatMoney(monthlyObligatory, opts.baseCurrency)} в месяц\n` +
           // Один знак после запятой — как в самой карточке: «61%» против
@@ -416,7 +424,9 @@ export interface HealthHistoryPoint {
  */
 export function healthHistory(opts: ComputeOptions, months = 12): HealthHistoryPoint[] {
   const startDay = opts.monthStartDay ?? 1;
-  const yms = monthsOf(opts)
+  // Точки — по всем месяцам с данными, включая идущий: последняя точка —
+  // сегодняшняя оценка.
+  const yms = groupByMonth(opts.transactions, { monthStartDay: startDay })
     .map((m) => m.ym)
     .slice(-months);
   if (yms.length === 0) return [];
@@ -432,9 +442,19 @@ export function healthHistory(opts: ComputeOptions, months = 12): HealthHistoryP
     while (netIdx + 1 < net.length && net[netIdx + 1].date <= cutoff) netIdx++;
     const score = computeHealthScore({
       ...opts,
+      // Для прошлой точки «сегодня» — день после её месяца: сам месяц тогда
+      // уже полный и в расчёт идёт.
+      today: last || !opts.today ? opts.today : dayAfter(cutoff),
       transactions: last ? opts.transactions : sorted.slice(0, txEnd),
       liquidOverride: (netIdx >= 0 ? net[netIdx].net : 0) + extra,
     });
     return { ym, overall: score.overall };
   });
+}
+
+/** Следующий день, «2026-10-31» → «2026-11-01». */
+function dayAfter(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const next = new Date(y, m - 1, d + 1);
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
 }
