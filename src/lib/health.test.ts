@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeHealthScore } from "./health";
+import { computeHealthScore, healthHistory } from "./health";
 import { tx } from "../test/fixtures";
 import { stripAmountMarks } from "./format";
 
@@ -180,5 +180,48 @@ describe("computeHealthScore — месяц отчётный, а не кален
       run(day).components.find((c) => c.id === "emergency_fund")!.extra!.avgMonthly;
     expect(extra(28)).toBeCloseTo(6000, 5);
     expect(extra()).toBeCloseTo(3000, 5);
+  });
+});
+
+describe("цель по подушке и история оценки", () => {
+  // Шесть месяцев: доход 10 000, расход 6 000 — копится по 4 000 в месяц.
+  const txs = ["01", "02", "03", "04", "05", "06"].flatMap((m, i) => [
+    tx({ id: `hi${i}`, date: `2026-${m}-10`, kind: "income", amount: 10000, amountBase: 10000 }),
+    tx({ id: `he${i}`, date: `2026-${m}-15`, kind: "expense", amount: 6000, amountBase: 6000 }),
+  ]);
+  const base = { transactions: txs, baseCurrency: "RUB", calibration: null, categoryMeta: {} };
+  const cushion = (opts: Parameters<typeof computeHealthScore>[0]) =>
+    computeHealthScore(opts).components.find((c) => c.id === "emergency_fund")!;
+
+  it("подушка считается к выбранной цели, по умолчанию — к шести месяцам", () => {
+    // Накоплено 24 000 при расходе 6 000 в месяц — 4 месяца.
+    expect(cushion(base).value).toBeCloseTo(4);
+    expect(cushion(base).score).toBeCloseTo((4 / 6) * 100);
+    expect(cushion({ ...base, cushionTarget: 3 }).score).toBe(100);
+    expect(cushion({ ...base, cushionTarget: 12 }).score).toBeCloseTo((4 / 12) * 100);
+    expect(cushion({ ...base, cushionTarget: 12 }).detail).toContain("Цель — 12 месяцев");
+    expect(cushion({ ...base, cushionTarget: 3 }).facts).toMatchObject({ liquid: 24000, avgExpense: 6000, target: 3 });
+  });
+
+  it("история: точка на каждый месяц, последняя — сегодняшняя оценка", () => {
+    const h = healthHistory(base);
+    expect(h.map((p) => p.ym)).toEqual(["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06"]);
+    expect(h[h.length - 1].overall).toBe(computeHealthScore(base).overall);
+    // Подушка растёт с каждым месяцем — оценка не падает.
+    for (let i = 1; i < h.length; i++) expect(h[i].overall).toBeGreaterThanOrEqual(h[i - 1].overall);
+    expect(h[0].overall).toBeLessThan(h[h.length - 1].overall);
+  });
+
+  it("прошлая точка считается по капиталу на тот день, а не по сегодняшнему", () => {
+    const march = computeHealthScore({
+      ...base,
+      transactions: txs.filter((t) => t.date <= "2026-03-31"),
+    }).overall;
+    expect(healthHistory(base)[2].overall).toBe(march);
+  });
+
+  it("не больше заданного числа месяцев; без операций — пусто", () => {
+    expect(healthHistory(base, 3).map((p) => p.ym)).toEqual(["2026-04", "2026-05", "2026-06"]);
+    expect(healthHistory({ ...base, transactions: [] })).toEqual([]);
   });
 });

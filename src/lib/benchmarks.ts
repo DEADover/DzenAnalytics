@@ -38,7 +38,14 @@ export interface BenchmarkSettings {
   investCategories: string[];
   /** Ожидаемая доходность, % годовых. */
   investRate: number;
+
+  /** Цель по подушке безопасности, месяцев расходов. В отличие от ориентиров,
+   *  входит в общую оценку: подушка считается к этой цели. */
+  cushionTarget: CushionTarget;
 }
+
+export const CUSHION_TARGETS = [3, 6, 12] as const;
+export type CushionTarget = (typeof CUSHION_TARGETS)[number];
 
 export const DEFAULT_BENCHMARKS: BenchmarkSettings = {
   housingOn: true,
@@ -55,6 +62,7 @@ export const DEFAULT_BENCHMARKS: BenchmarkSettings = {
   investAccounts: [],
   investCategories: [],
   investRate: 12,
+  cushionTarget: 6,
 };
 
 const strings = (v: unknown): string[] | undefined =>
@@ -83,6 +91,7 @@ export function parseBenchmarks(raw: unknown): BenchmarkSettings {
     investAccounts: strings(r.investAccounts) ?? d.investAccounts,
     investCategories: strings(r.investCategories) ?? d.investCategories,
     investRate: num(r.investRate, 1, 40) ?? d.investRate,
+    cushionTarget: CUSHION_TARGETS.find((t) => t === r.cushionTarget) ?? d.cushionTarget,
   };
 }
 

@@ -79,3 +79,34 @@ test("выключенный ориентир пропадает, порог м�
   await expect(card(page, "housing")).toContainText("Высоко");
   await expect(card(page, "housing")).toContainText("норма до 10%");
 });
+
+test("оценка: главный шаг, история по месяцам и цель по подушке", async ({ page }) => {
+  await connectZen(page, "/health");
+  // История — линией под вердиктом, с разницей за отрезок.
+  await expect(page.locator("[data-health-trend]")).toContainText("мес");
+  // Подушка 7,9 месяца при цели 6: цель набрана, подтягивать нечего.
+  const goal = page.locator("[data-cushion-goal]");
+  const step = page.locator("[data-health-step]");
+  await expect(goal).toContainText("Цель набрана");
+  await expect(step).toHaveCount(0);
+  const overallBefore = Number(await page.locator(".text-5xl").first().textContent());
+
+  // Цель 12 месяцев: подушка считается к ней, выбор сохраняется.
+  await goal.getByRole("button", { name: "12 мес" }).click();
+  await expect
+    .poll(async () => (await readMeta<{ cushionTarget: number }>(page, "healthBenchmarks"))?.cushionTarget)
+    .toBe(12);
+  await expect(goal).toContainText(/Ещё .*₽.* — при текущем темпе к [а-я]+ \d{4}/);
+  expect(Number(await page.locator(".text-5xl").first().textContent())).toBeLessThan(overallBefore);
+
+  // Теперь главный шаг — про подушку, с суммой и приростом оценки.
+  await expect(step).toContainText("Главный шаг.");
+  await expect(step).toContainText("12 месяцев");
+  await expect(step).toContainText(/Оценка вырастет с \d+ до \d+\./);
+
+  // Строка цели — в одну линию: переключатель и прогноз не переносятся.
+  const mids = await goal
+    .locator(":scope > *")
+    .evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2)));
+  expect(Math.max(...mids) - Math.min(...mids)).toBeLessThanOrEqual(2);
+});

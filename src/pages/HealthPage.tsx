@@ -4,7 +4,10 @@ import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { useHealthScore } from "../hooks/useHealthScore";
+import { useHealthHistory, useHealthScore } from "../hooks/useHealthScore";
+import { cushionForecast, healthNextStep } from "../lib/healthStep";
+import { localToday } from "../lib/period";
+import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { useNetWorthSeries } from "../hooks/useNetWorthSeries";
 import { useFireCapital, useFireExcluded } from "../hooks/useFireCapital";
 import { accountKeyOf } from "../lib/accountKey";
@@ -31,6 +34,11 @@ export function HealthPage() {
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const score = useHealthScore();
+  const history = useHealthHistory();
+  const step = useMemo(() => (score ? healthNextStep(score) : null), [score]);
+  const forecast = useMemo(() => (score ? cushionForecast(score, localToday()) : null), [score]);
+  const cushionTarget = useBenchmarksStore((s) => s.cushionTarget);
+  const updateSettings = useBenchmarksStore((s) => s.update);
   const benchmarks = useBenchmarks();
   const [benchmarkSetup, setBenchmarkSetup] = useState(false);
   const { capitalAccounts } = useFireCapital();
@@ -79,7 +87,17 @@ export function HealthPage() {
         description="Складывается из 5 показателей ниже. Чем выше балл (0–100), тем устойчивее ваши финансы."
       />
 
-      <HealthSummary score={score} hideHeading />
+      <HealthSummary
+        score={score}
+        hideHeading
+        history={history}
+        step={step}
+        cushion={{
+          target: cushionTarget,
+          onTarget: (t) => void updateSettings({ cushionTarget: t }),
+          forecast,
+        }}
+      />
 
       <SectionControls>
         <Tooltip content="Настроить ориентиры">

@@ -8,7 +8,14 @@ import { useSlicesStore, activeSlice } from "../store/useSlicesStore";
 import { useLiveAccounts } from "./useLiveAccounts";
 import { useLoanAccountKeys, useOffBalanceExcluded } from "./useInBalanceTransactions";
 import { useAccountDirectory } from "./useAccountDirectory";
-import { computeHealthScore, type HealthScore } from "../lib/health";
+import {
+  computeHealthScore,
+  healthHistory,
+  type HealthHistoryPoint,
+  type HealthOptions,
+  type HealthScore,
+} from "../lib/health";
+import { useBenchmarksStore } from "../store/useBenchmarksStore";
 import { stripFromAnalytics } from "../lib/aggregations";
 
 /**
@@ -21,6 +28,23 @@ import { stripFromAnalytics } from "../lib/aggregations";
  * otherwise the net-worth calibration already counts them (avoids double-count).
  */
 export function useHealthScore(): HealthScore | null {
+  const inputs = useHealthInputs();
+  return useMemo(() => (inputs ? computeHealthScore(inputs) : null), [inputs]);
+}
+
+/**
+ * Оценка на конец каждого из последних 12 отчётных месяцев — для графика
+ * «как менялась оценка». Отдельным хуком: на главной он не нужен, а считать
+ * оценку двенадцать раз там незачем.
+ */
+export function useHealthHistory(): HealthHistoryPoint[] {
+  const inputs = useHealthInputs();
+  return useMemo(() => (inputs ? healthHistory(inputs) : []), [inputs]);
+}
+
+/** Всё, из чего считается оценка, — одно на оценку и её историю. */
+function useHealthInputs(): HealthOptions | null {
+  const cushionTarget = useBenchmarksStore((s) => s.cushionTarget);
   const transactions = useDataStore((s) => s.transactions);
   const rates = useDataStore((s) => s.rates);
   const baseCurrency = rates.base;
@@ -77,15 +101,17 @@ export function useHealthScore(): HealthScore | null {
       labelOf: dir.label,
     });
 
-    return computeHealthScore({
+    return {
       transactions: scored,
       baseCurrency,
       calibration,
       categoryMeta,
       extraLiquid,
       monthStartDay,
-    });
+      cushionTarget,
+    };
   }, [
+    cushionTarget,
     transactions,
     rates,
     baseCurrency,

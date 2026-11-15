@@ -3,12 +3,21 @@ interface Props {
   color?: string;
   width?: number;
   height?: number;
+  /** Шкала от нуля (по умолчанию). `false` — от наименьшего значения ряда:
+   *  для показателей, которые ходят в узком коридоре далеко от нуля. */
+  zeroBased?: boolean;
 }
 
-export function Sparkline({ data, color = "rgb(var(--c-accent))", width = 80, height = 24 }: Props) {
+export function Sparkline({
+  data,
+  color = "rgb(var(--c-accent))",
+  width = 80,
+  height = 24,
+  zeroBased = true,
+}: Props) {
   if (data.length === 0) return <div style={{ width, height }} />;
-  const min = Math.min(...data, 0);
-  const max = Math.max(...data, 0);
+  const min = zeroBased ? Math.min(...data, 0) : Math.min(...data);
+  const max = zeroBased ? Math.max(...data, 0) : Math.max(...data);
   const range = max - min || 1;
   const stepX = data.length > 1 ? width / (data.length - 1) : 0;
 

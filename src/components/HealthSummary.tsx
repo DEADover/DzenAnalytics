@@ -11,8 +11,13 @@ import {
   ArrowRight,
   AlertCircle,
   CheckCircle2,
+  Target,
 } from "lucide-react";
-import type { HealthComponent, HealthScore } from "../lib/health";
+import type { HealthComponent, HealthHistoryPoint, HealthScore } from "../lib/health";
+import type { CushionForecast, HealthStep } from "../lib/healthStep";
+import { CUSHION_TARGETS, type CushionTarget } from "../lib/benchmarks";
+import { Segmented } from "./Segmented";
+import { Sparkline } from "./Sparkline";
 import { formatMoney, formatPct, formatFixed } from "../lib/format";
 import { Tooltip } from "./Tooltip";
 import { CardHeader } from "./CardHeader";
@@ -135,7 +140,31 @@ function barFill(c: HealthComponent): number {
   return Math.min(Math.max(raw, 4), 100);
 }
 
-function ScoreRow({ c, base }: { c: HealthComponent; base: string }) {
+/** «к марту 2027» — когда наберётся подушка. */
+const MONTH_DATIVE = [
+  "январю", "февралю", "марту", "апрелю", "маю", "июню",
+  "июлю", "августу", "сентябрю", "октябрю", "ноябрю", "декабрю",
+];
+function byMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  return `к ${MONTH_DATIVE[m - 1]} ${y}`;
+}
+
+/** Цель по подушке и когда она наберётся при текущем темпе сбережений. */
+export interface CushionGoal {
+  target: CushionTarget;
+  onTarget: (next: CushionTarget) => void;
+  forecast: CushionForecast | null;
+}
+
+function cushionText(f: CushionForecast, base: string): string {
+  if (f.remaining <= 0) return "Цель набрана";
+  const need = `Ещё ${formatMoney(f.remaining, base)}`;
+  if (f.months === null || !f.ym) return `${need} — при текущем темпе не наберётся`;
+  return `${need} — при текущем темпе ${byMonth(f.ym)}`;
+}
+
+function ScoreRow({ c, base, cushion }: { c: HealthComponent; base: string; cushion?: CushionGoal }) {
   const Icon = COMPONENT_ICONS[c.id] || HeartPulse;
   const advice = c.extra?.hint ?? c.hint;
   const showAdvice = !!c.hint && c.status !== "good"; // steer only when off-target
@@ -168,6 +197,24 @@ function ScoreRow({ c, base }: { c: HealthComponent; base: string }) {
             </div>
           )}
 
+          {cushion && c.id === "emergency_fund" && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap" data-cushion-goal>
+              <span className="text-[11px] text-muted">Цель</span>
+              <Segmented
+                tight
+                label="Цель по подушке"
+                value={cushion.target}
+                options={CUSHION_TARGETS.map((t) => ({ value: t, label: `${t} мес` }))}
+                onChange={cushion.onTarget}
+              />
+              {cushion.forecast && (
+                <span className="text-[11px] text-muted tabular-nums">
+                  {cushionText(cushion.forecast, base)}
+                </span>
+              )}
+            </div>
+          )}
+
           {showAdvice && advice && (
             <div className="text-[11px] text-muted mt-1.5 flex items-start gap-1.5">
               <Sparkles className="w-3 h-3 text-accent shrink-0 mt-0.5" />
@@ -191,7 +238,16 @@ export function HealthSummary({
   score,
   to,
   hideHeading = false,
+  history,
+  step,
+  cushion,
 }: {
+  /** Оценка по месяцам — маленьким графиком под вердиктом. */
+  history?: HealthHistoryPoint[];
+  /** «Главный шаг» — вместо списка слабых мест. */
+  step?: HealthStep | null;
+  /** Выбор цели по подушке и прогноз. */
+  cushion?: CushionGoal;
   score: HealthScore;
   to?: string;
   /** Hide the card's own «Финансовое здоровье» title — used on the /health
@@ -265,18 +321,35 @@ export function HealthSummary({
           <div className="text-sm text-muted leading-snug">
             {verdictSentence(components)}
           </div>
+
+          {history && history.length >= 3 && <ScoreTrend history={history} overall={overall} />}
         </div>
 
         {/* Scorecard */}
         <div className="flex-1 min-w-0 md:border-l md:border-border md:pl-6 divide-y divide-border/60">
           {components.map((c) => (
-            <ScoreRow key={c.id} c={c} base={baseCurrency} />
+            <ScoreRow key={c.id} c={c} base={baseCurrency} cushion={cushion} />
           ))}
         </div>
       </div>
 
       {/* Footer: what to act on first / all-clear — merged into the same card */}
       {(() => {
+        if (step) {
+          return (
+            <div className="mt-5 pt-5 border-t border-border" data-health-step>
+              <div className="flex items-start gap-2.5 rounded-control bg-accent/10 px-3.5 py-3 text-sm">
+                <Target className="w-4 h-4 text-accent shrink-0 mt-0.5" aria-hidden />
+                <span>
+                  <strong>Главный шаг.</strong> {step.text}{" "}
+                  <span className="text-muted">
+                    Оценка вырастет с {step.from} до {step.to}.
+                  </span>
+                </span>
+              </div>
+            </div>
+          );
+        }
         const poor = components.filter((c) => c.status === "poor");
         if (poor.length > 0) {
           return (
@@ -312,5 +385,27 @@ export function HealthSummary({
         return null;
       })()}
     </div>
+  );
+}
+
+/** Как менялась оценка: линия по месяцам и разница с началом отрезка. */
+function ScoreTrend({ history, overall }: { history: HealthHistoryPoint[]; overall: number }) {
+  const diff = history[history.length - 1].overall - history[0].overall;
+  const n = history.length;
+  return (
+    <Tooltip
+      content={
+        "Какой была бы оценка на конец каждого месяца. Считается по нынешним данным: " +
+        "операции, поправленные задним числом, меняют и прошлые точки."
+      }
+      placement="bottom"
+    >
+      <div className="flex items-center gap-2 cursor-help" data-health-trend>
+        <Sparkline data={history.map((p) => p.overall)} color={overallVar(overall)} width={96} height={26} zeroBased={false} />
+        <span className="text-xs text-muted tabular-nums">
+          {diff === 0 ? "без изменений" : `${diff > 0 ? "+" : "−"}${Math.abs(diff)}`} за {n} мес
+        </span>
+      </div>
+    </Tooltip>
   );
 }

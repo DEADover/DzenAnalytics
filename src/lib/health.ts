@@ -9,7 +9,7 @@ import {
   type CalibrationInput,
   type ObligationMeta,
 } from "./aggregations";
-import { periodKey } from "./period";
+import { periodKey, periodRange } from "./period";
 
 export type HealthStatus = "good" | "fair" | "poor" | "na";
 
@@ -22,6 +22,9 @@ export interface HealthComponent {
   status: HealthStatus;
   detail: string;    // what is measured, plain-language
   hint: string;      // advice when score is poor / fair
+  /** Числа, из которых получен показатель, — для «Главного шага» и прогноза
+   *  подушки (`lib/healthStep`). */
+  facts?: Record<string, number>;
   /** Optional secondary, purely informational figures shown under the card —
    *  do NOT affect the score. Used by «Подушка безопасности» to also expose the
    *  runway on OBLIGATORY-only spending AND the average monthly obligatory
@@ -56,7 +59,14 @@ interface ComputeOptions {
   extraLiquid?: number;
   /** Первый день отчётного месяца (1–31). По умолчанию 1 — календарный месяц. */
   monthStartDay?: number;
+  /** Цель по подушке, месяцев расходов. По умолчанию 6. */
+  cushionTarget?: number;
+  /** Накопления, заданные снаружи, — для оценки на прошлую дату
+   *  (`healthHistory`): там нужен капитал на тот день, а не сегодняшний. */
+  liquidOverride?: number;
 }
+
+export type HealthOptions = ComputeOptions;
 
 /**
  * «Последние N месяцев» здесь — отчётные, а не календарные: балл считается по
@@ -123,6 +133,7 @@ function computeSavingsRate(opts: ComputeOptions): HealthComponent {
     weight: 30,
     score,
     value: rate,
+    facts: { avgIncome, avgExpense },
     status: recent.length === 0 ? "na" : classify(score),
     // Spell out the three numbers behind the percentage: without them the score
     // can't be checked against the same metric on the FIRE block, and «почему у
@@ -152,7 +163,8 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
   const netWorth = series.length > 0 ? series[series.length - 1].net : 0;
   // Off-balance savings count toward the cushion even when they're excluded
   // from the headline net worth.
-  const liquid = netWorth + (opts.extraLiquid ?? 0);
+  const liquid = opts.liquidOverride ?? netWorth + (opts.extraLiquid ?? 0);
+  const target = opts.cushionTarget ?? 6;
   const months = monthsOf(opts);
   const recent = months.slice(-6);
   const avgExpense = mean(recent.map((m) => m.expense));
@@ -174,8 +186,8 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
   const obligatoryCoverage =
     avgMonthlyObligatory > 0 ? liquid / avgMonthlyObligatory : 0;
 
-  // Target: 6 months. Score: 0 → 0, 6 → 100, clamp.
-  const score = clamp((coverage / 6) * 100);
+  // Цель — `target` месяцев (по умолчанию 6): 0 → 0, цель → 100.
+  const score = clamp((coverage / target) * 100);
 
   return {
     id: "emergency_fund",
@@ -183,11 +195,13 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
     weight: 25,
     score,
     value: coverage,
+    facts: { liquid, avgExpense, target },
     status: avgExpense <= 0 ? "na" : classify(score),
     // Числа, из которых получились месяцы: без них «3,4 месяца» невозможно
     // сверить ни с балансом на «Счетах», ни со средним расходом (issue #52).
     detail:
-      "Запас денег на чёрный день. На сколько месяцев хватит накоплений, если доход вдруг пропадёт, а траты оставить прежними. Цель — 6 месяцев." +
+      "Запас денег на чёрный день. На сколько месяцев хватит накоплений, если доход вдруг пропадёт, а траты оставить прежними. " +
+      `Цель — ${target} ${pluralRu(target, ["месяц", "месяца", "месяцев"])}.` +
       (avgExpense > 0
         ? "\n\nОткуда цифра:\n" +
           `· накопления — ${formatMoney(liquid, opts.baseCurrency)}\n` +
@@ -205,10 +219,10 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
     hint:
       coverage < 1
         ? "Меньше месяца запаса — это рискованно. Сделайте подушку первой целью."
-        : coverage < 3
-          ? "Стремитесь хотя бы к 3 месяцам. Полноценная подушка — это 6 месяцев расходов."
-          : coverage < 6
-            ? "Уже неплохо. Доведите до 6 месяцев — этого хватит, чтобы спокойно пережить потерю работы или крупную непредвиденную трату."
+        : coverage < 3 && target > 3
+          ? `Стремитесь хотя бы к 3 месяцам. Полноценная подушка — это ${target} месяцев расходов.`
+          : coverage < target
+            ? `Уже неплохо. Доведите до ${target} месяцев — этого хватит, чтобы спокойно пережить потерю работы или крупную непредвиденную трату.`
             : "",
   };
 }
@@ -229,6 +243,7 @@ function computeUncategorized(opts: ComputeOptions): HealthComponent {
     // Reported as the SHARE THAT IS categorized — 100% means everything has a
     // category (the intuitive «all good» direction), not the uncategorized %.
     value: total > 0 ? 1 - pct : 0,
+    facts: { uncategorized, total },
     status: total === 0 ? "na" : classify(score),
     detail:
       "Доля операций, которым присвоена категория. Чем больше — тем точнее вся аналитика. Хорошо — от 95%." +
@@ -291,6 +306,7 @@ function computeStability(opts: ComputeOptions): HealthComponent {
     weight: 15,
     score,
     value: cv,
+    facts: { meanRate: m },
     status: classify(score),
     detail:
       "Насколько ровно вы откладываете из месяца в месяц. Чем ровнее суммы — тем лучше. То густо, то пусто — балл ниже.\n\n" +
@@ -332,6 +348,7 @@ function computeFixedLoad(opts: ComputeOptions): HealthComponent {
     weight: 15,
     score,
     value: share,
+    facts: { avgIncome, monthlyObligatory },
     status: avgIncome <= 0 ? "na" : classify(score),
     detail:
       "Какая часть дохода уходит на то, без чего не обойтись: жильё, продукты, кредиты, транспорт. Чем меньше — тем больше остаётся на цели и накопления. Хорошо — меньше 50%. Отметить обязательные категории можно на странице «Категории»." +
@@ -354,6 +371,15 @@ function computeFixedLoad(opts: ComputeOptions): HealthComponent {
 
 // ─── public API ───────────────────────────────────────────────────────────────
 
+/** Общий балл: взвешенное среднее по показателям, у которых есть данные. */
+export function overallOf(components: readonly Pick<HealthComponent, "score" | "weight" | "status">[]): number {
+  const active = components.filter((c) => c.status !== "na");
+  const totalWeight = active.reduce((s, c) => s + c.weight, 0);
+  return totalWeight > 0
+    ? Math.round(active.reduce((s, c) => s + c.score * c.weight, 0) / totalWeight)
+    : 0;
+}
+
 export function computeHealthScore(opts: ComputeOptions): HealthScore {
   const components: HealthComponent[] = [
     computeSavingsRate(opts),
@@ -363,13 +389,7 @@ export function computeHealthScore(opts: ComputeOptions): HealthScore {
     computeFixedLoad(opts),
   ];
 
-  // Weighted average over components with non-NA status.
-  const active = components.filter((c) => c.status !== "na");
-  const totalWeight = active.reduce((s, c) => s + c.weight, 0);
-  const overall =
-    totalWeight > 0
-      ? Math.round(active.reduce((s, c) => s + c.score * c.weight, 0) / totalWeight)
-      : 0;
+  const overall = overallOf(components);
 
   return {
     overall,
@@ -377,4 +397,44 @@ export function computeHealthScore(opts: ComputeOptions): HealthScore {
     components,
     baseCurrency: opts.baseCurrency,
   };
+}
+
+export interface HealthHistoryPoint {
+  /** Отчётный месяц. */
+  ym: string;
+  overall: number;
+}
+
+/**
+ * Оценка на конец каждого из последних отчётных месяцев — какой она была бы,
+ * посчитай её тогда: операции только до этого дня, капитал — на этот день.
+ * Последняя точка — сегодняшняя оценка.
+ *
+ * Считается по нынешним данным: если операцию задним числом переразнесли по
+ * категориям, прошлые точки это учтут. Счета вне баланса входят в подушку
+ * сегодняшним остатком — их истории здесь нет.
+ */
+export function healthHistory(opts: ComputeOptions, months = 12): HealthHistoryPoint[] {
+  const startDay = opts.monthStartDay ?? 1;
+  const yms = monthsOf(opts)
+    .map((m) => m.ym)
+    .slice(-months);
+  if (yms.length === 0) return [];
+  const sorted = [...opts.transactions].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const net = netWorthSeries(opts.transactions, opts.calibration);
+  const extra = opts.extraLiquid ?? 0;
+  let txEnd = 0;
+  let netIdx = -1;
+  return yms.map((ym, i) => {
+    const last = i === yms.length - 1;
+    const cutoff = last ? "9999-12-31" : periodRange(ym, startDay).to;
+    while (txEnd < sorted.length && sorted[txEnd].date.slice(0, 10) <= cutoff) txEnd++;
+    while (netIdx + 1 < net.length && net[netIdx + 1].date <= cutoff) netIdx++;
+    const score = computeHealthScore({
+      ...opts,
+      transactions: last ? opts.transactions : sorted.slice(0, txEnd),
+      liquidOverride: (netIdx >= 0 ? net[netIdx].net : 0) + extra,
+    });
+    return { ym, overall: score.overall };
+  });
 }
