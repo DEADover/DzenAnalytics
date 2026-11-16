@@ -29,6 +29,22 @@ const tx = (date: string, amount: number, kind: Transaction["kind"] = "expense")
   }) as Transaction;
 
 describe("monthOverMonth", () => {
+  it("прошедший месяц против идущего: от него берётся столько же дней", () => {
+    const txs = [
+      tx("2026-06-05", 10_000),
+      tx("2026-06-25", 90_000), // за пределами первых десяти дней — в сравнение не идёт
+      tx("2026-08-03", 30_000),
+    ];
+    // Сегодня 10 августа: август идёт, июнь сравнивается с ним по 1–10 числа.
+    const m = monthOverMonth(txs, "2026-06", 1, "2026-08-10", "2026-08");
+    expect(m.now).toEqual({ from: "2026-06-01", to: "2026-06-10" });
+    expect(m.prev).toEqual({ from: "2026-08-01", to: "2026-08-10" });
+    expect(m.days).toBe(10);
+    expect(m.running).toBe(true);
+    expect(m.expense.now).toBe(10_000);
+    expect(m.expense.prev).toBe(30_000);
+  });
+
   it("два законченных месяца сравниваются целиком", () => {
     const txs = [
       tx("2026-07-05", 100_000, "income"),

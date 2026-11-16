@@ -28,6 +28,7 @@ import { SectionEmpty } from "../SectionEmpty";
 import { GlobalFilters } from "../GlobalFilters";
 import { PeriodStepper } from "../PeriodStepper";
 import { KindSwitcher } from "../KindSwitcher";
+import { Segmented } from "../Segmented";
 import { Filter, LayoutDashboard } from "lucide-react";
 import { useHomeScope } from "../../hooks/useHomeScope";
 import { CashflowBars } from "./blocks/cashflow";
@@ -136,9 +137,21 @@ export function DashboardView() {
     () => transactions.reduce((mx, t) => (t.date > mx ? t.date : mx), ""),
     [transactions]
   );
+  // С чем сравнивать выбранный прошедший месяц: с предыдущим или с идущим.
+  // У идущего месяца выбора нет — сравнивать его с самим собой незачем.
+  const [momAgainst, setMomAgainst] = useState<"prev" | "now">("prev");
+  const momVsNow = scope.on && m.ym !== m.nowYm && momAgainst === "now";
+  const momAgainstYm = momVsNow ? m.nowYm : shiftPeriod(m.ym, -1);
   const mom = useMemo(
-    () => monthOverMonth(transactions, m.ym, monthStartDay, lastDate || monthEnd(m.ym, monthStartDay)),
-    [transactions, m.ym, monthStartDay, lastDate]
+    () =>
+      monthOverMonth(
+        transactions,
+        m.ym,
+        monthStartDay,
+        lastDate || monthEnd(m.ym, monthStartDay),
+        momAgainstYm
+      ),
+    [transactions, m.ym, monthStartDay, lastDate, momAgainstYm]
   );
   /**
    * «в июле» — название прошлого месяца в ПРЕДЛОЖНОМ падеже.
@@ -147,9 +160,9 @@ export function DashboardView() {
    * («июль»), и подпись читалась «В июль за те же 28 дней».
    */
   const prevMonthLabel = useMemo(() => {
-    const mo = Number(shiftPeriod(m.ym, -1).slice(5, 7));
+    const mo = Number(momAgainstYm.slice(5, 7));
     return MONTHS_IN[mo - 1] ?? "";
-  }, [m.ym]);
+  }, [momAgainstYm]);
 
   const layout = useDashboardLayoutStore((s) => s.layout);
   const editing = useDashboardLayoutStore((s) => s.editing);
@@ -198,7 +211,13 @@ export function DashboardView() {
 
   // Свободные деньги (#96). Счета отдаём из модели — они там уже приведены к
   // базовой валюте и помечены архивом/внебалансом; остальное хук берёт сам.
-  const freeMoney = useFreeMoney(m.accounts, todayIso);
+  // «Свободные деньги» — про идущий месяц и про весь бюджет: общие фильтры
+  // их не касаются, поэтому счета берём обычным набором, а не из фильтра.
+  const freeAccounts = useMemo(
+    () => (m.includeOffBalance ? m.accountsAll : m.accountsAll.filter((a) => !a.offBalance)),
+    [m.accountsAll, m.includeOffBalance]
+  );
+  const freeMoney = useFreeMoney(freeAccounts, todayIso);
 
   // Кольца статей: те же деревья, что на «Категориях», только за текущий месяц.
   const monthTx = useMemo(
@@ -477,12 +496,40 @@ export function DashboardView() {
                   третьего числа любой месяц выглядел бы провалом рядом с целым
                   прошлым. Сколько дней взято, написано в шапке и под числом.
                   Норма сбережений — доля дохода, которая осталась.
+                  {scope.on && (
+                    <>
+                      {" "}
+                      Прошедший месяц можно сравнить и с идущим: от него тогда
+                      берётся столько же дней, сколько в идущем уже прошло.
+                    </>
+                  )}
                 </p>
+              }
+              right={
+                scope.on && m.ym !== m.nowYm ? (
+                  <Segmented
+                    tight
+                    size="sm"
+                    label="С каким месяцем сравнивать"
+                    value={momAgainst}
+                    onChange={setMomAgainst}
+                    options={[
+                      { value: "prev", label: "С прошлым", title: "С месяцем перед выбранным" },
+                      { value: "now", label: "С текущим", title: "С идущим месяцем — за столько же дней" },
+                    ]}
+                    className="ml-auto"
+                  />
+                ) : undefined
               }
               to="/compare"
               linkLabel="Сравнение"
             />
-            <MonthOverMonthBlock mom={mom} base={m.base} prevLabel={prevMonthLabel} />
+            <MonthOverMonthBlock
+              mom={mom}
+              base={m.base}
+              prevLabel={prevMonthLabel}
+              baselineWord={momVsNow ? "Сейчас" : "Было"}
+            />
           </>
         );
 

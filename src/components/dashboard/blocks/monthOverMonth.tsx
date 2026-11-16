@@ -27,7 +27,13 @@ export function MonthOverMonthBlock({
   mom,
   base,
   prevLabel,
+  baselineWord = "Было",
 }: {
+  /**
+   * Чем подписать второе число в плитках. «Было» — когда сравнивают с месяцем
+   * раньше; с идущим месяцем сравнивают «Сейчас».
+   */
+  baselineWord?: string;
   mom: MonthOverMonth;
   base: string;
   /** Название прошлого месяца в ПРЕДЛОЖНОМ падеже: «в июле за те же…». */
@@ -65,10 +71,10 @@ export function MonthOverMonthBlock({
           вместе со строкой «Было…», ярлык держится верха. Так все четыре
           числа и все четыре сравнения стоят по своим линиям. */}
       <div className="flex-1 min-h-0 grid grid-cols-2 gap-3">
-        <MomTile label="Доходы" metric={mom.income} base={base} tone="income" />
-        <MomTile label="Расходы" metric={mom.expense} base={base} tone="expense" lowerIsBetter />
-        <MomTile label="Норма сбережений" metric={mom.savingsRate} base={base} percent />
-        <MomTile label="Средний чек" metric={mom.avgExpense} base={base} lowerIsBetter />
+        <MomTile label="Доходы" metric={mom.income} base={base} tone="income" baselineWord={baselineWord} />
+        <MomTile label="Расходы" metric={mom.expense} base={base} tone="expense" lowerIsBetter baselineWord={baselineWord} />
+        <MomTile label="Норма сбережений" metric={mom.savingsRate} base={base} percent baselineWord={baselineWord} />
+        <MomTile label="Средний чек" metric={mom.avgExpense} base={base} lowerIsBetter baselineWord={baselineWord} />
       </div>
     </div>
   );
@@ -110,7 +116,9 @@ function MomTile({
   tone,
   percent = false,
   lowerIsBetter = false,
+  baselineWord,
 }: {
+  baselineWord: string;
   label: string;
   metric: MoMMetric;
   base: string;
@@ -136,7 +144,7 @@ function MomTile({
         {show(metric.now)}
       </span>
       <span className="text-[12px] text-muted tabular-nums">
-        Было {show(metric.prev)}
+        {baselineWord} {show(metric.prev)}
         {/* У доли показываем РАЗНИЦУ двух процентов, а не процент от процента:
             14,6 % → −9,6 % это «−24,2 %», а не «−166 %». Строго это пункты, но
             «Было 14,6 %» стоит рядом, и из пары читается, что это разность. */}

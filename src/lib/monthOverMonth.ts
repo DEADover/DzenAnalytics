@@ -73,10 +73,16 @@ export function monthOverMonth(
   txs: Transaction[],
   ym: string,
   monthStartDay: number,
-  today: string
+  today: string,
+  /**
+   * С каким месяцем сравнивать; без него — с предыдущим. На главной с выбором
+   * месяца прошедший месяц можно поставить рядом с идущим: тогда от него
+   * берётся столько же дней, сколько в идущем уже прошло.
+   */
+  againstYm: string = shiftPeriod(ym, -1)
 ): MonthOverMonth {
   const full = periodRange(ym, monthStartDay);
-  const prevFull = periodRange(shiftPeriod(ym, -1), monthStartDay);
+  const prevFull = periodRange(againstYm, monthStartDay);
   const fit = comparableRanges(full, prevFull, today, true);
 
   const inRange = (t: Transaction, r: DayRange) => t.date >= r.from && t.date <= r.to;
