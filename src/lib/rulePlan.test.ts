@@ -68,7 +68,7 @@ describe("план применения правил", () => {
         state: "pending",
         rule: "Купоны",
       },
-      { label: "Получатель", from: "—", to: "Сбербанк", state: "pending", rule: "Купоны" },
+      { label: "Контрагент", from: "—", to: "Сбербанк", state: "pending", rule: "Купоны" },
       {
         label: "Комментарий",
         from: "Выплата купона",
@@ -102,7 +102,7 @@ describe("план применения правил", () => {
     const payee: StoredRule = {
       id: "pay",
       enabled: true,
-      title: "Получатель Сбербанк",
+      title: "Контрагент Сбербанк",
       conditions: [{ field: "comment", op: "contains", value: "купон", caseInsensitive: true }],
       join: "and",
       actions: [{ kind: "setPayee", value: "Сбербанк" }],
@@ -118,7 +118,7 @@ describe("план применения правил", () => {
     );
     expect(plan.rows[0].changes.map((c) => [c.label, c.rule])).toEqual([
       ["Категория", "Категория купонов"],
-      ["Получатель", "Получатель Сбербанк"],
+      ["Контрагент", "Контрагент Сбербанк"],
     ]);
   });
 

@@ -65,6 +65,7 @@ export type RulesFileParse =
 
 const FIELDS: ReadonlySet<string> = new Set<RuleField>([
   "payee",
+  "statement",
   "comment",
   "category",
   "account",

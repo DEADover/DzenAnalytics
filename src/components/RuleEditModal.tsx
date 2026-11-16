@@ -26,6 +26,9 @@ import {
   joinCategoryFull,
   splitCategoryFull,
   ruleMatchesV2,
+  hiddenMatchText,
+  ruleChangesTx,
+  ruleHasEffect,
   type CategoryRuleV2,
   type ConditionJoin,
   type ConditionOp,
@@ -80,7 +83,7 @@ function opsOf(field: RuleField): { value: ConditionOp; label: string }[] {
  */
 const ACTION_TARGETS: { value: RuleTargetField; label: string }[] = [
   { value: "category", label: "Категория" },
-  { value: "payee", label: "Получатель" },
+  { value: "payee", label: "Контрагент" },
   { value: "comment", label: "Комментарий" },
   { value: "kind", label: "Тип операции" },
   { value: "tags", label: "Вторая категория" },
@@ -618,6 +621,23 @@ export function RuleEditModal({
   }, [cleaned, usableGroups, transactions]);
 
   const count = matches.length;
+
+  /** То же правило с условиями, по которым считались совпадения. */
+  const probeRule = useMemo<CategoryRuleV2>(
+    () => ({ ...cleaned, groups: usableGroups }),
+    [cleaned, usableGroups]
+  );
+  /**
+   * Операции, где правилу менять нечего: всё, что оно просит, уже стоит.
+   * Пока действие не заполнено, считать нечего — и про «уже соответствует»
+   * молчим: счётчик тогда отвечает только на вопрос об условиях.
+   */
+  const settled = useMemo(() => {
+    const ids = new Set<string>();
+    if (!ruleHasEffect(probeRule)) return ids;
+    for (const t of matches) if (!ruleChangesTx(t, probeRule)) ids.add(t.id);
+    return ids;
+  }, [matches, probeRule]);
 
   // --- Валидация. Правило без условий подошло бы ко всему подряд, правило без
   // действий ничего не делает, а действие без значения движок молча пропустит —
@@ -1168,6 +1188,16 @@ export function RuleEditModal({
                 <>
                   Подойдёт <strong className="tabular-nums">{formatNum(count)}</strong>{" "}
                   {pluralRu(count, ["операция", "операции", "операций"])}
+                  {settled.size > 0 && (
+                    <span className="text-muted" data-rule-settled>
+                      {" · "}
+                      {settled.size === count
+                        ? count === 1
+                          ? "Уже соответствует, менять нечего"
+                          : "Все уже соответствуют, менять нечего"
+                        : `${formatNum(settled.size)} уже ${pluralRu(settled.size, ["соответствует", "соответствуют", "соответствуют"])}`}
+                    </span>
+                  )}
                   {/* Раньше про отложенную запись говорил значок у каждого
                       действия. Теперь так работают все три поля — значит это
                       свойство правила, а не отдельного действия, и сказать о
@@ -1206,15 +1236,29 @@ export function RuleEditModal({
               id="rule-matches"
               className="border-t border-border max-h-60 overflow-y-auto px-3 py-2 space-y-1"
             >
-              {matches.slice(0, MATCH_LIMIT).map((t) => (
+              {matches.slice(0, MATCH_LIMIT).map((t) => {
+                const hidden = hiddenMatchText(t, probeRule);
+                return (
                 <div key={t.id} className="flex items-center gap-2.5 text-sm">
                   <CategoryDot category={t.category} size="w-6 h-6" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate">{matchTitle(t)}</div>
                     <div className="text-xs text-muted truncate">
                       {formatDate(t.date)} · {t.category || "Без категории"}
+                      {/* В ленте видно имя из справочника, а условие могло
+                          сработать по тексту под ним — показываем, по какому. */}
+                      {hidden && (
+                        <span data-rule-hidden-match>
+                          {" · "}Совпало: «{hidden}»
+                        </span>
+                      )}
                     </div>
                   </div>
+                  {settled.has(t.id) && (
+                    <span className="shrink-0 rounded-md bg-panel2 px-1.5 py-0.5 text-[11px] text-muted whitespace-nowrap">
+                      Уже соответствует
+                    </span>
+                  )}
                   <div
                     className={clsx(
                       "shrink-0 tabular-nums whitespace-nowrap",
@@ -1224,7 +1268,8 @@ export function RuleEditModal({
                     {formatMoney(t.amount, t.currency)}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {count > MATCH_LIMIT && (
                 <div className="text-xs text-muted pt-1">
                   Показаны первые {MATCH_LIMIT} из {formatNum(count)} — правило

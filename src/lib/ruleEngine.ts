@@ -39,6 +39,7 @@ import type { CategoryRule as CategoryRuleV1, RuleField } from "../store/useCate
 import type { RuleSchedule } from "./ruleSchedule";
 import { safeCompileRegex, safeTest } from "./safeRegex";
 import { NO_CATEGORY } from "./zenmoneyMap";
+import { displayPayee } from "./format";
 
 export type { RuleField };
 
@@ -48,7 +49,8 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   kind: "Тип операции",
   account: "Счёт",
   category: "Текущая категория",
-  payee: "Получатель",
+  payee: "Контрагент",
+  statement: "Строка из выписки",
   comment: "Комментарий",
   amount: "Сумма",
 };
@@ -224,7 +226,7 @@ export type RuleActionKind =
 
 export const ACTION_LABELS: Record<RuleActionKind, string> = {
   setCategory: "Категория",
-  setPayee: "Получатель",
+  setPayee: "Контрагент",
   setComment: "Комментарий",
   prependComment: "Дописать в начало комментария",
   appendComment: "Дописать в конец комментария",
@@ -276,7 +278,7 @@ export function actionTarget(kind: RuleActionKind): RuleTargetField {
 /** Подпись поля, которое занимает действие, — «Что меняет» в таблице и списках правил. */
 export const RULE_TARGET_LABELS: Record<RuleTargetField, string> = {
   category: "Категория",
-  payee: "Получатель",
+  payee: "Контрагент",
   comment: "Комментарий",
   kind: "Тип операции",
   tags: "Вторая категория",
@@ -454,6 +456,10 @@ export function conditionValues(t: Transaction, field: RuleField): string[] {
   switch (field) {
     case "payee":
       return [t.payeeOriginal ?? "", t.payee ?? "", t.brand ?? ""];
+    // Строка, которую прислал банк, — как есть. Её не меняют ни человек, ни
+    // правила, поэтому условие по ней не «уплывает» после правки контрагента.
+    case "statement":
+      return [t.payeeRaw ?? ""];
     case "comment":
       return [t.comment ?? ""];
     case "category":
@@ -616,26 +622,83 @@ export function conditionMatches(
   if (c.op === "empty") return values.every((v) => isBlankField(v, c.field));
   if (c.op === "not_empty") return values.some((v) => !isBlankField(v, c.field));
 
+  // Отрицание — про операцию целиком: «не содержит» значит «ни в одной из
+  // форм поля». Иначе правило срабатывало бы на пустом бренде у операции,
+  // где нужное слово стоит в тексте банка.
+  if (c.op === "not_contains") {
+    const norm = (v: string) => (c.caseInsensitive ? v.toLowerCase() : v);
+    const needle = norm(c.value);
+    return values.every((v) => !norm(v).includes(needle));
+  }
+  return values.some((v) => textValueMatches(v, c, compiled));
+}
+
+/** Совпала ли ОДНА форма поля с текстовым условием («содержит», «равно»…). */
+function textValueMatches(v: string, c: RuleCondition, compiled?: RegExp | null): boolean {
   if (c.op === "regex") {
     const re = compiled !== undefined ? compiled : compileCondition(c);
-    return re ? values.some((v) => safeTest(re, v)) : false;
+    return re ? safeTest(re, v) : false;
   }
-
-  const norm = (v: string) => (c.caseInsensitive ? v.toLowerCase() : v);
+  const norm = (x: string) => (c.caseInsensitive ? x.toLowerCase() : x);
   const needle = norm(c.value);
   switch (c.op) {
     case "contains":
-      return values.some((v) => norm(v).includes(needle));
-    // Отрицание тоже про операцию целиком: «не содержит» значит «ни в одной из
-    // форм поля». Иначе правило срабатывало бы на пустом бренде у операции,
-    // где нужное слово стоит в тексте банка.
-    case "not_contains":
-      return values.every((v) => !norm(v).includes(needle));
+      return norm(v).includes(needle);
     case "equals":
-      return values.some((v) => norm(v) === needle);
+      return norm(v) === needle;
     case "starts_with":
-      return values.some((v) => norm(v).startsWith(needle));
+      return norm(v).startsWith(needle);
+    default:
+      return false;
   }
+}
+
+const POSITIVE_TEXT_OPS: ReadonlySet<ConditionOp> = new Set<ConditionOp>([
+  "contains",
+  "equals",
+  "starts_with",
+  "regex",
+]);
+
+/**
+ * Текст, по которому операция подошла под условие о контрагенте или строке из
+ * выписки, — когда это НЕ то имя, что показано в ленте.
+ *
+ * Условие «Контрагент» смотрит и на имя из справочника, и на текст под ним
+ * (что пришло от банка или было набрано раньше). В ленте видно только имя, и
+ * совпадение по тексту выглядит ошибкой: «содержит IKI» с учётом регистра —
+ * а в списке «Iki» (#136). `null` — совпало по самому имени или условий о
+ * контрагенте в правиле нет.
+ */
+export function hiddenMatchText(t: Transaction, rule: CategoryRuleV2): string | null {
+  const shown = displayPayee(t).trim();
+  for (const c of allConditions(rule)) {
+    if (c.field !== "payee" && c.field !== "statement") continue;
+    if (!POSITIVE_TEXT_OPS.has(c.op) || !conditionHasValue(c)) continue;
+    const forms = conditionValues(t, c.field).map((v) => v.trim()).filter(Boolean);
+    // Имя из ленты подошло само — объяснять нечего.
+    if (c.field === "payee" && shown && textValueMatches(shown, c)) continue;
+    const hit = forms.find((v) => v !== shown && textValueMatches(v, c));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Изменит ли правило операцию — или всё, что оно просит, уже стоит.
+ *
+ * Счётчик «Подойдёт N» в окне правила отвечает на вопрос об условиях; человек
+ * же читает его как «изменится N» и удивляется, когда применять нечего. Мерка
+ * та же, что в окне «Что изменят правила» (`lib/rulePlan`).
+ */
+export function ruleChangesTx(t: Transaction, rule: CategoryRuleV2): boolean {
+  const p = ruleActionsToEdit(t, rule);
+  if (p.kind !== undefined) return true;
+  if (p.categoryFull !== undefined && p.categoryFull !== (t.categoryFullOriginal || t.categoryFull)) return true;
+  if (p.brand !== undefined && p.brand !== displayPayee(t)) return true;
+  if (p.comment !== undefined && p.comment !== (t.comment ?? "")) return true;
+  if (p.extraCategories !== undefined) return true;
+  if (p.unseen === false) return true;
   return false;
 }
 

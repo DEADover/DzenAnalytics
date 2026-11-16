@@ -22,6 +22,8 @@ import {
   type RuleCondition,
   opsForField,
   conditionHasValue,
+  hiddenMatchText,
+  ruleChangesTx,
   type ConditionOp,
 } from "./ruleEngine";
 import type { CategoryRule } from "../store/useCategoryRulesStore";
@@ -386,7 +388,7 @@ describe("правила — группы условий (issue #61)", () => {
     );
     // Одна группа — скобок нет.
     expect(describeRule(rule({ conditions: [cond({ value: "магнит" })] }))).toBe(
-      "Получатель содержит «магнит» → Категория = «Еда»"
+      "Контрагент содержит «магнит» → Категория = «Еда»"
     );
   });
 });
@@ -405,7 +407,7 @@ describe("правила — действия", () => {
   });
 
   it("получатель пишется в бренд", () => {
-    // В интерфейсе поле называется «Получатель», но показывается и уезжает в
+    // В интерфейсе поле называется «Контрагент», но показывается и уезжает в
     // Дзен-мани именно бренд: правка `payee` на операции с брендом не была бы
     // видна вообще.
     const patch = ruleActionsToEdit(
@@ -739,7 +741,7 @@ describe("правила — вспомогательное", () => {
       actions: [{ kind: "setCategory", value: "Доходы / Купоны" }] as RuleAction[],
     });
     expect(describeRule(r)).toBe(
-      "Получатель не заполнено И Комментарий содержит «купон» → Категория = «Доходы / Купоны»"
+      "Контрагент не заполнено И Комментарий содержит «купон» → Категория = «Доходы / Купоны»"
     );
   });
 
@@ -897,5 +899,44 @@ describe("тёзки в правилах: «Счёт равен» и перев�
       actions: [{ kind: "setCategory", value: "Еда" }],
     });
     expect(describeRule(r, (v, id) => (id === "a2" ? `${v} · Сбербанк` : v))).toContain("«Т-Банк · Сбербанк»");
+  });
+});
+
+describe("правила — строка из выписки и «уже соответствует» (#136)", () => {
+  const iki = tx({ payee: "IKI", payeeOriginal: "IKI", brand: "Iki", payeeRaw: "IKI VILNIUS LT" });
+
+  it("условие «Строка из выписки» смотрит только на текст банка", () => {
+    expect(conditionValues(iki, "statement")).toEqual(["IKI VILNIUS LT"]);
+    const c = cond({ field: "statement", op: "contains", value: "VILNIUS", caseInsensitive: false });
+    expect(conditionMatches(iki, c)).toBe(true);
+    // Имя контрагента и текст под ним в это условие не попадают.
+    expect(conditionMatches(tx({ payee: "VILNIUS", brand: "VILNIUS" }), c)).toBe(false);
+    // У операции без строки из выписки поле «не заполнено».
+    expect(conditionMatches(tx({ payee: "Iki" }), cond({ field: "statement", op: "empty" }))).toBe(true);
+    expect(conditionMatches(iki, cond({ field: "statement", op: "empty" }))).toBe(false);
+  });
+
+  it("называет текст, по которому операция подошла, если в ленте видно другое", () => {
+    const strict = rule({ conditions: [cond({ value: "IKI", caseInsensitive: false })] });
+    expect(hiddenMatchText(iki, strict)).toBe("IKI");
+    // Имя из ленты подошло само — объяснять нечего.
+    const loose = rule({ conditions: [cond({ value: "iki", caseInsensitive: true })] });
+    expect(hiddenMatchText(iki, loose)).toBeNull();
+    const byStatement = rule({ conditions: [cond({ field: "statement", value: "vilnius" })] });
+    expect(hiddenMatchText(iki, byStatement)).toBe("IKI VILNIUS LT");
+    // Условий о контрагенте нет — и подсказки нет.
+    expect(hiddenMatchText(iki, rule({ conditions: [cond({ field: "comment", value: "x" })] }))).toBeNull();
+  });
+
+  it("отличает операции, где менять уже нечего", () => {
+    const toIki = rule({ actions: [{ kind: "setPayee", value: "Iki" }] });
+    expect(ruleChangesTx(iki, toIki)).toBe(false);
+    expect(ruleChangesTx(tx({ payee: "IKI" }), toIki)).toBe(true);
+    const toFood = rule({ actions: [{ kind: "setCategory", value: "Еда" }] });
+    expect(ruleChangesTx(tx({ categoryFull: "Еда", categoryFullOriginal: "Еда" }), toFood)).toBe(false);
+    expect(ruleChangesTx(tx(), toFood)).toBe(true);
+    const note = rule({ actions: [{ kind: "prependComment", value: "[магазин]" }] });
+    expect(ruleChangesTx(tx({ comment: "[магазин] хлеб" }), note)).toBe(false);
+    expect(ruleChangesTx(tx({ comment: "хлеб" }), note)).toBe(true);
   });
 });

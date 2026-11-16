@@ -567,7 +567,7 @@ describe("правила — хранилище", () => {
       conditions: [{ field: "payee", op: "empty", value: "", caseInsensitive: true }],
       actions: [{ kind: "setPayee", value: "Сбербанк" }],
     });
-    expect(describeCategoryRule(r)).toBe("Получатель не заполнено → Получатель = «Сбербанк»");
+    expect(describeCategoryRule(r)).toBe("Контрагент не заполнено → Контрагент = «Сбербанк»");
   });
 });
 

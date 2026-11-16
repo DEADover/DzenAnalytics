@@ -163,12 +163,12 @@ export function BulkEditModal({ count, allTransactions, onApply, onClose }: Prop
 
         {/* Payee */}
         <div>
-          <label className="label block mb-1">Получатель</label>
+          <label className="label block mb-1">Контрагент</label>
           <Combobox
             value={payee}
             options={payeeOptions}
             onChange={setPayee}
-            placeholder="Получатель без изменений"
+            placeholder="Контрагент без изменений"
             maxHeight="200px"
           />
         </div>

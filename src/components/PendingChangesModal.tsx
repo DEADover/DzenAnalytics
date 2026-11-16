@@ -107,7 +107,7 @@ const ASPECTS: Aspect[] = [
     // в облако, а в списке на отправку не показывалась вовсе.
     get: (t) => dash((t.extraCategories ?? []).join(", ")),
   },
-  { keys: ["payee", "brand"], label: "Получатель", get: (t) => dash(displayPayee(t)) },
+  { keys: ["payee", "brand"], label: "Контрагент", get: (t) => dash(displayPayee(t)) },
   { keys: ["comment"], label: "Комментарий", get: (t) => dash(t.comment) },
   {
     keys: ["amount", "currency"],
@@ -479,7 +479,7 @@ export function PendingChangesModal({ onClose }: { onClose: () => void }) {
         key: `cpdel:${id}`,
         action: "delete",
         title: cpTitle(id),
-        note: "Удаление · У операций очистится получатель",
+        note: "Удаление · У операций очистится контрагент",
         revert: () => useCounterpartyEditsStore.getState().restore(id),
       });
     }

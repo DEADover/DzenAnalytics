@@ -418,7 +418,7 @@ export function buildRulePlan(
     }
     if (patch.brand !== undefined) {
       add(
-        "Получатель",
+        "Контрагент",
         "brand",
         dash(displayPayee(t)),
         dash(patch.brand),
