@@ -65,7 +65,7 @@ import { EditTransactionModal } from "../components/EditTransactionModal";
 import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
-import { queryMatcher } from "../lib/keyboardLayout";
+import { parseTextQuery, TEXT_QUERY_HINT } from "../lib/textQuery";
 import { txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 
@@ -170,8 +170,8 @@ export function UncategorizedPage() {
   const searched = useMemo(() => {
     const q = pageSearch.trim();
     if (!q) return list;
-    const match = queryMatcher(q);
-    return list.filter((t) => match(`${payeeSearchText(t)} ${t.comment} ${t.account}`));
+    const parsed = parseTextQuery(q);
+    return list.filter((t) => parsed.test(`${payeeSearchText(t)} ${t.comment} ${t.account}`, t.comment));
   }, [list, pageSearch]);
 
   const sorted = useMemo(
@@ -390,7 +390,7 @@ export function UncategorizedPage() {
               value={pageSearch}
               onChange={setPageSearch}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по контрагенту, комментарию и счёту. Не сохраняется и на другие страницы не влияет."}
+              title={"Быстрый поиск по этой таблице\nИщет по контрагенту, комментарию и счёту. Не сохраняется и на другие страницы не влияет." + "\n\n" + TEXT_QUERY_HINT}
               className="flex-1 min-w-[220px]"
             />
             {stats.confident > 0 && (

@@ -58,6 +58,7 @@ import {
 import { useMembersStore } from "../store/useMembersStore";
 import { useDebouncedField } from "../hooks/useDebouncedField";
 import { FilterResetButton } from "./FilterResetButton";
+import { TEXT_QUERY_HINT } from "../lib/textQuery";
 
 /**
  * Пресеты периода.
@@ -965,7 +966,7 @@ export function GlobalFilters({
 
         <div
           className="relative flex-1 min-w-[220px]"
-          title="Фильтр по получателю и комментарию — входит в сохранённый фильтр и влияет на все виджеты"
+          title={"Фильтр по получателю и комментарию — входит в сохранённый фильтр и влияет на все виджеты\n\n" + TEXT_QUERY_HINT}
         >
           {/* Значок поля — такой же тихий, как у соседних кнопок: фиолетовый
               выбивался из ряда единственным цветным пятном. */}

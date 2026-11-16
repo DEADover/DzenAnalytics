@@ -70,7 +70,7 @@ import {
   OperationListRow,
   OperationListTray,
 } from "../components/operations/OperationList";
-import { queryMatcher } from "../lib/keyboardLayout";
+import { parseTextQuery, TEXT_QUERY_HINT } from "../lib/textQuery";
 import { TOUR_OP_EVENT } from "../lib/tour";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
@@ -343,10 +343,11 @@ export function TransactionsPage() {
   /** Подходит ли операция под быстрый поиск. Раскладка не важна — как в общем фильтре и списках. */
   const searchMatch = useMemo(() => {
     if (!query) return null;
-    const match = queryMatcher(query);
+    const parsed = parseTextQuery(query);
     return (t: Transaction) =>
-      match(
-        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+      parsed.test(
+        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`,
+        t.comment
       );
   }, [query]);
   const inFilter = useMemo(
@@ -659,7 +660,7 @@ export function TransactionsPage() {
               onScopeChange={setSearchScope}
               counts={{ filter: inFilter.length, all: everywhere.length }}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде: выбор всплывает под полем. Не сохраняется и на другие страницы не влияет."}
+              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде: выбор всплывает под полем. Не сохраняется и на другие страницы не влияет." + "\n\n" + TEXT_QUERY_HINT}
               className="flex-1 min-w-[220px]"
             />
             {apiConnected && (

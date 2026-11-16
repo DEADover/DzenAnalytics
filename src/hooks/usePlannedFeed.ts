@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { queryMatcher } from "../lib/keyboardLayout";
+import { parseTextQuery } from "../lib/textQuery";
 import { periodKey, periodRange, localToday } from "../lib/period";
 import { useZenPlanned } from "./useZenPlanned";
 import { useFiltersStore } from "../store/useFiltersStore";
@@ -32,14 +32,15 @@ export function usePlannedFeed(query = "") {
   const ops = useMemo(() => {
     if (!planned) return [];
     const q = query.trim();
-    const match = q ? queryMatcher(q) : null;
+    const match = q ? parseTextQuery(q) : null;
     return planned.filter(
       (p) =>
         deletions[p.id] === undefined &&
         (accounts.size === 0 ||
           accounts.has(p.accountKey ?? p.account) ||
           (p.toAccount != null && accounts.has(p.toAccountKey ?? p.toAccount))) &&
-        (!match || match(`${p.payee} ${p.comment} ${p.category} ${p.account} ${p.toAccount ?? ""}`))
+        (!match ||
+          match.test(`${p.payee} ${p.comment} ${p.category} ${p.account} ${p.toAccount ?? ""}`, p.comment))
     );
   }, [planned, deletions, accounts, query]);
   const monthEnd = periodRange(periodKey(today, monthStartDay), monthStartDay).to;

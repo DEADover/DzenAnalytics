@@ -50,7 +50,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
-import { queryMatcher } from "../lib/keyboardLayout";
+import { parseTextQuery, TEXT_QUERY_HINT } from "../lib/textQuery";
 import { txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 
@@ -398,10 +398,11 @@ function DeletedFeed({
   const searched = useMemo(() => {
     const q = pageSearch.trim();
     if (!q) return filtered;
-    const match = queryMatcher(q);
+    const parsed = parseTextQuery(q);
     return filtered.filter(({ tx: t }) =>
-      match(
-        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`
+      parsed.test(
+        `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`,
+        t.comment
       )
     );
   }, [filtered, pageSearch]);
@@ -556,7 +557,7 @@ function DeletedFeed({
               value={pageSearch}
               onChange={setPageSearch}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту. Не сохраняется и на другие страницы не влияет."}
+              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту. Не сохраняется и на другие страницы не влияет." + "\n\n" + TEXT_QUERY_HINT}
               className="flex-1 min-w-[220px]"
             />
             <SortMenu
