@@ -388,6 +388,13 @@ export function EditTransactionModal({
     endDate: null,
   }));
   const repeat = canRepeat && repeatOn;
+  const commentBox = useRef<HTMLDivElement>(null);
+  const repeatBox = useRef<HTMLDivElement>(null);
+  const [commentPin, setCommentPin] = useState<number | null>(null);
+  // Расписание появилось под комментарием — на невысоком экране докручиваем до него.
+  useEffect(() => {
+    if (repeat) repeatBox.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [repeat]);
   const repeatSchedule: PlanSchedule = { ...repeatRule, startDate: date };
   const repeatPreview = repeat ? scheduleDates(repeatSchedule, date, planHorizon(localToday())) : [];
   /** Сохранение заведёт план, а не операцию. */
@@ -1027,7 +1034,9 @@ export function EditTransactionModal({
   // the top. A body-level portal also matches the standard modal pattern
   // (immune to ancestor transforms / containing blocks).
   return (
-    <Modal onClose={onClose} width="xl" className="h-[860px]">
+    // С расписанием окно растёт вниз, а не ужимает комментарий; выше экрана
+    // не станет — дальше прокручивается тело.
+    <Modal onClose={onClose} width="xl" className={repeat ? "h-auto" : "h-[860px]"}>
       <ModalHeader
         icon={isCreate ? Plus : Pencil}
                 title={planMarker ? "Сохранить как факт" : isCopy ? "Копия операции" : isCreate ? "Новая операция" : "Редактирование операции"}
@@ -1044,7 +1053,9 @@ export function EditTransactionModal({
           ) : undefined
         }
       />
-      <ModalBody scroll gap={2} className="flex flex-col">
+      {/* Место под полосу прокрутки отведено заранее (её 10 px — из правого
+          поля): появилась полоса или нет, поля и кнопки той же ширины. */}
+      <ModalBody scroll gap={2} className="flex flex-col [scrollbar-gutter:stable] !pr-2.5">
         {/* Kind switcher — 4-way pill toggle. "Возврат" is a money-back
             flow on an expense category; it inflows the account but
             shrinks the category's spend rather than adding to income. */}
@@ -1470,35 +1481,45 @@ export function EditTransactionModal({
             )}
           </div>
         )}
-        <FormField
-          label="Комментарий"
-          // Grows to fill the leftover modal height so the comment ends at the
-          // same bottom edge for every operation type.
-          className="flex-1 flex flex-col min-h-0"
+        {/* Комментарий тянется до подвала — нижний край окна один у всех типов
+            операции. Нижний предел — ярлык и поле в свои 60 px: в ноль не
+            сжимается. Когда включают «Повторять операцию», высота замирает на
+            текущей: расписание встаёт НИЖЕ, а поле остаётся каким было. */}
+        <div
+          ref={commentBox}
+          className="flex-1 flex flex-col min-h-[5.5rem]"
+          style={repeat && commentPin != null ? { flex: "none", height: commentPin } : undefined}
         >
-          <HashtagTextarea
-            key={commentKey}
-            value={comment}
-            onChange={setComment}
-            tags={allTags}
-            rows={4}
-            // `flex-1` stretches it to fill the remaining height down to the
-            // footer (same bottom edge for all types); min-h is the floor for
-            // manual (drag) shrinking / the rare no-spare-space case.
-            className="input text-sm w-full resize-y min-h-[3.75rem] flex-1"
-            boxClassName="flex-1 min-h-0"
-            suggestContext={{
-              payee,
-              category: subcategory ? `${category} / ${subcategory}` : category,
-            }}
-          />
-        </FormField>
+          <FormField
+            label="Комментарий"
+            className="flex-1 flex flex-col min-h-0"
+          >
+            <HashtagTextarea
+              key={commentKey}
+              value={comment}
+              onChange={setComment}
+              tags={allTags}
+              rows={4}
+              // `flex-1` stretches it to fill the remaining height down to the
+              // footer (same bottom edge for all types); min-h is the floor for
+              // manual (drag) shrinking / the rare no-spare-space case.
+              className="input text-sm w-full resize-y min-h-[3.75rem] flex-1"
+              boxClassName="flex-1 min-h-0"
+              suggestContext={{
+                payee,
+                category: subcategory ? `${category} / ${subcategory}` : category,
+              }}
+            />
+          </FormField>
+        </div>
         {/* «Повторять операцию» — только у новой операции и копии, последним в форме,
             как в Дзен-мани: с ним вместо операции
             заводится регулярный план, как при создании операции в Дзен-мани.
             Первая дата — поле «Дата» выше, поэтому в расписании её нет. */}
         {canRepeat && (
-          <div className="space-y-3">
+          // `shrink-0`: в столбце блок не должен сжиматься — иначе переключатель
+          // наезжает на комментарий; не помещается — тело окна прокручивается.
+          <div ref={repeatBox} className="space-y-3 shrink-0">
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <span className="min-w-0">
                 <span className="text-sm block">Повторять операцию</span>
@@ -1506,7 +1527,17 @@ export function EditTransactionModal({
                   {repeat ? "Будет регулярным планом в Дзен-мани" : "Сделать плановой, с расписанием повторов"}
                 </span>
               </span>
-              <Switch checked={repeatOn} onChange={setRepeatOn} label="Повторять операцию" />
+              <Switch
+                checked={repeatOn}
+                onChange={(on) => {
+                  // Высоту комментария запоминаем ДО того, как появится расписание.
+                  // `offsetHeight`, не рамка на экране: та уменьшена, пока окно ещё
+                  // въезжает с масштабом.
+                  setCommentPin(on ? (commentBox.current?.offsetHeight ?? null) : null);
+                  setRepeatOn(on);
+                }}
+                label="Повторять операцию"
+              />
             </label>
             {repeat && (
               <PlanScheduleFields

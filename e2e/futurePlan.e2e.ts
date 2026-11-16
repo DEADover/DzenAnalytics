@@ -111,3 +111,39 @@ test("«Повторять операцию» с датой в прошлом н
   await card.getByRole("button", { name: "Запланировать", exact: true }).click();
   await expect(card.getByText(/не начинается в прошлом/)).toBeVisible();
 });
+
+for (const height of [1000, 740]) {
+  test(`«Повторять операцию» не меняет комментарий и ширину полей (окно ${height})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height });
+    await connectZen(page, "/transactions");
+    await setPushMode(page, "manual");
+    await page.getByRole("button", { name: /Добавить/ }).first().click();
+    await page.getByRole("menuitem", { name: "Расход" }).or(page.getByText("Расход", { exact: true })).first().click();
+    const card = page.getByRole("dialog").filter({ hasText: "Новая операция" });
+    const comment = card.locator("textarea");
+    const sw = card.getByRole("switch", { name: "Повторять операцию" });
+    await expect(sw).toBeVisible();
+    // Окно въезжает с масштабом — мерить можно, когда оно встало.
+    await page.waitForTimeout(500);
+    const before = await comment.boundingBox();
+
+    await sw.click();
+    await expect(card.locator("[data-schedule-preview]")).toBeVisible();
+    await page.waitForTimeout(500);
+    const after = await comment.boundingBox();
+    // Комментарий того же размера: расписание встало ниже, а не ужало его.
+    expect(after!.height).toBe(before!.height);
+    // Полоса прокрутки, если появилась, ширину полей не тронула.
+    expect(after!.width).toBe(before!.width);
+    // Переключатель стоит под комментарием, а не на нём; расписание видно.
+    const swBox = await sw.boundingBox();
+    expect(swBox!.y).toBeGreaterThanOrEqual(after!.y + after!.height);
+    await expect(card.locator("[data-schedule-preview]")).toBeInViewport();
+    if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/repeat-${height}.png` });
+
+    // Выключили — всё как было.
+    await sw.click();
+    await page.waitForTimeout(300);
+    expect((await comment.boundingBox())!.height).toBe(before!.height);
+  });
+}
