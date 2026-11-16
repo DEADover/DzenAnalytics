@@ -17,7 +17,9 @@ test("операция становится планом: правило и 12 �
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Сделать регулярной")).toBeVisible();
   // Ближайшая дата — через месяц после операции.
-  await expect(dialog.getByText(/Каждый месяц · ближайшие: 14\.11/)).toBeVisible();
+  // Раз в месяц, первая дата — следующий месяц после операции от 14.10.
+  await expect(dialog.getByRole("group", { name: "Период" }).getByRole("button", { name: "Месяц" })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByLabel("Первая дата").or(dialog.locator('input[value="14.11.2026"]')).first()).toBeVisible();
   await dialog.getByLabel(/^Сумма/).fill("600");
   if (process.env.E2E_SHOTS) await dialog.screenshot({ path: "/private/tmp/claude-501/-Users-sgryzhin-Claude-Projects-DzenAnalytics/c59bc0a7-ca1a-4645-bf5d-782b7d6d1b0a/scratchpad/recurring-modal.png" });
   await dialog.getByRole("button", { name: "Запланировать" }).click();

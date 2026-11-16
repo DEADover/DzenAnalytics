@@ -1,7 +1,5 @@
-import { formatDate } from "../../lib/format";
 import {
   WEEKDAY_SHORT,
-  scheduleLabel,
   weekdayOf,
   type PlanSchedule,
   type ScheduleUnit,
@@ -21,11 +19,13 @@ const UNIT_FORMS: Record<ScheduleUnit, [string, string, string]> = {
 
 /**
  * Расписание плана: периодичность, дни недели, «каждые N», первая дата и
- * «повторять до», а под ними — какие даты получатся. Одно на «Сделать
+ * «повторять до». Строки с ближайшими датами под блоком нет — как и в самом
+ * приложении. Одно на «Сделать
  * регулярной» и «Изменить → Вся цепочка»: расписание в обоих окнах одно и то
  * же, и вид у него должен быть один.
  *
- * `preview` — даты, которые получатся (считает окно: ему виднее, с какого дня).
+ * `preview` — даты, которые получатся (считает окно: ему виднее, с какого дня);
+ * последняя из них подставляется в «Повторять до» по «Выбрать дату».
  */
 export function PlanScheduleFields({
   value,
@@ -55,7 +55,7 @@ export function PlanScheduleFields({
   const unitWord = pluralRu(every, UNIT_FORMS[value.unit]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-schedule>
       {/* Порядок и подписи — как в форме операции Дзен-мани: периодичность,
           дни недели, «каждый N», «до». Человек, заводивший планы в приложении,
           узнаёт блок с первого взгляда. */}
@@ -155,18 +155,6 @@ export function PlanScheduleFields({
           )}
         </div>
       </div>
-
-      <p className="text-xs text-muted" data-schedule-preview>
-        {scheduleLabel(value)}
-        {preview.length > 0 ? (
-          <>
-            {" "}· ближайшие: {preview.slice(0, 3).map((d) => formatDate(d, "short")).join(", ")}
-            {preview.length > 3 && ` и ещё ${preview.length - 3}`}
-          </>
-        ) : (
-          " · ни одной даты"
-        )}
-      </p>
     </div>
   );
 }

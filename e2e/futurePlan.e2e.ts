@@ -69,12 +69,12 @@ test("копия с «Повторять операцию» становится
   await expect(card).toBeVisible();
   // Без переключателя — обычная операция, расписания не видно.
   await expect(card.getByRole("button", { name: "Создать", exact: true })).toBeVisible();
-  await expect(card.locator("[data-schedule-preview]")).toHaveCount(0);
+  await expect(card.locator("[data-schedule]")).toHaveCount(0);
 
   await card.getByRole("switch", { name: "Повторять операцию" }).click();
   await expect(card.getByText("Первая дата плана")).toBeVisible();
-  // Сегодня 15.10: каждый месяц, первая дата — из поля «Дата».
-  await expect(card.locator("[data-schedule-preview]")).toContainText("15.10");
+  // Первая дата — из поля «Дата» (сегодня 15.10), расписание открылось ниже.
+  await expect(card.locator("[data-schedule]")).toBeVisible();
   await footerInOneRow(card);
   if (process.env.E2E_SHOTS) await card.screenshot({ path: process.env.E2E_SHOTS + "/repeat-plan.png" });
   await card.getByRole("button", { name: "Запланировать", exact: true }).click();
@@ -128,7 +128,7 @@ for (const height of [1000, 740]) {
     const before = await comment.boundingBox();
 
     await sw.click();
-    await expect(card.locator("[data-schedule-preview]")).toBeVisible();
+    await expect(card.locator("[data-schedule]")).toBeVisible();
     await page.waitForTimeout(500);
     const after = await comment.boundingBox();
     // Комментарий того же размера: расписание встало ниже, а не ужало его.
@@ -138,7 +138,7 @@ for (const height of [1000, 740]) {
     // Переключатель стоит под комментарием, а не на нём; расписание видно.
     const swBox = await sw.boundingBox();
     expect(swBox!.y).toBeGreaterThanOrEqual(after!.y + after!.height);
-    await expect(card.locator("[data-schedule-preview]")).toBeInViewport();
+    await expect(card.locator("[data-schedule]")).toBeInViewport();
     if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/repeat-${height}.png` });
 
     // Выключили — всё как было.

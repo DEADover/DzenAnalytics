@@ -30,7 +30,7 @@ test("расписание цепочки: правило, новые даты �
 
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Вся цепочка", exact: true }).click();
-  await expect(dialog.locator("[data-schedule-preview]")).toContainText("Каждый месяц");
+  await expect(dialog.getByRole("group", { name: "Период" }).getByRole("button", { name: "Месяц" })).toHaveAttribute("aria-pressed", "true");
 
   await dialog.getByRole("group", { name: "Период" }).getByRole("button", { name: "Неделя" }).click();
   const days = dialog.getByRole("group", { name: "Дни недели" });
@@ -38,7 +38,7 @@ test("расписание цепочки: правило, новые даты �
   await days.getByRole("button", { name: "пн" }).click();
   await days.getByRole("button", { name: "чт" }).click();
   await days.getByRole("button", { name: "сб" }).click();
-  await expect(dialog.locator("[data-schedule-preview]")).toContainText("Каждую неделю, по пн и чт · ближайшие: 15.10");
+  await expect(days.locator('[aria-pressed="true"]')).toHaveText(["пн", "чт"]);
   await expect(dialog.getByText(/Незакрытые даты плана, включая просроченные, заменятся/)).toBeVisible();
   await dialog.getByRole("button", { name: "Сохранить для цепочки" }).click();
   await expect(dialog).toHaveCount(0);
