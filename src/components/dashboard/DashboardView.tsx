@@ -17,9 +17,19 @@
  */
 
 import { MONTHS_IN } from "../../lib/months";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import clsx from "clsx";
 import { BlockTitle } from "./blocks/shared";
 import { MonthHero } from "./blocks/monthHero";
+import { PageHeader } from "../PageHeader";
+import { InfoPopover, InfoTerm } from "../InfoPopover";
+import { SectionControls } from "../SectionControls";
+import { SectionEmpty } from "../SectionEmpty";
+import { GlobalFilters } from "../GlobalFilters";
+import { PeriodStepper } from "../PeriodStepper";
+import { KindSwitcher } from "../KindSwitcher";
+import { Filter, LayoutDashboard } from "lucide-react";
+import { useHomeScope } from "../../hooks/useHomeScope";
 import { CashflowBars } from "./blocks/cashflow";
 import { CapitalBlock } from "./blocks/capital";
 import { AccountsBlock, CategoriesList, ObservationsList, UpcomingList, ZenPlannedList } from "./blocks/lists";
@@ -27,8 +37,18 @@ import { ActivityHeat } from "./blocks/activity";
 import { MonthOverMonthBlock } from "./blocks/monthOverMonth";
 import { FreeMoneyBlock, FreeMoneyCompactBlock } from "./blocks/freeMoney";
 import { LinksRow } from "./LinksRow";
-import { WidgetBoard } from "./WidgetBoard";
 import {
+  EmptyDashboard,
+  LayoutToolbar,
+  WidgetGap,
+  WidgetShell,
+} from "./WidgetLayout";
+import { useWidgetDrag } from "../../hooks/useWidgetDrag";
+import {
+  isBareWidget,
+  maxOffset,
+  packLayout,
+  type LayoutCell,
   widgetMeta,
   widgetView,
   type WidgetPlacement,
@@ -36,12 +56,12 @@ import {
 import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import {
   formatMoney,
+  formatDate,
   monthTitle,
   dayTitle,
 } from "../../lib/format";
-import { localToday } from "../../lib/period";
+import { localToday, periodRange } from "../../lib/period";
 import { useDashboardModel } from "../../hooks/useDashboardModel";
-import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useZenPlanned } from "../../hooks/useZenPlanned";
 import { useFreeMoney } from "../../hooks/useFreeMoney";
 import { usePlannedDeletionsStore } from "../../store/usePlannedDeletionsStore";
@@ -89,9 +109,23 @@ function PlannedTotals({ out, income, base }: { out: number; income: number; bas
 
 /** Месяцы в предложном падеже: «в январе», «в марте», «в августе». */
 
+/** Капитал на конец дня `date` — последняя точка кривой не позже него. */
+function netWorthAt(series: readonly { date: string; net: number }[], date: string): number {
+  let net = 0;
+  for (const p of series) {
+    if (p.date > date) break;
+    net = p.net;
+  }
+  return net;
+}
+
 export function DashboardView() {
-  const m = useDashboardModel();
-  const transactions = useAnalyticsTransactions();
+  // «Фильтры и выбор месяца»: когда настройка включена, главная считает за
+  // выбранный месяц и по общим фильтрам; выключена — `scope` ничего не меняет.
+  const scope = useHomeScope();
+  const m = useDashboardModel(scope.options);
+  const transactions = scope.transactions;
+  const [catKind, setCatKind] = useState<"expense" | "income">("expense");
   const showDrill = useDrillStore((s) => s.show);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
   const categoryMeta = useCategoryMetaStore((s) => s.meta);
@@ -117,16 +151,22 @@ export function DashboardView() {
     return MONTHS_IN[mo - 1] ?? "";
   }, [m.ym]);
 
+  const layout = useDashboardLayoutStore((s) => s.layout);
   const editing = useDashboardLayoutStore((s) => s.editing);
+  const setEditing = useDashboardLayoutStore((s) => s.setEditing);
+  const move = useDashboardLayoutStore((s) => s.move);
+  const shift = useDashboardLayoutStore((s) => s.shift);
   const setLinks = useDashboardLayoutStore((s) => s.setLinks);
   const setOffBalance = useDashboardLayoutStore((s) => s.setOffBalance);
+  const dropInGap = useDashboardLayoutStore((s) => s.dropInGap);
 
   // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
   // что у своих регулярных: от сегодня до конца отчётного месяца.
   const todayIso = localToday();
   // С просроченными: платёж, который прошляпили, — главное, что виджет обязан
   // показать (issue #87).
-  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.ym, m.monthStartDay), true);
+  // Планы — всегда до конца ИДУЩЕГО месяца, какой бы месяц ни был выбран.
+  const zenPlannedAll = useZenPlanned(todayIso, monthEnd(m.nowYm, m.monthStartDay), true);
   // Просроченные, снятые вручную и ещё не уехавшие в облако, на главной не
   // показываем вовсе: на «Регулярных» они висят зачёркнутыми, чтобы правку
   // можно было откатить, а здесь это был бы шум.
@@ -188,6 +228,27 @@ export function DashboardView() {
       );
   }, [monthTx, showDrill, m.ym]);
 
+  const drag = useWidgetDrag(
+    (dragKey, overKey) => void move(dragKey, overKey),
+    (dragKey, beforeKey, gapCol) => void dropInGap(dragKey, beforeKey, gapCol)
+  );
+
+  // Режим настройки не переживает уход со страницы: вернувшись на главную,
+  // человек ждёт готовый экран, а не разложенные ручки.
+  useEffect(() => () => setEditing(false), [setEditing]);
+
+  // Escape — выход из режима, как из любого другого временного состояния.
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector('[role="dialog"]')) return;
+      setEditing(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing, setEditing]);
+
   const { onMonth, onCategory, onAccount, onDay } = useMemo(
     () => ({
       // По столбцу — только доходы или только расходы месяца (расходы — с
@@ -225,6 +286,33 @@ export function DashboardView() {
     [transactions, monthTx, showDrill, monthStartDay, m.ym]
   );
 
+  /**
+   * Виджет, только что поставленный из пустой клетки, — его и подсвечиваем
+   * появлением. Ключ сбрасывается сам: анимация одноразовая, и держать её
+   * включённой после того, как она отыграла, значит повторять её на каждой
+   * следующей перерисовке.
+   */
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  useEffect(() => {
+    if (!justAdded) return;
+    const t = setTimeout(() => setJustAdded(null), 600);
+    return () => clearTimeout(t);
+  }, [justAdded]);
+
+  /** Ширина того, что сейчас везут: дырка уже не примет виджет шире себя. */
+  const dragSpan = useMemo(() => {
+    if (!drag.dragKey) return 0;
+    const p = layout.find((x) => x.key === drag.dragKey);
+    return p ? widgetMeta(p.kind)?.span ?? 1 : 0;
+  }, [drag.dragKey, layout]);
+
+  // Без Дзен-мани остатков по счетам нет — под фильтром счетов считать нечего.
+  const capitalUnknown = (
+    <SectionEmpty variant="compact">
+      Остатки по выбранным счетам известны только при подключении к Дзен-мани
+    </SectionEmpty>
+  );
+
   /** Содержимое виджета. Обойму, ширину и ручки надевает `WidgetShell`. */
   function widgetBody(p: WidgetPlacement): ReactNode {
     switch (p.kind) {
@@ -232,7 +320,20 @@ export function DashboardView() {
         // «В рамке» — тот же «Открытый», только в поддоне и на серой
         // подложке: содержание одно, разная подача.
         const view = widgetView(widgetMeta("month"), p.view)?.id;
-        return <MonthHero m={m} view={view} />;
+        if (!scope.on) return <MonthHero m={m} view={view} />;
+        // План бюджета считается по всем счетам и статьям — с отфильтрованным
+        // фактом рядом он бы врал. Остаток на счетах у прошедшего месяца — на
+        // его последний день, а не сегодняшний.
+        const hero = {
+          ...m,
+          planIncome: scope.narrowed ? null : m.planIncome,
+          planExpense: scope.narrowed ? null : m.planExpense,
+          netWorth:
+            m.ym === m.nowYm
+              ? m.netWorth
+              : netWorthAt(m.netWorthSeries, periodRange(m.ym, m.monthStartDay).to),
+        };
+        return <MonthHero m={hero} view={view} fixed />;
       }
 
       case "freeMoney":
@@ -241,9 +342,18 @@ export function DashboardView() {
         return <FreeMoneyCompactBlock f={freeMoney} base={m.base} />;
 
       case "accounts":
+        if (!scope.capitalKnown) {
+          return (
+            <>
+              <BlockTitle title="Балансы счетов" to="/accounts" linkLabel="Счета" />
+              {capitalUnknown}
+            </>
+          );
+        }
         return (
           <AccountsBlock
             m={m}
+            picked={scope.capitalKeys !== null}
             offBalance={p.offBalance}
             onOffBalanceChange={(v) => void setOffBalance(p.key, v)}
             onAccount={onAccount}
@@ -271,7 +381,7 @@ export function DashboardView() {
                 rows={zenPlanned}
                 base={m.base}
                 today={todayIso}
-                until={monthEnd(m.ym, m.monthStartDay)}
+                until={monthEnd(m.nowYm, m.monthStartDay)}
               />
             ) : (
               <UpcomingList m={m} />
@@ -318,11 +428,33 @@ export function DashboardView() {
               to="/cashflow"
               linkLabel="Cash-flow"
             />
-            <CashflowBars m={m} onMonth={onMonth} height={260} />
+            {scope.on ? (
+              // Клик выбирает месяц — вся главная пересчитывается; по столбцу
+              // заодно переключаются статьи: доходы или расходы.
+              <CashflowBars
+                m={m}
+                height={260}
+                selectedYm={m.ym}
+                onMonth={(ym, kind) => {
+                  scope.setYm(ym);
+                  if (kind) setCatKind(kind);
+                }}
+              />
+            ) : (
+              <CashflowBars m={m} onMonth={onMonth} height={260} />
+            )}
           </>
         );
 
       case "capital":
+        if (!scope.capitalKnown) {
+          return (
+            <>
+              <BlockTitle title="Капитал" to="/accounts" linkLabel="Счета" />
+              {capitalUnknown}
+            </>
+          );
+        }
         return <CapitalBlock series={m.netWorthSeries} base={m.base} today={todayIso} accounts={m.accounts} />;
 
       case "monthOverMonth":
@@ -346,6 +478,30 @@ export function DashboardView() {
         );
 
       case "categories":
+        // С выбором месяца у статей свой переключатель: клик по зелёному
+        // столбцу графика показывает здесь доходы месяца.
+        if (scope.on) {
+          return (
+            <>
+              <BlockTitle
+                title={catKind === "expense" ? "Расходы по категориям" : "Доходы по категориям"}
+                info={
+                  <p>
+                    Процент — доля статьи во всех {catKind === "expense" ? "расходах" : "доходах"}{" "}
+                    месяца. Полоса меряется от самой крупной статьи. Клик открывает
+                    операции статьи за этот месяц.
+                  </p>
+                }
+                right={<KindSwitcher kind={catKind} onChange={setCatKind} />}
+              />
+              <CategoriesList
+                m={m}
+                kind={catKind}
+                onCategory={(name) => drillCategory(catKind, name)}
+              />
+            </>
+          );
+        }
         return (
           <>
             <BlockTitle
@@ -400,7 +556,7 @@ export function DashboardView() {
         return (
           <>
             <BlockTitle
-              title="Активность в этом месяце"
+              title={m.ym === m.nowYm ? "Активность в этом месяце" : "Активность за месяц"}
               info={
                 <p>
                   Чем темнее клетка, тем больше потрачено в этот день. Шкала строится по
@@ -436,5 +592,181 @@ export function DashboardView() {
     }
   }
 
-  return <WidgetBoard body={widgetBody} />;
+  const visible = layout.filter((p) => !p.hidden);
+  // Дырки в рядах считаем сами: сетка их оставляет, но в разметке их нет, а
+  // значит и уронить в них виджет нельзя. Считаем ВСЕГДА, а не только в режиме
+  // настройки: пустая клетка слева от виджета — часть раскладки, и без неё
+  // сдвинутый виджет возвращался бы к левому краю, стоило выйти из настройки.
+  const cells = useMemo(() => {
+    const packed = packLayout(visible);
+    // В режиме настройки в конце всегда есть куда поставить: если ряды сошлись
+    // ровно, пустой клетки не остаётся вовсе — и «плюсу» негде жить. Полоса во
+    // всю ширину заодно принимает бросок любого виджета, даже самого широкого.
+    if (!editing || packed[packed.length - 1]?.type === "gap") return packed;
+    return [...packed, { type: "gap" as const, span: 3, before: null }];
+  }, [visible, editing]);
+
+  /**
+   * Номер ряда для каждой ячейки раскладки.
+   *
+   * Нужен ровно для одного: дырку нельзя закрыть виджетом ИЗ ЭТОГО ЖЕ РЯДА. Он
+   * не встанет на её место, а поменяется местами с соседом, и дырка останется
+   * там же — со стороны это выглядит как «перетаскивание не работает».
+   */
+  /**
+   * С какой колонки ряда начинается каждая ячейка.
+   *
+   * Нужна дыркам: бросок ставит виджет ровно в ту клетку, куда целились, а для
+   * этого надо знать её номер в ряду (см. `dropIntoGap`).
+   */
+  const colOf = (() => {
+    const out = new Map<LayoutCell, number>();
+    let col = 0;
+    for (const cell of cells) {
+      const span =
+        cell.type === "gap" ? cell.span : widgetMeta(cell.placement.kind).span;
+      out.set(cell, col);
+      col = (col + span) % 3;
+    }
+    return out;
+  })();
+
+  const scopeRange = periodRange(m.ym, m.monthStartDay);
+
+  return (
+    <div className="flex flex-col gap-5 3xl:gap-6">
+      {scope.on && (
+        <>
+          <PageHeader
+            icon={LayoutDashboard}
+            title="Главная"
+            info={
+              <InfoPopover>
+                <p>
+                  Включены <InfoTerm>фильтры и выбор месяца</InfoTerm>: главная
+                  считает за месяц, выбранный справа или кликом по графику
+                  доходов и расходов, и по общим фильтрам — всем, кроме
+                  периода. Отметьте свои счета или участника, и виджеты
+                  покажут только ваш бюджет, а капитал и остатки — эти счета.
+                </p>
+                <p>
+                  План из «Бюджета» стоит под доходом и расходом, пока фильтры
+                  не заданы: он считается по всем счетам и статьям. «Свободные
+                  деньги» и «Запланированные операции» всегда про идущий месяц.
+                </p>
+                <p>
+                  Выключается там же, где включалось: значок «Настроить
+                  главную» в шапке.
+                </p>
+              </InfoPopover>
+            }
+          />
+          <SectionControls>
+            <PeriodStepper
+              size="md"
+              monthYM={m.ym}
+              minYM={scope.firstYm}
+              maxYM={scope.nowYm}
+              hint={`${formatDate(scopeRange.from, "full")} — ${formatDate(scopeRange.to, "full")}`}
+              onStep={(dir) => scope.setYm(shiftPeriod(m.ym, dir))}
+              onCurrent={() => scope.setYm(scope.nowYm)}
+              atCurrent={m.ym === scope.nowYm}
+              onSelectMonth={scope.setYm}
+              onSelectYear={(y) => scope.setYm(`${y}-${m.ym.slice(5, 7)}`)}
+            />
+          </SectionControls>
+          <GlobalFilters
+            showDateRange={false}
+            dateRangeHint="Месяц выбирается на графике или в шапке главной"
+          />
+        </>
+      )}
+      <LayoutToolbar layout={layout} />
+
+      {scope.filteredOut ? (
+        <SectionEmpty icon={Filter} title="Под фильтры не попала ни одна операция" />
+      ) : visible.length === 0 ? (
+        <EmptyDashboard />
+      ) : (
+        <section data-tour="widgets" className="grid grid-cols-1 lg:grid-cols-3 gap-5 3xl:gap-6">
+          {cells.map((cell, ci) => {
+            if (cell.type === "gap") {
+              // В ряду дырок бывает две: перенос на новый ряд и отступ слева от
+              // виджета. Ключ по одному лишь соседу их бы склеил — подсвечивались
+              // бы обе разом.
+              const gapKey = `gap:${ci}:${cell.before ?? "end"}`;
+              // Помещается ли виджет, если начать его с этой клетки. Считаем
+              // до конца РЯДА, а не по ширине самой дырки: виджет, который
+              // бросают в собственный отступ, занимает и то место, где стоял.
+              const gapCol = colOf.get(cell) ?? 0;
+              const accepts = drag.dragKey !== null && gapCol + dragSpan <= 3;
+              const refusal =
+                drag.dragKey !== null && !accepts
+                  ? "Не поместится — двигайте стрелками"
+                  : null;
+              // Вне настройки дырка — просто пустое место: ни рамки, ни
+              // приглашения, ни обработчиков.
+              if (!editing) {
+                return (
+                  <div
+                    key={gapKey}
+                    aria-hidden
+                    className={clsx("hidden lg:block", cell.span === 2 && "lg:col-span-2")}
+                  />
+                );
+              }
+              return (
+                <WidgetGap
+                  key={gapKey}
+                  span={cell.span}
+                  dragging={drag.dragKey !== null}
+                  accepts={accepts}
+                  refusal={refusal}
+                  highlight={drag.overKey === gapKey}
+                  layout={layout}
+                  beforeKey={cell.before}
+                  onEnter={() => drag.enter(gapKey)}
+                  onDrop={(sourceKey) => drag.dropBefore(sourceKey, cell.before, gapCol)}
+                  onAdded={setJustAdded}
+                />
+              );
+            }
+            const p = cell.placement;
+            const i = visible.indexOf(p);
+            return (
+            <WidgetShell
+              key={p.key}
+              placement={p}
+              meta={widgetMeta(p.kind)}
+              bare={isBareWidget(widgetMeta(p.kind), p.view)}
+              sunken={widgetView(widgetMeta(p.kind), p.view)?.sunken === true}
+              editing={editing}
+              appearing={justAdded === p.key}
+              dragging={drag.dragKey === p.key}
+              dropTarget={
+                drag.overKey === p.key && drag.dragKey !== null && drag.dragKey !== p.key
+              }
+              onDragStart={() => drag.start(p.key)}
+              onDragEnter={() => drag.enter(p.key)}
+              onDragEnd={drag.end}
+              onDrop={(sourceKey) => drag.drop(sourceKey, p.key)}
+              onShift={(dir) => void shift(p.key, dir)}
+              // Шаг — это клетка, а не сосед: у крайнего виджета он ещё есть,
+              // пока в ряду остаётся пустое место.
+              canBack={i > 0 || (p.offset ?? 0) > 0}
+              canForward={
+                i < visible.length - 1 ||
+                (p.offset ?? 0) < maxOffset(widgetMeta(p.kind))
+              }
+            >
+              {widgetBody(p)}
+            </WidgetShell>
+            );
+          })}
+        </section>
+      )}
+
+
+    </div>
+  );
 }

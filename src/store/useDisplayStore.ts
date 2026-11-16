@@ -119,6 +119,12 @@ interface DisplayState {
    */
   feedHeadSticky: boolean;
   /**
+   * «Фильтры и выбор месяца» на главной: над виджетами появляется панель общих
+   * фильтров и листание месяца, и главная считает за выбранный месяц и по
+   * фильтрам. По умолчанию выключено — главная про идущий месяц и все счета.
+   */
+  homeFilters: boolean;
+  /**
    * Строка «Запланировано» над лентой «Операций»: сколько планов Дзен-мани
    * просрочено и осталось до конца месяца, года и всего; клик открывает
    * ленту одних планов с действиями как в приложении. По умолчанию включено;
@@ -205,6 +211,7 @@ interface DisplayState {
   setCommentWrap: (on: boolean) => Promise<void>;
   setColumnResize: (on: boolean) => Promise<void>;
   setFeedHeadSticky: (on: boolean) => Promise<void>;
+  setHomeFilters: (on: boolean) => Promise<void>;
   setFeedPlanned: (on: boolean) => Promise<void>;
   setFeedPlannedMode: (mode: FeedPlannedMode) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
@@ -226,6 +233,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   commentWrap: true,
   columnResize: false,
   feedHeadSticky: false,
+  homeFilters: false,
   feedPlanned: true,
   feedPlannedMode: "bar",
   syncLogOpen: false,
@@ -251,6 +259,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       commentWrap?: boolean;
       columnResize?: boolean;
       feedHeadSticky?: boolean;
+      homeFilters?: boolean;
       feedPlanned?: boolean;
       feedPlannedMode?: unknown;
       syncLogOpen?: boolean;
@@ -277,6 +286,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       commentWrap: stored?.commentWrap !== false,
       columnResize: stored?.columnResize === true,
       feedHeadSticky: stored?.feedHeadSticky === true,
+      homeFilters: stored?.homeFilters === true,
       feedPlanned: stored?.feedPlanned !== false,
       feedPlannedMode: isFeedPlannedMode(stored?.feedPlannedMode) ? stored.feedPlannedMode : "bar",
       syncLogOpen: stored?.syncLogOpen === true,
@@ -325,6 +335,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   setFeedHeadSticky: async (on) => {
     set({ feedHeadSticky: on });
     await db.saveJSON(KEY, { ...persisted(get()), feedHeadSticky: on });
+  },
+
+  setHomeFilters: async (on) => {
+    set({ homeFilters: on });
+    await db.saveJSON(KEY, { ...persisted(get()), homeFilters: on });
   },
 
   setFeedPlanned: async (on) => {
@@ -402,6 +417,7 @@ function persisted(s: DisplayState) {
     commentWrap: s.commentWrap,
     columnResize: s.columnResize,
     feedHeadSticky: s.feedHeadSticky,
+    homeFilters: s.homeFilters,
     feedPlanned: s.feedPlanned,
     feedPlannedMode: s.feedPlannedMode,
     syncLogOpen: s.syncLogOpen,

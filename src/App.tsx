@@ -43,7 +43,6 @@ import {
   WhatIfPage,
   YearReviewPage,
   DigestPage,
-  OverviewPage,
   TransactionsPage,
   CashflowPage,
   CategoriesPage,
@@ -109,7 +108,7 @@ import { useCounterpartyNotesStore } from "./store/useCounterpartyNotesStore";
 import { useSavedViewsStore } from "./store/useSavedViewsStore";
 import { useFireStore } from "./store/useFireStore";
 import { useWhatIfStore } from "./store/useWhatIfStore";
-import { useDashboardLayoutStore, useOverviewLayoutStore } from "./store/useDashboardLayoutStore";
+import { useDashboardLayoutStore } from "./store/useDashboardLayoutStore";
 import { useFiltersStore } from "./store/useFiltersStore";
 import { useImportBatchesStore } from "./store/useImportBatchesStore";
 import { endSwitch } from "./lib/switchOverlay";
@@ -265,7 +264,6 @@ function App() {
       ["usePlannedDeletionsStore", usePlannedDeletionsStore],
       ["usePlanActionsStore", usePlanActionsStore],
       ["useDashboardLayoutStore", useDashboardLayoutStore],
-      ["useOverviewLayoutStore", useOverviewLayoutStore],
       ["useFilterMemoryStore", useFilterMemoryStore],
       ["useCategoryRulesStore", useCategoryRulesStore],
       ["useCloudSettingsStore", useCloudSettingsStore],
@@ -601,7 +599,6 @@ function App() {
             <Route path="/health" element={<HealthPage />} />
             <Route path="/whatif" element={<WhatIfPage />} />
             <Route path="/year-review" element={<YearReviewPage />} />
-            <Route path="/overview" element={<OverviewPage />} />
             <Route path="/digest" element={<DigestPage />} />
             {/* Filtered pages: GlobalFilters is rendered INSIDE each page right
                 after PageHeader (see TransactionsPage, CashflowPage, etc.) so

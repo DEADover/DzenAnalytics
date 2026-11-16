@@ -37,15 +37,16 @@ import {
   type WidgetPlacement,
 } from "../../lib/dashboardLayout";
 import { navSection } from "../../lib/navSections";
-import { useLayoutSurface } from "./layoutSurface";
+import { useDashboardLayoutStore } from "../../store/useDashboardLayoutStore";
 import { pluralRu } from "../../lib/plural";
 import { SectionEmpty } from "../SectionEmpty";
+import { Switch } from "../Switch";
+import { useDisplayStore } from "../../store/useDisplayStore";
 
 /* ─────────────────────────────  обойма виджета  ───────────────────────────── */
 
 /**
- * Поддон виджета — то, во что вставлено его содержимое. Один на главную и на
- * «Обзор месяца»: там те же виджеты стоят в постоянной раскладке, без ручек.
+ * Поддон виджета — то, во что вставлено его содержимое.
  */
 export function WidgetPlate({ sunken, children }: { sunken?: boolean; children: ReactNode }) {
   if (sunken) {
@@ -107,10 +108,9 @@ export function WidgetShell({
   canForward: boolean;
   children: ReactNode;
 }) {
-  const surface = useLayoutSurface();
-  const setHidden = surface.useStore((s) => s.setHidden);
-  const remove = surface.useStore((s) => s.remove);
-  const setView = surface.useStore((s) => s.setView);
+  const setHidden = useDashboardLayoutStore((s) => s.setHidden);
+  const remove = useDashboardLayoutStore((s) => s.remove);
+  const setView = useDashboardLayoutStore((s) => s.setView);
 
   const drag = editing
     ? {
@@ -197,8 +197,8 @@ export function WidgetShell({
       <button
         type="button"
         className="btn-icon-danger shrink-0"
-        title={meta.multi ? `Удалить: ${meta.title}` : surface.removeLabel}
-        aria-label={meta.multi ? `Удалить: ${meta.title}` : surface.removeLabel}
+        title={meta.multi ? `Удалить: ${meta.title}` : "Убрать с главной"}
+        aria-label={meta.multi ? `Удалить: ${meta.title}` : "Убрать с главной"}
         onClick={() =>
           void (meta.multi ? remove(placement.key) : setHidden(placement.key, true))
         }
@@ -433,9 +433,8 @@ function WidgetPicker({
   onClose: () => void;
   onAdded: (key: string) => void;
 }) {
-  const surface = useLayoutSurface();
-  const setHidden = surface.useStore((s) => s.setHidden);
-  const addLinks = surface.useStore((s) => s.addLinks);
+  const setHidden = useDashboardLayoutStore((s) => s.setHidden);
+  const addLinks = useDashboardLayoutStore((s) => s.addLinks);
   const { hidden, fresh, total } = available(layout);
 
   // Escape закрывает список — по всему сервису он закрывает любой слой поверх.
@@ -458,7 +457,7 @@ function WidgetPicker({
         title={
           total > 0
             ? "Поставить сюда виджет"
-            : surface.nothingToAdd
+            : "Ставить нечего: на главной уже всё, что есть"
         }
         aria-label="Поставить сюда виджет"
         disabled={total === 0}
@@ -606,11 +605,11 @@ function WidgetPicker({
  * какой была до всей этой затеи.
  */
 export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }) {
-  const surface = useLayoutSurface();
-  const editing = surface.useStore((s) => s.editing);
-  const setEditing = surface.useStore((s) => s.setEditing);
-  const reset = surface.useStore((s) => s.reset);
-  const board = surface.useStore((s) => s.board);
+  const editing = useDashboardLayoutStore((s) => s.editing);
+  const setEditing = useDashboardLayoutStore((s) => s.setEditing);
+  const reset = useDashboardLayoutStore((s) => s.reset);
+  const homeFilters = useDisplayStore((s) => s.homeFilters);
+  const setHomeFilters = useDisplayStore((s) => s.setHomeFilters);
 
   if (!editing) return null;
 
@@ -623,11 +622,20 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
         поставьте новый плюсом в пустой клетке.
       </p>
       <div className="flex items-center gap-2">
+        {/* Настройка самой главной, а не раскладки, — но живёт здесь же: это
+            единственное место, где главную настраивают. */}
+        <label
+          className="flex items-center gap-2 text-[13px] mr-2 cursor-pointer"
+          title={"Фильтры и выбор месяца\nНад виджетами появятся общие фильтры и листание месяца: главная считает за выбранный месяц и по фильтрам"}
+        >
+          <Switch checked={homeFilters} onChange={(v) => void setHomeFilters(v)} label="Фильтры и выбор месяца" />
+          <span>Фильтры и выбор месяца</span>
+        </label>
         <button
           type="button"
           className="btn-ghost text-sm"
           onClick={() => void reset()}
-          disabled={isDefaultLayout(layout, board)}
+          disabled={isDefaultLayout(layout)}
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
           Сбросить
@@ -667,23 +675,20 @@ function shelfLabel(p: WidgetPlacement): { text: string; title: string } {
 
 /** Когда с главной сняли всё: экран не должен выглядеть сломанным. */
 export function EmptyDashboard() {
-  const surface = useLayoutSurface();
-  const editing = surface.useStore((s) => s.editing);
-  const setEditing = surface.useStore((s) => s.setEditing);
-  const reset = surface.useStore((s) => s.reset);
-  // Сколько виджетов на этой странице бывает — без полосок, их заводят сами.
-  const count = surface.useStore((s) => s.board.defaults.length);
+  const editing = useDashboardLayoutStore((s) => s.editing);
+  const setEditing = useDashboardLayoutStore((s) => s.setEditing);
+  const reset = useDashboardLayoutStore((s) => s.reset);
   return (
     <SectionEmpty
       icon={LayoutTemplate}
-      title={surface.emptyTitle}
+      title="На главной ничего не осталось"
       action={
         <>
           {/* В самом режиме кнопка звала бы туда, где человек уже стоит. */}
           {!editing && (
             <button type="button" className="btn-ghost text-sm" onClick={() => setEditing(true)}>
               <LayoutTemplate className="w-3.5 h-3.5" aria-hidden="true" />
-              {surface.editLabel}
+              Настроить главную
             </button>
           )}
           <button type="button" className="btn-primary text-sm" onClick={() => void reset()}>
@@ -693,8 +698,8 @@ export function EmptyDashboard() {
         </>
       }
     >
-      Все {count} {pluralRu(count, ["виджет", "виджета", "виджетов"])} убраны.{" "}
-      {surface.rebuildHint}
+      Все {WIDGETS.length} {pluralRu(WIDGETS.length, ["виджет", "виджета", "виджетов"])} убраны.
+      Верните нужные или соберите главную заново.
     </SectionEmpty>
   );
 }

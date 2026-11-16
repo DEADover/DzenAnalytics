@@ -2,8 +2,8 @@
  * «Итоги месяца» — заголовочный виджет: сколько осталось от дохода, темп трат,
  * доход и расход с планом.
  *
- * Живёт отдельно от раскладки главной: тот же блок показывает «Обзор месяца»,
- * только там месяц выбирают на странице, а не в самой пилюле.
+ * Месяц либо выбирают в самой пилюле (идущий или прошлый), либо он приходит
+ * снаружи — когда на главной включены «Фильтры и выбор месяца».
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -131,7 +131,7 @@ function monthLeft(m: DashboardModel): string {
  * сливались с названием. Даты показываем, только когда месяц не календарный:
  * там они ничего не добавляют.
  */
-export function MonthPill({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
+function MonthPill({ m, size }: { m: DashboardModel; size: "sm" | "md" }) {
   const shifted = m.monthStartDay !== 1;
   const r = periodRange(m.ym, m.monthStartDay);
   const sep = (
@@ -241,14 +241,30 @@ function MonthSwitch({
  * виджете и не запоминается — открыли главную, видите текущий месяц, как в
  * Дзен-мани.
  */
-export function MonthHero({ m, view }: { m: DashboardModel; view: string | undefined }) {
+export function MonthHero({
+  m,
+  view,
+  fixed = false,
+}: {
+  m: DashboardModel;
+  view: string | undefined;
+  /**
+   * Месяц выбран снаружи — листанием в шапке главной («Фильтры и выбор
+   * месяца»). Своего выбора у пилюли тогда нет, а заголовок страницы — не она.
+   */
+  fixed?: boolean;
+}) {
   const [which, setWhich] = useState<"current" | "prev">("current");
-  const shown: DashboardModel = which === "prev" ? { ...m, ...m.prevMonth } : m;
-  const pill = (size: "sm" | "md") => (
-    <MonthSwitch m={shown} current={m} which={which} onChange={setWhich} size={size} />
-  );
-  if (view === "split") return <HeroSplit m={shown} pill={pill("sm")} />;
-  return <HeroOpen m={shown} sunken={view === "framed"} pill={pill("md")} />;
+  const shown: DashboardModel = !fixed && which === "prev" ? { ...m, ...m.prevMonth } : m;
+  const pill = (size: "sm" | "md") =>
+    fixed ? (
+      <MonthPill m={m} size={size} />
+    ) : (
+      <MonthSwitch m={shown} current={m} which={which} onChange={setWhich} size={size} />
+    );
+  const titleTag = fixed ? "h2" : "h1";
+  if (view === "split") return <HeroSplit m={shown} pill={pill("sm")} titleTag={titleTag} />;
+  return <HeroOpen m={shown} sunken={view === "framed"} pill={pill("md")} titleTag={titleTag} />;
 }
 
 /**
@@ -256,7 +272,7 @@ export function MonthHero({ m, view }: { m: DashboardModel; view: string | undef
  * В обойме с двойным кантом он читался бы как ещё одна карточка с числом, а это
  * заголовок всего экрана.
  */
-export function HeroOpen({
+function HeroOpen({
   m,
   sunken,
   pill,
@@ -441,7 +457,7 @@ function RailRow({ label, value, tone }: { label: string; value: string; tone?: 
  * пройдено: без неё низ колонки пустовал, а вопрос «много ли ещё впереди»
  * ровно тот, что задают, глядя на остаток.
  */
-export function HeroSplit({
+function HeroSplit({
   m,
   pill,
   titleTag: Title = "h1",

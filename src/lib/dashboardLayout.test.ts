@@ -7,8 +7,6 @@ import {
   addLinksRow,
   isDefaultLayout,
   layoutFromStored,
-  OVERVIEW_BOARD,
-  defaultLayout,
   moveWidget,
   moveWidgetBefore,
   normalizeLayout,
@@ -731,53 +729,5 @@ describe("«Балансы счетов»: счета вне баланса — 
     const junk = normalizeLayout([{ key: "accounts", kind: "accounts", offBalance: "да" }, { key: "month", kind: "month", offBalance: true }]);
     expect(acc(junk)).not.toHaveProperty("offBalance");
     expect(junk.find((p) => p.kind === "month")).not.toHaveProperty("offBalance");
-  });
-});
-
-describe("раскладка «Обзора месяца»", () => {
-  const board = OVERVIEW_BOARD;
-
-  it("стандартная — свой порядок, «Итоги месяца» в рамке, «Кольцо доходов» снято", () => {
-    const layout = defaultLayout(board);
-    expect(kinds(layout).slice(0, 3)).toEqual(["cashflow", "categories", "month"]);
-    expect(layout.find((p) => p.kind === "month")?.view).toBe("framed");
-    expect(layout.find((p) => p.kind === "donutIncome")?.hidden).toBe(true);
-    expect(isDefaultLayout(layout, board)).toBe(true);
-    // Раскладка главной для этой страницы стандартной не считается.
-    expect(isDefaultLayout(layout)).toBe(false);
-  });
-
-  it("виджетов про идущий месяц на странице нет — даже если они пришли в сохранённом", () => {
-    const out = normalizeLayout(
-      [
-        { key: "upcoming", kind: "upcoming" },
-        { key: "freeMoney", kind: "freeMoney" },
-        { key: "capital", kind: "capital" },
-      ],
-      board
-    );
-    expect(kinds(out)).not.toContain("upcoming");
-    expect(kinds(out)).not.toContain("freeMoney");
-    expect(kinds(out)).toContain("capital");
-  });
-
-  it("недостающий виджет встаёт по порядку этой страницы и со своим видом", () => {
-    const saved = defaultLayout(board).filter((p) => p.kind !== "month");
-    const out = normalizeLayout(saved, board);
-    expect(kinds(out)).toEqual(kinds(defaultLayout(board)));
-    expect(out.find((p) => p.kind === "month")?.view).toBe("framed");
-  });
-
-  it("полоску с кнопками можно завести и здесь", () => {
-    const out = normalizeLayout(
-      [...defaultLayout(board), { key: "links-1", kind: "links", links: ["/goals"] }],
-      board
-    );
-    expect(kinds(out)).toContain("links");
-  });
-
-  it("смена вида «Итогов месяца» — уже не стандартная раскладка", () => {
-    const layout = defaultLayout(board).map((p) => (p.kind === "month" ? { ...p, view: "split" } : p));
-    expect(isDefaultLayout(layout, board)).toBe(false);
   });
 });

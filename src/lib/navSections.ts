@@ -26,7 +26,6 @@ import {
   LineChart,
   ListChecks,
   Newspaper,
-  PanelsTopLeft,
   Percent,
   PieChart,
   Sparkles,
@@ -67,7 +66,6 @@ export const SECONDARY_GROUPS: { title: string; items: NavSection[] }[] = [
     title: "Аналитика",
     items: [
       { to: "/health", label: "Финансовое здоровье", icon: HeartPulse, hint: "Насколько устойчивы финансы сейчас" },
-      { to: "/overview", label: "Обзор месяца", icon: PanelsTopLeft, hint: "Главная за любой месяц и по фильтрам" },
       { to: "/report", label: "Доходы и расходы", icon: Table, hint: "Все категории по периодам одной таблицей" },
       { to: "/dynamics", label: "Динамика", icon: Activity, hint: "Операции на временной оси" },
       { to: "/trends", label: "Тренды", icon: BarChart3, hint: "По месяцам, дням недели и часам суток" },

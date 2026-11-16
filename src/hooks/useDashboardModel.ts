@@ -90,8 +90,10 @@ export interface HeroMonth {
 export interface DashboardModel {
   ready: boolean;
   base: Currency;
-  /** Текущий период в виде YYYY-MM. */
+  /** Месяц, о котором экран, YYYY-MM: идущий или выбранный. */
   ym: string;
+  /** Идущий отчётный месяц — предстоящие платежи и прогноз всегда про него. */
+  nowYm: string;
   /** Первый день отчётного периода — по нему подписываются его даты. */
   monthStartDay: number;
   /** Откуда взялся этот день: подсказка к пилюле объясняет это человеку. */
@@ -180,8 +182,8 @@ export interface DashboardModel {
 const AVG_WINDOW = 6;
 
 /**
- * Чем «Обзор месяца» отличается от главной: месяц выбран, операции уже прошли
- * общие фильтры, а капитал считается по счетам из фильтра.
+ * Главная с включёнными «Фильтрами и выбором месяца»: месяц выбран, операции
+ * уже прошли общие фильтры, а капитал считается по счетам из фильтра.
  */
 export interface DashboardModelOptions {
   /** Месяц, о котором экран, YYYY-MM. Без него — текущий отчётный. */
@@ -401,8 +403,8 @@ export function useDashboardModel(opts: DashboardModelOptions = {}): DashboardMo
   }, [transactions]);
 
   const upcoming = useMemo(
-    () => upcomingPayments(recurring, rates, today, monthEnd(ym, monthStartDay), commentFor),
-    [recurring, rates, today, ym, monthStartDay, commentFor]
+    () => upcomingPayments(recurring, rates, today, monthEnd(nowYm, monthStartDay), commentFor),
+    [recurring, rates, today, nowYm, monthStartDay, commentFor]
   );
   const upcomingTotalBase = useMemo(() => upcomingTotal(upcoming), [upcoming]);
 
@@ -489,6 +491,7 @@ export function useDashboardModel(opts: DashboardModelOptions = {}): DashboardMo
     ready: transactions.length > 0,
     base,
     ym,
+    nowYm,
     monthStartDay,
     monthStartDaySource,
     month,
