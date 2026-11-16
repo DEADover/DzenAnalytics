@@ -7,7 +7,7 @@ import { queryMatcher } from "./keyboardLayout";
  *   кофе на вынос      — содержит эту фразу (как и раньше: текст целиком)
  *   -кофе              — не содержит
  *   комм:кофе          — слово есть в комментарии
- *   -комм:кофе         — слова нет в комментарии
+ *   комм:-кофе         — слова нет в комментарии (то же: -комм:кофе)
  *   комм:пусто         — комментария нет
  *   комм:есть          — комментарий есть
  *   -"на вынос"        — условие с пробелом берут в кавычки
@@ -22,7 +22,9 @@ export interface TextQuery {
   test: (text: string, comment: string | null | undefined) => boolean;
 }
 
-const TOKEN = /(-?)(?:(комментарий|коммент|комм):)?(?:"([^"]*)"?|(\S+))/giu;
+// Пробел после «комм:» не обязателен и не мешает: «комм:-кофе», «комм: -кофе»,
+// «комм: пусто» читаются одинаково. Минус годится и перед «комм:», и после.
+const TOKEN = /(-?)(?:(комментарий|коммент|комм):\s*(-?))?(?:"([^"]*)"?|(\S+))/giu;
 const PREFIX_ONLY = /^(комментарий|коммент|комм):$/iu;
 const EMPTY_WORDS = new Set(["пусто", "пустой", "нет"]);
 const FILLED_WORDS = new Set(["есть", "непусто", "непустой"]);
@@ -42,10 +44,13 @@ export function parseTextQuery(raw: string): TextQuery {
   let commentEmpty: boolean | null = null;
 
   for (const m of source.matchAll(TOKEN)) {
-    const minus = m[1] === "-";
     const inComment = m[2] !== undefined;
-    const quoted = m[3] !== undefined;
-    const value = (quoted ? m[3] : m[4]).trim();
+    // Два минуса («-комм:-кофе») друг друга гасят — это уже «содержит».
+    const minus = (m[1] === "-") !== (m[3] === "-");
+    const quoted = m[4] !== undefined;
+    const value = (quoted ? m[4] : m[5]).trim();
+    // «комм:-» — условие ещё набирают.
+    if (inComment && !quoted && value === "-") continue;
     if (!value) {
       // Одинокий «-» или пустые кавычки — условие ещё не дописано.
       if (!inComment && !quoted && minus) plain.push("-");
@@ -62,9 +67,9 @@ export function parseTextQuery(raw: string): TextQuery {
       mustNot.push(queryMatcher(value));
     } else if (quoted) {
       must.push(queryMatcher(value));
-    } else if (!PREFIX_ONLY.test(m[4])) {
+    } else if (!PREFIX_ONLY.test(m[5])) {
       // «комм:» без значения — условие ещё набирают, искать его буквально незачем.
-      plain.push(m[4]);
+      plain.push(m[5]);
     }
   }
   // Обычные слова остаются одной фразой — поиск «кофе на вынос» не меняется.
@@ -92,7 +97,7 @@ export interface QueryPiece {
   op: boolean;
 }
 
-const OP_PIECE = /(^|\s)(-?(?:комментарий|коммент|комм):|-(?=[^\s-]))/giu;
+const OP_PIECE = /(^|\s)(-?(?:комментарий|коммент|комм):-?|-(?=[^\s-]))/giu;
 
 /**
  * Разбить запрос на куски для подсветки: «комм:», «-комм:» и минус перед

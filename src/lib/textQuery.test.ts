@@ -37,6 +37,20 @@ describe("parseTextQuery (#135)", () => {
     expect(hit("Комментарий:кофе", "Магазин", "Купил кофе")).toBe(true);
   });
 
+  it("минус после «комм:» и пробел после двоеточия — как кому удобнее", () => {
+    for (const q of ["комм:-завтрак", "-комм:завтрак", "комм: -завтрак", "комм:-\"завтрак\""]) {
+      expect(hit(q, "Завтрак в кафе", "")).toBe(true); // слово не в комментарии
+      expect(hit(q, "Кафе", "Завтрак")).toBe(false);
+      expect(hit(q, "Кафе", "обед")).toBe(true);
+    }
+    expect(hit("комм: завтрак", "Завтрак в кафе", "")).toBe(false);
+    expect(hit("комм: завтрак", "Кафе", "Завтрак")).toBe(true);
+    expect(hit("комм: пусто", "Кафе", "")).toBe(true);
+    expect(hit("комм: пусто", "Кафе", "обед")).toBe(false);
+    // Недописанное «комм:-» ничего не прячет.
+    expect(hit("комм:-", "Кафе", "обед")).toBe(true);
+  });
+
   it("комм:пусто и комм:есть", () => {
     expect(hit("комм:пусто", "Магазин", "")).toBe(true);
     expect(hit("комм:пусто", "Магазин", "  ")).toBe(true);
@@ -56,6 +70,8 @@ describe("подсветка и дописывание условий", () => {
     expect(queryPieces("аптека -комм:мама").filter((p) => p.op).map((p) => p.text)).toEqual(["-комм:"]);
     expect(queryPieces("-кофе комм:есть").filter((p) => p.op).map((p) => p.text)).toEqual(["-", "комм:"]);
     expect(queryPieces("т-банк - карта").some((p) => p.op)).toBe(false);
+    expect(queryPieces("комм:-завтрак").filter((p) => p.op).map((p) => p.text)).toEqual(["комм:-"]);
+    expect(queryPieces("комм: -завтрак").filter((p) => p.op).map((p) => p.text)).toEqual(["комм:", "-"]);
   });
 
   it("completeCommentPrefix: «комм» в конце превращается в «комм:»", () => {
