@@ -49,14 +49,17 @@ test("правило: строка из выписки, «уже соответ�
   // В строке — имя, текст под ним и строка из выписки; подсвечено то, на чём
   // сошлось условие: «Iki» с учётом регистра не подходит, подошёл текст «IKI».
   const first = list.locator("[data-rule-match]").first();
-  await expect(first).toContainText("Iki · IKI");
-  await expect(first.locator("[data-rule-statement]")).toHaveText("В выписке: IKI VILNIUS LT");
+  await expect(first.locator("div.truncate")).toHaveText([
+    "Дата: 2 мая 2026 г. · Тип операции: Расход",
+    "Категория: Еда вне дома",
+    "Контрагент: Iki (IKI) · В выписке: IKI VILNIUS LT",
+  ]);
   await expect(first.locator("[data-rule-mark]")).toHaveText(["IKI"]);
   // Текст под именем слово в слово повторяет строку из выписки — рядом с именем
   // его нет, а подсветка условия «Контрагент» стоит в строке «В выписке».
   const third = list.locator("[data-rule-match]").filter({ hasText: "IKI SIAULIAI LT" });
   await expect(third).toHaveCount(1);
-  await expect(third.locator("div.truncate").first()).toHaveText("Iki");
+  await expect(third.locator("[data-rule-payee]")).toHaveText("Контрагент: Iki");
   await expect(third.locator("[data-rule-statement] [data-rule-mark]")).toHaveText(["IKI"]);
 
   // То же по строке из выписки: «KAUNAS» есть только у одной.

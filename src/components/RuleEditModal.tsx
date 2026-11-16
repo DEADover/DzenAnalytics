@@ -11,6 +11,7 @@ import {
   CONDITION_OP_LABELS,
   FIELD_LABELS,
   KIND_VALUE_LABELS,
+  ruleKindOf,
   SET_KIND_VALUES,
   NUMERIC_FIELDS,
   opsForField,
@@ -41,7 +42,7 @@ import {
   type RuleKindValue,
   type RuleTargetField,
 } from "../lib/ruleEngine";
-import { currencySymbol, displayPayee, formatDate, formatMoney, formatNum } from "../lib/format";
+import { currencySymbol, displayPayee, formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { CategoryDot } from "./CategoryDot";
 import { AccountLogo } from "./AccountLogo";
@@ -380,6 +381,23 @@ function JoinRow({
       <span className="h-px flex-1 bg-border" aria-hidden />
     </div>
   );
+}
+
+/** Подпись поля в строке списка совпадений: «Дата: », «Контрагент: ». */
+function MatchLabel({ children }: { children: ReactNode }) {
+  return <span className="text-muted">{children}: </span>;
+}
+
+/** Точка между двумя полями в одной строке списка совпадений. */
+function MatchSep() {
+  return <span className="text-muted"> · </span>;
+}
+
+/** «30 апреля 2025 г.» — дата словами, как её читают, а не «30 апр.». */
+function longDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
 }
 
 /** Сколько знаков оставить перед совпадением, когда текст обрезан слева. */
@@ -1292,50 +1310,70 @@ export function RuleEditModal({
                 const statement = (t.payeeRaw ?? "").trim();
                 const comment = (t.comment ?? "").trim();
                 const category = t.categoryFullOriginal || t.categoryFull || "";
+                const under = payeeUnderTexts(t);
                 return (
                 <div key={t.id} className="flex items-start gap-2.5 text-sm py-0.5" data-rule-match>
                   <CategoryDot category={t.category} size="w-6 h-6" />
-                  <div className="min-w-0 flex-1">
-                    {/* Имя из справочника и тексты под ним: условие
-                        «Контрагент» смотрит на всё сразу, а подсветка
-                        показывает, на чём именно оно сошлось. */}
+                  {/* Строки с подписями и в одном порядке у всех операций:
+                      без подписей было не понять, где контрагент, а где
+                      строка из выписки. Подсвечено то, на чём сошлось
+                      условие. Пустые поля строк не занимают. */}
+                  <div className="min-w-0 flex-1 text-[13px] leading-[1.45]">
                     <div className="truncate">
-                      {name ? (
-                        <Marked text={name} ranges={matchRanges(name, "payee", probeRule)} />
-                      ) : (
-                        <span className="text-muted">Без контрагента</span>
-                      )}
-                      {payeeUnderTexts(t).map((x) => (
-                        <span key={x} className="text-muted">
-                          {" · "}
-                          <Marked text={x} ranges={matchRanges(x, "payee", probeRule)} />
-                        </span>
-                      ))}
+                      <MatchLabel>Дата</MatchLabel>
+                      {longDate(t.date)}
+                      <MatchSep />
+                      <MatchLabel>Тип операции</MatchLabel>
+                      {KIND_VALUE_LABELS[ruleKindOf(t)]}
                     </div>
-                    <div className="text-xs text-muted truncate">
-                      {formatDate(t.date)} ·{" "}
-                      {category ? (
-                        <Marked text={category} ranges={matchRanges(category, "category", probeRule)} />
-                      ) : (
-                        "Без категории"
-                      )}
-                    </div>
-                    {statement && (
-                      <div className="text-xs text-muted truncate" data-rule-statement>
-                        В выписке:{" "}
-                        <Marked
-                          text={statement}
-                          ranges={matchRanges(
-                            statement,
-                            statementAlsoPayee(t) ? ["statement", "payee"] : "statement",
-                            probeRule
-                          )}
-                        />
+                    {ruleKindOf(t) !== "transfer" && ruleKindOf(t) !== "debt" && (
+                      <div className="truncate">
+                        <MatchLabel>Категория</MatchLabel>
+                        {category ? (
+                          <Marked text={category} ranges={matchRanges(category, "category", probeRule)} />
+                        ) : (
+                          "Без категории"
+                        )}
+                      </div>
+                    )}
+                    {(name || under.length > 0 || statement) && (
+                      <div className="truncate">
+                        {(name || under.length > 0) && (
+                          <span data-rule-payee>
+                            <MatchLabel>Контрагент</MatchLabel>
+                            {name && <Marked text={name} ranges={matchRanges(name, "payee", probeRule)} />}
+                            {/* Текст под именем — что было в поле до
+                                справочника; условие «Контрагент» видит и его. */}
+                            {under.map((x) => (
+                              <span key={x} className="text-muted">
+                                {" ("}
+                                <Marked text={x} ranges={matchRanges(x, "payee", probeRule)} />
+                                {")"}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                        {statement && (
+                          <>
+                            {(name || under.length > 0) && <MatchSep />}
+                            <span data-rule-statement>
+                              <MatchLabel>В выписке</MatchLabel>
+                              <Marked
+                                text={statement}
+                                ranges={matchRanges(
+                                  statement,
+                                  statementAlsoPayee(t) ? ["statement", "payee"] : "statement",
+                                  probeRule
+                                )}
+                              />
+                            </span>
+                          </>
+                        )}
                       </div>
                     )}
                     {comment && (
-                      <div className="text-xs text-muted truncate" data-rule-comment>
-                        Комментарий:{" "}
+                      <div className="truncate" data-rule-comment>
+                        <MatchLabel>Комментарий</MatchLabel>
                         <Marked text={comment} ranges={matchRanges(comment, "comment", probeRule)} />
                       </div>
                     )}
