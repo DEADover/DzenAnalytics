@@ -36,6 +36,7 @@ export interface FilterSnapshot {
   hideZero: boolean;
   onlyWithComment: boolean;
   onlyWithoutComment: boolean;
+  commentExcludes: string;
   onlyNew: boolean;
 }
 
@@ -60,6 +61,7 @@ export interface FilterValues {
   hideZero: boolean;
   onlyWithComment: boolean;
   onlyWithoutComment: boolean;
+  commentExcludes: string;
   onlyNew: boolean;
 }
 
@@ -78,6 +80,7 @@ export function snapshotFilters(s: FilterValues): FilterSnapshot {
     hideZero: s.hideZero,
     onlyWithComment: s.onlyWithComment,
     onlyWithoutComment: s.onlyWithoutComment,
+    commentExcludes: s.commentExcludes,
     onlyNew: s.onlyNew,
   };
 }
@@ -97,6 +100,7 @@ export function isEmptySnapshot(s: FilterSnapshot): boolean {
     !s.hideZero &&
     !s.onlyWithComment &&
     !s.onlyWithoutComment &&
+    s.commentExcludes.trim() === "" &&
     !s.onlyNew
   );
 }
@@ -133,6 +137,7 @@ export function restoreFilters(raw: unknown): FilterValues | null {
     // «С комментарием» и «без» вместе не бывают: из правленного руками файла
     // берём первое, иначе фильтр спрятал бы все операции.
     onlyWithoutComment: bool(s.onlyWithoutComment) && !bool(s.onlyWithComment),
+    commentExcludes: typeof s.commentExcludes === "string" ? s.commentExcludes : "",
     onlyNew: bool(s.onlyNew),
   };
 }
