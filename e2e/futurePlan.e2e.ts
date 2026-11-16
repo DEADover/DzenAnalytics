@@ -58,7 +58,7 @@ test("копия с будущей датой становится разовы�
   ]);
 });
 
-test("копия с «Регулярная операция» становится регулярным планом", async ({ page, zen }) => {
+test("копия с «Повторять операцию» становится регулярным планом", async ({ page, zen }) => {
   await connectZen(page, "/transactions");
   await setPushMode(page, "manual");
 
@@ -71,7 +71,7 @@ test("копия с «Регулярная операция» становитс
   await expect(card.getByRole("button", { name: "Создать", exact: true })).toBeVisible();
   await expect(card.locator("[data-schedule-preview]")).toHaveCount(0);
 
-  await card.getByRole("switch", { name: "Регулярная операция" }).click();
+  await card.getByRole("switch", { name: "Повторять операцию" }).click();
   await expect(card.getByText("Первая дата плана")).toBeVisible();
   // Сегодня 15.10: каждый месяц, первая дата — из поля «Дата».
   await expect(card.locator("[data-schedule-preview]")).toContainText("15.10");
@@ -96,14 +96,14 @@ test("копия с «Регулярная операция» становитс
   expect(new Set((sent.reminderMarker ?? []).map((m) => m.reminder))).toEqual(new Set([sent.reminder![0].id]));
 });
 
-test("«Регулярная операция» с датой в прошлом не сохраняется", async ({ page }) => {
+test("«Повторять операцию» с датой в прошлом не сохраняется", async ({ page }) => {
   await connectZen(page, "/transactions");
   await setPushMode(page, "manual");
   const row = page.locator("div.grid", { hasText: "Кофейня у дома" }).filter({ hasText: "832" }).first();
   await row.getByRole("button", { name: "Изменить операцию" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Копировать операцию" }).click();
   const card = page.getByRole("dialog").filter({ hasText: "Копия операции" });
-  await card.getByRole("switch", { name: "Регулярная операция" }).click();
+  await card.getByRole("switch", { name: "Повторять операцию" }).click();
   const date = card.getByLabel("Дата").first();
   await date.click();
   await date.fill("10.10.2026");

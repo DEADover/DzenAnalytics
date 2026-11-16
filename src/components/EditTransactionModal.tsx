@@ -1112,34 +1112,6 @@ export function EditTransactionModal({
             />
           </FormField>
         </div>
-        {/* «Регулярная операция» — только у новой операции и копии: с ним вместо операции
-            заводится регулярный план, как при создании операции в Дзен-мани.
-            Первая дата — поле «Дата» выше, поэтому в расписании её нет. */}
-        {canRepeat && (
-          <div className="space-y-3">
-            <label className="flex items-center justify-between gap-3 cursor-pointer">
-              <span className="min-w-0">
-                <span className="label block">Регулярная операция</span>
-                <span className="text-xs text-muted">
-                  {repeat ? "Будет регулярным планом в Дзен-мани" : "Сделать плановой, с расписанием повторов"}
-                </span>
-              </span>
-              <Switch checked={repeatOn} onChange={setRepeatOn} label="Регулярная операция" />
-            </label>
-            {repeat && (
-              <PlanScheduleFields
-                value={repeatSchedule}
-                onChange={(next) => {
-                  const { startDate: _start, ...rule } = next;
-                  void _start;
-                  setRepeatRule(rule);
-                }}
-                preview={repeatPreview}
-                hideStart
-              />
-            )}
-          </div>
-        )}
         {/* Category / Subcategory — not shown for transfers: a transfer is
             just money moving between the user's own accounts, it has no
             spending/income category. */}
@@ -1521,6 +1493,35 @@ export function EditTransactionModal({
             }}
           />
         </FormField>
+        {/* «Повторять операцию» — только у новой операции и копии, последним в форме,
+            как в Дзен-мани: с ним вместо операции
+            заводится регулярный план, как при создании операции в Дзен-мани.
+            Первая дата — поле «Дата» выше, поэтому в расписании её нет. */}
+        {canRepeat && (
+          <div className="space-y-3">
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <span className="min-w-0">
+                <span className="text-sm block">Повторять операцию</span>
+                <span className="text-xs text-muted">
+                  {repeat ? "Будет регулярным планом в Дзен-мани" : "Сделать плановой, с расписанием повторов"}
+                </span>
+              </span>
+              <Switch checked={repeatOn} onChange={setRepeatOn} label="Повторять операцию" />
+            </label>
+            {repeat && (
+              <PlanScheduleFields
+                value={repeatSchedule}
+                onChange={(next) => {
+                  const { startDate: _start, ...rule } = next;
+                  void _start;
+                  setRepeatRule(rule);
+                }}
+                preview={repeatPreview}
+                hideStart
+              />
+            )}
+          </div>
+        )}
       </ModalBody>
       {error ? (
         <div className="shrink-0 px-5 pt-2 pb-1 text-xs text-expense">{error}</div>
