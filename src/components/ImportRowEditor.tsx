@@ -3,6 +3,7 @@ import { FormField } from "./FormField";
 import { AlertTriangle, BadgeCheck, BadgePlus, Check, X } from "lucide-react";
 import { Combobox } from "./Combobox";
 import { CategoryCascadePicker, type CategoryNode } from "./CategoryCascadePicker";
+import { TimeField } from "./TimeField";
 import { DateField } from "./DateField";
 import { Segmented } from "./Segmented";
 import { NO_CATEGORY } from "../lib/zenmoneyMap";
@@ -96,8 +97,7 @@ export function ImportRowEditor({
           />
         </FormField>
         <FormField label="Время">
-          <input
-            type="time"
+          <TimeField
             value={draft.time}
             onChange={(e) => set({ time: e.target.value })}
             aria-label="Время операции"

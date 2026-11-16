@@ -35,6 +35,7 @@ import { CategoryCascadePicker } from "./CategoryCascadePicker";
 import { Tooltip } from "./Tooltip";
 import { Segmented } from "./Segmented";
 import { validateOperation } from "../lib/operationValidation";
+import { TimeField } from "./TimeField";
 import { DateField } from "./DateField";
 import { HashtagTextarea } from "./HashtagTextarea";
 import { CategoryDot } from "./CategoryDot";
@@ -1115,8 +1116,7 @@ export function EditTransactionModal({
             />
           </FormField>
           <FormField label="Время">
-            <input
-              type="time"
+            <TimeField
               value={time}
               onChange={(e) => setTime(e.target.value)}
               className="input text-sm w-full"
