@@ -57,6 +57,28 @@ import { useEffect } from "react";
 import { SectionControls } from "../components/SectionControls";
 import { clickedRow, clickedDataKey } from "../lib/chartClick";
 import { useInBalanceTransactions } from "../hooks/useInBalanceTransactions";
+import { DataTable } from "../components/DataTable";
+import { DeviationPill } from "../components/DeviationPill";
+import { DiffModeToggle } from "../components/DiffModeToggle";
+import { useDiffMode } from "../store/useDiffModeStore";
+import { diffSortValue } from "../lib/diffMode";
+import { Sparkline } from "../components/Sparkline";
+import { localToday } from "../lib/period";
+import {
+  categoryTrends,
+  fullMonths,
+  TREND_MIN_MONTHS,
+  type CategoryTrend,
+  type TrendGroup,
+} from "../lib/categoryTrends";
+
+/** Группа тренда словом и её место при сортировке: растущие — первыми. */
+const TREND_LABEL: Record<TrendGroup, string> = {
+  rising: "Растёт",
+  floating: "Плавает",
+  falling: "Снижается",
+};
+const TREND_ORDER: Record<TrendGroup, number> = { rising: 0, floating: 1, falling: 2 };
 
 export function TrendsPage() {
   // Без движений по счетам вне баланса, пока они не считаются, — как во всех
@@ -123,6 +145,21 @@ export function TrendsPage() {
     return data;
   }, [filtered, activeCategories, level, kind, monthStartDay]);
 
+  // Тренды — по полным месяцам периода: идущий заведомо меньше остальных.
+  const trendMonths = useMemo(
+    () => fullMonths(filtered, monthStartDay, localToday()),
+    [filtered, monthStartDay]
+  );
+  const trends = useMemo(
+    () => categoryTrends(filtered, { level, kind, monthStartDay, months: trendMonths }),
+    [filtered, level, kind, monthStartDay, trendMonths]
+  );
+  const [trendMode, setTrendMode] = useDiffMode("trends.categories", "both");
+  const [trendExportSlot, setTrendExportSlot] = useState<HTMLElement | null>(null);
+  const hasTrend = trendMonths.length >= TREND_MIN_MONTHS;
+  const firstMonth = trendMonths[0];
+  const lastMonth = trendMonths[trendMonths.length - 1];
+
   const dowStats = useMemo(() => statsByDayOfWeek(filtered, kind), [filtered, kind]);
   const howCells = useMemo(() => statsByHourOfWeek(filtered, kind), [filtered, kind]);
 
@@ -147,12 +184,6 @@ export function TrendsPage() {
 
   const weekendTotal = weekend.reduce((s, d) => s + d.total, 0);
   const weekdayTotal = weekday.reduce((s, d) => s + d.total, 0);
-
-  function toggleCategory(cat: string) {
-    setSelected((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
-  }
 
   // Expense-side drill-downs include refunds so the rows in the
   // drawer add up to the net figure the user clicked on. Parameter
@@ -229,23 +260,6 @@ export function TrendsPage() {
             </>
           }
         />
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          {allCategories.slice(0, 30).map((cat) => {
-            const isActive = activeCategories.includes(cat);
-            const isSelected = selected.includes(cat);
-            const color = colorForCategory(cat, categoryMeta);
-            return (
-              <button
-                key={cat}
-                onClick={() => toggleCategory(cat)}
-                className={`chip chip-sm ${isSelected ? "chip-on" : isActive ? "text-text" : ""}`}
-                style={isActive ? { borderLeftWidth: 3, borderLeftColor: color } : {}}
-              >
-                {cat}
-              </button>
-            );
-          })}
-        </div>
         <div className="h-80">
           <ChartContainer>
             <LineChart
@@ -286,6 +300,137 @@ export function TrendsPage() {
             </LineChart>
           </ChartContainer>
         </div>
+
+        {/* Куда идёт каждая категория. На графике двадцать линий не разобрать,
+            поэтому список: маленький график, группа тренда и изменение между
+            первым и последним полным месяцем. Отметка в строке включает линию
+            категории на графике выше — вместо прежних ярлыков над ним. */}
+        {trendMonths.length >= 2 ? (
+          <div className="mt-5" data-trend-table>
+            <div className="flex items-center gap-3 text-xs text-muted mb-2">
+              <span className="min-w-0 flex-1">
+              По полным месяцам: {monthTitle(firstMonth)} — {monthTitle(lastMonth)} ·{" "}
+              {kind === "expense" ? "Общий расход" : "Общий доход"}:{" "}
+              <DeviationPill
+                current={trends.total.last}
+                baseline={trends.total.first}
+                base={base}
+                mode="both"
+                kind={kind}
+              />
+              </span>
+              {/* «CSV» — в строке с подписью, а не отдельной строкой над таблицей. */}
+              <span ref={setTrendExportSlot} className="shrink-0" />
+            </div>
+            <DataTable<CategoryTrend>
+              bare
+              data={trends.rows}
+              rowKey={(r) => r.category}
+              defaultSortKey="trend"
+              defaultSortDir="asc"
+              limit={12}
+              exportName="category_trends"
+              exportSlot={trendExportSlot}
+              onRowClick={(r) => {
+                const months = new Set(trendMonths);
+                const txs = filtered.filter(
+                  (t) =>
+                    matchesKind(t.kind) &&
+                    (level === "top" ? t.category : t.categoryFull) === r.category &&
+                    months.has(periodKey(t.date, monthStartDay))
+                );
+                showDrill(`${r.category} · ${monthTitle(firstMonth)} — ${monthTitle(lastMonth)}`, txs, "Тренд категории");
+              }}
+              selection={{
+                selected: new Set(selected),
+                onChange: (next) => setSelected([...next]),
+                label: "Показать на графике все категории",
+              }}
+              columns={[
+                {
+                  key: "category",
+                  type: "text",
+                  label: "Категория",
+                  sortValue: (r) => r.category,
+                  render: (r) => (
+                    <span className="inline-flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ background: colorForCategory(r.category, categoryMeta) }}
+                        aria-hidden
+                      />
+                      <span className="truncate">{r.category}</span>
+                    </span>
+                  ),
+                },
+                {
+                  key: "spark",
+                  type: "mark",
+                  label: "По месяцам",
+                  sortable: false,
+                  exportSkip: true,
+                  wideOnly: true,
+                  render: (r) => (
+                    <span className="inline-flex align-middle">
+                      <Sparkline data={r.values} color={colorForCategory(r.category, categoryMeta)} width={72} height={20} />
+                    </span>
+                  ),
+                },
+                {
+                  key: "trend",
+                  type: "text",
+                  label: "Тренд",
+                  headerTitle:
+                    "По линии тренда через все полные месяцы периода: растёт или снижается, если за период набегает больше четверти среднего месяца",
+                  // Внутри группы — по силе тренда: самые быстро растущие выше.
+                  sortValue: (r) => (hasTrend ? TREND_ORDER[r.group] * 1e12 - r.trendChange : 0),
+                  exportValue: (r) => (hasTrend ? TREND_LABEL[r.group] : ""),
+                  tone: (r) =>
+                    !hasTrend || r.group === "floating"
+                      ? "muted"
+                      : (r.group === "rising") === (kind === "expense")
+                        ? "expense"
+                        : "income",
+                  render: (r) => (hasTrend ? TREND_LABEL[r.group] : "—"),
+                },
+                {
+                  key: "first",
+                  type: "money",
+                  muted: true,
+                  label: monthLabel(firstMonth),
+                  wideOnly: true,
+                  sortValue: (r) => r.first,
+                  render: (r) => formatMoney(r.first, base),
+                },
+                {
+                  key: "last",
+                  type: "money",
+                  label: monthLabel(lastMonth),
+                  sortValue: (r) => r.last,
+                  render: (r) => formatMoney(r.last, base),
+                },
+                {
+                  key: "change",
+                  type: "change",
+                  label: "Изменение",
+                  headerTitle: `${monthTitle(lastMonth)} против ${monthTitle(firstMonth)}`,
+                  headerLead: <DiffModeToggle mode={trendMode} onChange={setTrendMode} base={base} />,
+                  // Под самый широкий режим «₽ %» и от режима не зависит.
+                  width: "13rem",
+                  sortValue: (r) => diffSortValue(r.last, r.first, trendMode),
+                  exportValue: (r) => r.last - r.first,
+                  render: (r) => (
+                    <DeviationPill current={r.last} baseline={r.first} base={base} mode={trendMode} kind={kind} />
+                  ),
+                },
+              ]}
+            />
+          </div>
+        ) : (
+          <p className="mt-4 text-xs text-muted">
+            Тренды по категориям появятся, когда в периоде будет хотя бы два полных месяца.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
