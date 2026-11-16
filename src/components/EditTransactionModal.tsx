@@ -12,7 +12,10 @@ import { useDataStore } from "../store/useDataStore";
 import { useEditsStore } from "../store/useEditsStore";
 import { useDraftsStore } from "../store/useDraftsStore";
 import { usePlanActionsStore } from "../store/usePlanActionsStore";
-import { buildOneOffPlan } from "../lib/planCreate";
+import { buildNewPlan, buildOneOffPlan } from "../lib/planCreate";
+import { planHorizon, scheduleDates, type PlanSchedule } from "../lib/planSchedule";
+import { PlanScheduleFields } from "./operations/PlanScheduleFields";
+import { Switch } from "./Switch";
 import { useCounterpartyEditsStore } from "../store/useCounterpartyEditsStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
 import { getBrandTitlesFromCache } from "../store/useZenmoneyStore";
@@ -373,6 +376,22 @@ export function EditTransactionModal({
   // Как в Дзен-мани: новая операция (и копия) с датой позже сегодняшней
   // становится плановой (#120). Правку существующей операции это не касается.
   const futurePlan = isCreate && !planMarker && date > localToday();
+  // «Повторять»: новая операция (и копия) сразу заводится регулярным планом —
+  // первая дата из поля «Дата», дальше по расписанию. Как в Дзен-мани.
+  const canRepeat = isCreate && !planMarker;
+  const [repeatOn, setRepeatOn] = useState(false);
+  const [repeatRule, setRepeatRule] = useState<Omit<PlanSchedule, "startDate">>(() => ({
+    unit: "month",
+    every: 1,
+    // Дни недели подставит само расписание — по дате из поля, когда выберут «Неделя».
+    weekdays: [],
+    endDate: null,
+  }));
+  const repeat = canRepeat && repeatOn;
+  const repeatSchedule: PlanSchedule = { ...repeatRule, startDate: date };
+  const repeatPreview = repeat ? scheduleDates(repeatSchedule, date, planHorizon(localToday())) : [];
+  /** Сохранение заведёт план, а не операцию. */
+  const asPlan = futurePlan || repeat;
   // Operation time-of-day. New draft → seed with the current local time;
   // edit → the original `created` time. Persisted via the `createdAt` patch.
   const [time, setTime] = useState(() =>
@@ -767,6 +786,14 @@ export function EditTransactionModal({
    * получатель и комментарий очищаются, и курсор снова в сумме.
    */
   async function saveDraft(keepOpen = false) {
+    if (repeat && date < localToday()) {
+      setError("Регулярный план не начинается в прошлом — поставьте дату не раньше сегодняшней");
+      return;
+    }
+    if (repeat && repeatPreview.length === 0) {
+      setError("Окончание раньше первой даты — не выходит ни одной даты. Поставьте дату окончания позже");
+      return;
+    }
     const cache = await loadZenCache();
     if (!cache) {
       setError("Операции создаются только при подключённом Дзен-мани. Подключите его в настройках или синхронизируйтесь.");
@@ -785,7 +812,22 @@ export function EditTransactionModal({
       setError(built.skip ?? "Операция не создалась. Проверьте поля и попробуйте ещё раз");
       return;
     }
-    if (futurePlan) {
+    if (repeat) {
+      // «Повторять» — регулярный план: правило и даты на год вперёд.
+      const main = built.zen.outcome > 0 ? built.zen.outcome : built.zen.income;
+      const plan = buildNewPlan(
+        { tx: built.zen, amount: main, schedule: repeatSchedule, comment: built.zen.comment ?? null },
+        { uuid: () => crypto.randomUUID(), today: localToday(), stamp: Math.floor(Date.now() / 1000) }
+      );
+      await usePlanActionsStore.getState().put({
+        kind: "create",
+        markerId: plan.reminder.id,
+        date: repeatPreview[0] ?? built.zen.date,
+        title: payee.trim() || comment.trim() || category.trim() || "План",
+        reminder: plan.reminder,
+        markers: plan.markers,
+      });
+    } else if (futurePlan) {
       // Будущая дата — разовый план, а не операция: так же, как в Дзен-мани.
       const plan = buildOneOffPlan(built.zen, {
         uuid: () => crypto.randomUUID(),
@@ -816,7 +858,7 @@ export function EditTransactionModal({
     if (keepOpen) {
       const sum = parseAmountInput(amount);
       setSavedNote(
-        `${futurePlan ? "Запланировано" : "Создано"}: ${Number.isFinite(sum) ? formatMoney(sum, currency) : amount}` +
+        `${asPlan ? "Запланировано" : "Создано"}: ${Number.isFinite(sum) ? formatMoney(sum, currency) : amount}` +
           (payee.trim() ? ` · ${payee.trim()}` : "")
       );
       setAmount("");
@@ -828,7 +870,7 @@ export function EditTransactionModal({
       return;
     }
     onClose();
-    if (futurePlan) toast("Запланировано");
+    if (asPlan) toast("Запланировано");
     else if (planMarker) toast("Сохранено как факт");
     else {
       const id = built.zen.id;
@@ -1047,9 +1089,11 @@ export function EditTransactionModal({
           <FormField
             label="Дата"
             attention={
-              futurePlan
-                ? { text: "Будет плановой", title: "Как в Дзен-мани: операция с будущей датой становится плановой" }
-                : undefined
+              repeat
+                ? { text: "Первая дата плана", title: "С этой даты операция повторяется по расписанию ниже" }
+                : futurePlan
+                  ? { text: "Будет плановой", title: "Как в Дзен-мани: операция с будущей датой становится плановой" }
+                  : undefined
             }
           >
             <DateField
@@ -1068,6 +1112,34 @@ export function EditTransactionModal({
             />
           </FormField>
         </div>
+        {/* «Регулярная операция» — только у новой операции и копии: с ним вместо операции
+            заводится регулярный план, как при создании операции в Дзен-мани.
+            Первая дата — поле «Дата» выше, поэтому в расписании её нет. */}
+        {canRepeat && (
+          <div className="space-y-3">
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <span className="min-w-0">
+                <span className="label block">Регулярная операция</span>
+                <span className="text-xs text-muted">
+                  {repeat ? "Будет регулярным планом в Дзен-мани" : "Сделать плановой, с расписанием повторов"}
+                </span>
+              </span>
+              <Switch checked={repeatOn} onChange={setRepeatOn} label="Регулярная операция" />
+            </label>
+            {repeat && (
+              <PlanScheduleFields
+                value={repeatSchedule}
+                onChange={(next) => {
+                  const { startDate: _start, ...rule } = next;
+                  void _start;
+                  setRepeatRule(rule);
+                }}
+                preview={repeatPreview}
+                hideStart
+              />
+            )}
+          </div>
+        )}
         {/* Category / Subcategory — not shown for transfers: a transfer is
             just money moving between the user's own accounts, it has no
             spending/income category. */}
@@ -1468,14 +1540,14 @@ export function EditTransactionModal({
         ) : isCreate ? (
           // Вторая кнопка создания — слева, подальше от основной: «Создать»
           // по привычке жмут справа, и перепутать их не должно получаться.
-          <Tooltip content={`${futurePlan ? "Запланировать" : "Создать"} и сразу внести следующую — дата, счёт и категория останутся`}>
+          <Tooltip content={`${asPlan ? "Запланировать" : "Создать"} и сразу внести следующую — дата, счёт и категория останутся`}>
             <button
               onClick={() => void save(true)}
               disabled={saving}
               className="btn-ghost text-sm"
             >
               <ListPlus className="w-3.5 h-3.5" />
-              {futurePlan ? "Запланировать ещё" : "Создать и продолжить"}
+              {asPlan ? "Запланировать ещё" : "Создать и продолжить"}
             </button>
           </Tooltip>
         ) : (
@@ -1579,7 +1651,7 @@ export function EditTransactionModal({
             ) : (
               <Save className="w-3.5 h-3.5" />
             )}
-            {isCreate ? (futurePlan ? "Запланировать" : "Создать") : "Сохранить"}
+            {isCreate ? (asPlan ? "Запланировать" : "Создать") : "Сохранить"}
           </button>
         </div>
       </ModalFooter>

@@ -24,11 +24,14 @@ export function PlanScheduleFields({
   onChange,
   preview,
   startLabel = "Первая дата",
+  hideStart = false,
 }: {
   value: PlanSchedule;
   onChange: (next: PlanSchedule) => void;
   preview: string[];
   startLabel?: string;
+  /** Первую дату задаёт само окно (поле «Дата» новой операции) — здесь её не дублируем. */
+  hideStart?: boolean;
 }) {
   const set = (patch: Partial<PlanSchedule>) => onChange({ ...value, ...patch });
   const endMode: EndMode = value.endDate ? "until" : "never";
@@ -95,16 +98,18 @@ export function PlanScheduleFields({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <span className="label block mb-1">{startLabel}</span>
-          <DateField
-            value={value.startDate}
-            onChange={(e) => e.target.value && set({ startDate: e.target.value })}
-            typeable
-            className="input !py-1.5 text-sm w-full"
-          />
-        </div>
+      <div className={`grid grid-cols-1 gap-3 ${hideStart ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        {!hideStart && (
+          <div>
+            <span className="label block mb-1">{startLabel}</span>
+            <DateField
+              value={value.startDate}
+              onChange={(e) => e.target.value && set({ startDate: e.target.value })}
+              typeable
+              className="input !py-1.5 text-sm w-full"
+            />
+          </div>
+        )}
         <div>
           <span className="label block mb-1">Окончание</span>
           <Segmented<EndMode>
