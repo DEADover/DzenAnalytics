@@ -972,7 +972,7 @@ export function GlobalFilters({
           {/* Значок поля — такой же тихий, как у соседних кнопок: фиолетовый
               выбивался из ряда единственным цветным пятном. */}
           <Filter className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          {/* Поле понимает условия («-слово», «комм:пусто») — #135. */}
+          {/* Поле понимает условия («-слово», «комм:нет») — #135. */}
           <SyntaxInput
             value={search}
             onChange={(next) => setSearchSoon(next)}

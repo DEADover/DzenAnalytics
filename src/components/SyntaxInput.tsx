@@ -116,7 +116,7 @@ export function SyntaxInput({
           )}
           {awaits && (
             <span className="text-muted/70" data-syntax-values>
-              слово, -слово, пусто или есть
+              слово, -слово, есть или нет
             </span>
           )}
         </div>

@@ -32,7 +32,7 @@ test("включённые фильтры не меняют размер пан�
   expect(await size()).toBe(before);
 });
 
-test("условия в текстовом поиске: «-слово», «комм:пусто», «комм:есть» (#135)", async ({ page }) => {
+test("условия в текстовом поиске: «-слово», «комм:нет», «комм:есть» (#135)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await connectZen(page, "/transactions");
   const panel = page.locator('[data-tour="filters"]');
@@ -73,7 +73,7 @@ test("условия в текстовом поиске: «-слово», «ко
   const field = panel.getByPlaceholder(/Фильтр: получатель/);
   await field.fill("комм:есть");
   await expect.poll(passed).toBe(facts.filled);
-  await field.fill("комм:пусто");
+  await field.fill("комм:нет");
   await expect.poll(passed).toBe(facts.total - facts.filled);
 
   // Быстрый поиск по таблице понимает те же условия: слово есть — «-слово» его прячет.
@@ -114,7 +114,7 @@ test("поле поиска: Tab дописывает «комм:», услов�
 
   // Знак вопроса в поле открывает памятку.
   await panel.getByRole("button", { name: "Как искать" }).click();
-  await expect(page.getByRole("dialog", { name: "Как искать" })).toContainText("комм:пусто");
+  await expect(page.getByRole("dialog", { name: "Как искать" })).toContainText("комм:нет");
   await page.keyboard.press("Escape");
   // Высота панели от знака вопроса не изменилась.
   expect((await panel.boundingBox())?.height).toBe(before?.height);
