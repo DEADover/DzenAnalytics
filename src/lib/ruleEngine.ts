@@ -660,28 +660,54 @@ const POSITIVE_TEXT_OPS: ReadonlySet<ConditionOp> = new Set<ConditionOp>([
   "regex",
 ]);
 
+/** Отрезок текста «от — до» (конец не включается). */
+export type MatchRange = [number, number];
+
 /**
- * Текст, по которому операция подошла под условие о контрагенте или строке из
- * выписки, — когда это НЕ то имя, что показано в ленте.
+ * Куски текста, по которым сработали условия правила о поле `field`, — для
+ * подсветки в списке совпадений (#136).
  *
- * Условие «Контрагент» смотрит и на имя из справочника, и на текст под ним
- * (что пришло от банка или было набрано раньше). В ленте видно только имя, и
- * совпадение по тексту выглядит ошибкой: «содержит IKI» с учётом регистра —
- * а в списке «Iki» (#136). `null` — совпало по самому имени или условий о
- * контрагенте в правиле нет.
+ * В списке видно имя контрагента, текст под ним, строку из выписки и
+ * комментарий, но без подсветки непонятно, какое из условий на чём сошлось:
+ * «содержит IKI» с учётом регистра — а в строке «Iki». Подсвечиваем только
+ * утвердительные условия: у «не содержит» и «не заполнено» показывать нечего.
  */
-export function hiddenMatchText(t: Transaction, rule: CategoryRuleV2): string | null {
-  const shown = displayPayee(t).trim();
+export function matchRanges(text: string, field: RuleField, rule: CategoryRuleV2): MatchRange[] {
+  if (!text) return [];
+  const out: MatchRange[] = [];
   for (const c of allConditions(rule)) {
-    if (c.field !== "payee" && c.field !== "statement") continue;
-    if (!POSITIVE_TEXT_OPS.has(c.op) || !conditionHasValue(c)) continue;
-    const forms = conditionValues(t, c.field).map((v) => v.trim()).filter(Boolean);
-    // Имя из ленты подошло само — объяснять нечего.
-    if (c.field === "payee" && shown && textValueMatches(shown, c)) continue;
-    const hit = forms.find((v) => v !== shown && textValueMatches(v, c));
-    if (hit) return hit;
+    if (c.field !== field || !POSITIVE_TEXT_OPS.has(c.op) || !conditionHasValue(c)) continue;
+    if (c.op === "regex") {
+      const re = compileCondition(c);
+      if (!re || !safeTest(re, text)) continue;
+      const m = new RegExp(re.source, re.flags.replace("g", "")).exec(text);
+      if (m && m[0].length > 0) out.push([m.index, m.index + m[0].length]);
+      continue;
+    }
+    const norm = (x: string) => (c.caseInsensitive ? x.toLowerCase() : x);
+    const hay = norm(text);
+    const needle = norm(c.value);
+    // Смена регистра изредка меняет длину строки — тогда места не сойдутся.
+    if (!needle || hay.length !== text.length) continue;
+    if (c.op === "equals") {
+      if (hay === needle) out.push([0, text.length]);
+    } else if (c.op === "starts_with") {
+      if (hay.startsWith(needle)) out.push([0, needle.length]);
+    } else {
+      for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + needle.length)) {
+        out.push([i, i + needle.length]);
+      }
+    }
   }
-  return null;
+  // Соседние и перекрывающиеся куски — одним отрезком.
+  out.sort((x, y) => x[0] - y[0]);
+  const merged: MatchRange[] = [];
+  for (const r of out) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else merged.push([r[0], r[1]]);
+  }
+  return merged;
 }
 
 /**

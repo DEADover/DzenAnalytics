@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Checkbox } from "./Checkbox";
 import {
   Wand2,
@@ -26,7 +26,8 @@ import {
   joinCategoryFull,
   splitCategoryFull,
   ruleMatchesV2,
-  hiddenMatchText,
+  matchRanges,
+  type MatchRange,
   ruleChangesTx,
   ruleHasEffect,
   type CategoryRuleV2,
@@ -381,12 +382,49 @@ function JoinRow({
   );
 }
 
-/** Чем подписать операцию в списке совпадений: получателем, а если его нет —
- *  комментарием. У операций без получателя это единственная зацепка. */
-function matchTitle(t: Transaction): string {
-  const payee = displayPayee(t);
-  if (payee && payee.trim()) return payee;
-  return t.comment?.trim() || "—";
+/** Сколько знаков оставить перед совпадением, когда текст обрезан слева. */
+const CLIP_LEAD = 24;
+
+/**
+ * Текст с подсвеченными совпадениями. Если совпадение далеко от начала,
+ * начало срезается до «…»: строка в списке одна и обрезается справа, и
+ * подсветка в длинном комментарии иначе осталась бы за краем.
+ */
+function Marked({ text, ranges }: { text: string; ranges: MatchRange[] }) {
+  if (ranges.length === 0) return <>{text}</>;
+  const from = ranges[0][0] > CLIP_LEAD * 2 ? ranges[0][0] - CLIP_LEAD : 0;
+  const parts: ReactNode[] = [];
+  let at = from;
+  ranges.forEach(([a, b], i) => {
+    if (a > at) parts.push(text.slice(at, a));
+    parts.push(
+      <mark key={i} data-rule-mark className="rounded-[3px] bg-accent/25 text-text">
+        {text.slice(a, b)}
+      </mark>
+    );
+    at = b;
+  });
+  if (at < text.length) parts.push(text.slice(at));
+  return (
+    <>
+      {from > 0 && "…"}
+      {parts}
+    </>
+  );
+}
+
+/**
+ * Тексты под именем контрагента: что пришло от банка или было набрано
+ * раньше. В ленте их не видно, а условие «Контрагент» смотрит и на них.
+ */
+function payeeUnderTexts(t: Transaction): string[] {
+  const shown = displayPayee(t).trim();
+  const out: string[] = [];
+  for (const v of [t.payee, t.payeeOriginal]) {
+    const x = (v ?? "").trim();
+    if (x && x !== shown && !out.includes(x)) out.push(x);
+  }
+  return out;
 }
 
 /**
@@ -1237,22 +1275,50 @@ export function RuleEditModal({
               className="border-t border-border max-h-60 overflow-y-auto px-3 py-2 space-y-1"
             >
               {matches.slice(0, MATCH_LIMIT).map((t) => {
-                const hidden = hiddenMatchText(t, probeRule);
+                const name = displayPayee(t).trim();
+                const statement = (t.payeeRaw ?? "").trim();
+                const comment = (t.comment ?? "").trim();
+                const category = t.categoryFullOriginal || t.categoryFull || "";
                 return (
-                <div key={t.id} className="flex items-center gap-2.5 text-sm">
+                <div key={t.id} className="flex items-start gap-2.5 text-sm py-0.5" data-rule-match>
                   <CategoryDot category={t.category} size="w-6 h-6" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate">{matchTitle(t)}</div>
-                    <div className="text-xs text-muted truncate">
-                      {formatDate(t.date)} · {t.category || "Без категории"}
-                      {/* В ленте видно имя из справочника, а условие могло
-                          сработать по тексту под ним — показываем, по какому. */}
-                      {hidden && (
-                        <span data-rule-hidden-match>
-                          {" · "}Совпало: «{hidden}»
+                    {/* Имя из справочника и тексты под ним: условие
+                        «Контрагент» смотрит на всё сразу, а подсветка
+                        показывает, на чём именно оно сошлось. */}
+                    <div className="truncate">
+                      {name ? (
+                        <Marked text={name} ranges={matchRanges(name, "payee", probeRule)} />
+                      ) : (
+                        <span className="text-muted">Без контрагента</span>
+                      )}
+                      {payeeUnderTexts(t).map((x) => (
+                        <span key={x} className="text-muted">
+                          {" · "}
+                          <Marked text={x} ranges={matchRanges(x, "payee", probeRule)} />
                         </span>
+                      ))}
+                    </div>
+                    <div className="text-xs text-muted truncate">
+                      {formatDate(t.date)} ·{" "}
+                      {category ? (
+                        <Marked text={category} ranges={matchRanges(category, "category", probeRule)} />
+                      ) : (
+                        "Без категории"
                       )}
                     </div>
+                    {statement && (
+                      <div className="text-xs text-muted truncate" data-rule-statement>
+                        В выписке:{" "}
+                        <Marked text={statement} ranges={matchRanges(statement, "statement", probeRule)} />
+                      </div>
+                    )}
+                    {comment && (
+                      <div className="text-xs text-muted truncate" data-rule-comment>
+                        Комментарий:{" "}
+                        <Marked text={comment} ranges={matchRanges(comment, "comment", probeRule)} />
+                      </div>
+                    )}
                   </div>
                   {settled.has(t.id) && (
                     <span className="shrink-0 rounded-md bg-panel2 px-1.5 py-0.5 text-[11px] text-muted whitespace-nowrap">

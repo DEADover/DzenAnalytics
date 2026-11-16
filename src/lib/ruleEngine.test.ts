@@ -22,7 +22,7 @@ import {
   type RuleCondition,
   opsForField,
   conditionHasValue,
-  hiddenMatchText,
+  matchRanges,
   ruleChangesTx,
   type ConditionOp,
 } from "./ruleEngine";
@@ -916,16 +916,22 @@ describe("правила — строка из выписки и «уже соо
     expect(conditionMatches(iki, cond({ field: "statement", op: "empty" }))).toBe(false);
   });
 
-  it("называет текст, по которому операция подошла, если в ленте видно другое", () => {
+  it("находит куски текста, по которым сошлось условие", () => {
     const strict = rule({ conditions: [cond({ value: "IKI", caseInsensitive: false })] });
-    expect(hiddenMatchText(iki, strict)).toBe("IKI");
-    // Имя из ленты подошло само — объяснять нечего.
-    const loose = rule({ conditions: [cond({ value: "iki", caseInsensitive: true })] });
-    expect(hiddenMatchText(iki, loose)).toBeNull();
-    const byStatement = rule({ conditions: [cond({ field: "statement", value: "vilnius" })] });
-    expect(hiddenMatchText(iki, byStatement)).toBe("IKI VILNIUS LT");
-    // Условий о контрагенте нет — и подсказки нет.
-    expect(hiddenMatchText(iki, rule({ conditions: [cond({ field: "comment", value: "x" })] }))).toBeNull();
+    // Имя в ленте «Iki» с учётом регистра не подходит — подошёл текст под ним.
+    expect(matchRanges("Iki", "payee", strict)).toEqual([]);
+    expect(matchRanges("IKI", "payee", strict)).toEqual([[0, 3]]);
+    const loose = rule({ conditions: [cond({ field: "statement", value: "vilnius" })] });
+    expect(matchRanges("IKI VILNIUS LT", "statement", loose)).toEqual([[4, 11]]);
+    // Условие о другом поле этот текст не подсвечивает.
+    expect(matchRanges("IKI VILNIUS LT", "comment", loose)).toEqual([]);
+    // «Содержит» — все вхождения, «равно» — весь текст, «начинается с» — начало.
+    expect(matchRanges("аб аб", "comment", rule({ conditions: [cond({ field: "comment", value: "аб" })] }))).toEqual([[0, 2], [3, 5]]);
+    expect(matchRanges("Кафе", "comment", rule({ conditions: [cond({ field: "comment", op: "equals", value: "кафе" })] }))).toEqual([[0, 4]]);
+    expect(matchRanges("Кафе у дома", "comment", rule({ conditions: [cond({ field: "comment", op: "starts_with", value: "кафе" })] }))).toEqual([[0, 4]]);
+    expect(matchRanges("такси 15", "comment", rule({ conditions: [cond({ field: "comment", op: "regex", value: "\\d+" })] }))).toEqual([[6, 8]]);
+    // Отрицание подсвечивать нечем.
+    expect(matchRanges("кафе", "comment", rule({ conditions: [cond({ field: "comment", op: "not_contains", value: "бар" })] }))).toEqual([]);
   });
 
   it("отличает операции, где менять уже нечего", () => {
