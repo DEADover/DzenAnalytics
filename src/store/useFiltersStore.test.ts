@@ -517,20 +517,6 @@ describe("applyFilters — «Дополнительно»", () => {
     expect(ids(applyFilters(txs, filt({ onlyWithoutComment: true })))).toEqual(["a", "c", "d"]);
   });
 
-  it("commentExcludes прячет операции, где в комментарии есть слово (#135)", () => {
-    const withComments = [
-      { ...txs[0], id: "x1", comment: "Возврат долга" },
-      { ...txs[0], id: "x2", comment: "подарок маме" },
-      { ...txs[0], id: "x3", comment: "" },
-    ];
-    // Регистр не важен; операция без комментария остаётся.
-    expect(ids(applyFilters(withComments, filt({ commentExcludes: "возврат" })))).toEqual(["x2", "x3"]);
-    // Несколько слов — хватит любого.
-    expect(ids(applyFilters(withComments, filt({ commentExcludes: "долга  маме" })))).toEqual(["x3"]);
-    // Одни пробелы — не фильтр.
-    expect(ids(applyFilters(withComments, filt({ commentExcludes: "  " })))).toHaveLength(3);
-  });
-
   it("«с комментарием» и «без» выключают друг друга", () => {
     const st = useFiltersStore.getState();
     st.setOnlyWithComment(true);

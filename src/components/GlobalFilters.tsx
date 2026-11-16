@@ -244,10 +244,6 @@ export function GlobalFilters({
   const base = useDataStore((s) => s.rates.base);
   const f = useFiltersStore();
   const [search, setSearchSoon] = useDebouncedField(f.search, f.setSearch);
-  const [commentExcludes, setCommentExcludesSoon] = useDebouncedField(
-    f.commentExcludes,
-    f.setCommentExcludes
-  );
   const controlledPeriod = period !== undefined;
   // Period slice source: the local controller when controlled, else the store.
   // Both expose the same fields/handlers (preset/monthYM/from/to + setters).
@@ -551,7 +547,6 @@ export function GlobalFilters({
     f.hideZero ||
     f.onlyWithComment ||
     f.onlyWithoutComment ||
-    f.commentExcludes.trim().length > 0 ||
     f.onlyNew;
   const extraCount =
     (f.excludeTransfers ? 1 : 0) +
@@ -561,7 +556,6 @@ export function GlobalFilters({
     (f.hideZero ? 1 : 0) +
     (f.onlyWithComment ? 1 : 0) +
     (f.onlyWithoutComment ? 1 : 0) +
-    (f.commentExcludes.trim() ? 1 : 0) +
     (f.onlyNew ? 1 : 0);
   const hasFilters =
     f.accounts.size > 0 ||
@@ -725,6 +719,8 @@ export function GlobalFilters({
                     { label: "Без переводов между счетами", checked: f.excludeTransfers, on: f.setExcludeTransfers },
                     { label: "Только без категории", checked: f.onlyUncategorized, on: f.setOnlyUncategorized },
                     { label: "Скрыть нулевые операции", checked: f.hideZero, on: f.setHideZero },
+                    { label: "Только с комментарием", checked: f.onlyWithComment, on: f.setOnlyWithComment },
+                    { label: "Только без комментариев", checked: f.onlyWithoutComment, on: f.setOnlyWithoutComment },
                     { label: "Только новые", checked: f.onlyNew, on: f.setOnlyNew },
                   ].map((row) => (
                     <label
@@ -740,56 +736,6 @@ export function GlobalFilters({
                       />
                     </label>
                   ))}
-                </div>
-
-                {/* Комментарий — своим блоком (#135): «пустой», «не пустой» и
-                    «не содержит» спрашивают об одном поле, и вперемешку с
-                    остальными галочками их было не найти. «Содержит» — это
-                    поле «Фильтр» в самой панели: оно ищет и по комментарию. */}
-                <div className="pt-2 border-t border-border">
-                  <div className="caps-label mb-1 px-1.5">Комментарий</div>
-                  <div className="space-y-0.5">
-                    {[
-                      { label: "Не пустой", checked: f.onlyWithComment, on: f.setOnlyWithComment },
-                      { label: "Пустой", checked: f.onlyWithoutComment, on: f.setOnlyWithoutComment },
-                    ].map((row) => (
-                      <label
-                        key={row.label}
-                        className="flex items-center justify-between gap-2 text-xs px-1.5 py-1.5 rounded hover:bg-panel2 cursor-pointer"
-                      >
-                        <span>{row.label}</span>
-                        <Checkbox
-                          checked={row.checked}
-                          onChange={(on) => row.on(on)}
-                          label="Включить фильтр"
-                          className="shrink-0"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <div className="relative mt-1.5">
-                    <input
-                      value={commentExcludes}
-                      onChange={(e) => setCommentExcludesSoon(e.target.value)}
-                      placeholder="Не содержит слов…"
-                      aria-label="Комментарий не содержит слов"
-                      className="input text-xs w-full pr-8"
-                    />
-                    {commentExcludes && (
-                      <button
-                        onClick={() => setCommentExcludesSoon("", true)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
-                        aria-label="Очистить «Не содержит»"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  {/* Подписью, а не подсказкой при наведении: та всплывала над
-                      полем и закрывала две строки выше. */}
-                  <p className="mt-1 px-1.5 text-[11px] leading-4 text-muted">
-                    Слова через пробел — хватит любого
-                  </p>
                 </div>
             </>
           </Popover>

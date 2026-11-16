@@ -120,12 +120,6 @@ interface FiltersState {
   /** Только операции без комментария. Взаимоисключается с `onlyWithComment`:
    *  включение одного выключает другое. */
   onlyWithoutComment: boolean;
-  /**
-   * Слова, которых в комментарии быть не должно (#135). Через пробел; хватит
-   * одного совпадения, чтобы операция выпала. Операции без комментария
-   * остаются: в пустом тексте слова нет.
-   */
-  commentExcludes: string;
   /** Только «новые» — то, что приехало из банка и чего пользователь ещё не
    *  открывал (`viewed: false` в Дзен-мани). У операций из CSV признака нет. */
   onlyNew: boolean;
@@ -172,7 +166,6 @@ interface FiltersState {
   setHideZero: (v: boolean) => void;
   setOnlyWithComment: (v: boolean) => void;
   setOnlyWithoutComment: (v: boolean) => void;
-  setCommentExcludes: (s: string) => void;
   setOnlyNew: (v: boolean) => void;
   resetToCurrentPeriod: (startDay: number) => void;
   /**
@@ -211,7 +204,6 @@ const initial = {
   hideZero: false,
   onlyWithComment: false,
   onlyWithoutComment: false,
-  commentExcludes: "",
   onlyNew: false,
 };
 
@@ -305,7 +297,6 @@ export const useFiltersStore = create<FiltersState>((set, get) => ({
     set(onlyWithComment ? { onlyWithComment, onlyWithoutComment: false } : { onlyWithComment }),
   setOnlyWithoutComment: (onlyWithoutComment) =>
     set(onlyWithoutComment ? { onlyWithoutComment, onlyWithComment: false } : { onlyWithoutComment }),
-  setCommentExcludes: (commentExcludes) => set({ commentExcludes }),
   setOnlyNew: (onlyNew) => set({ onlyNew }),
   // Текущий период — того вида, который человек выбрал последним: выбрав
   // календарный месяц, он и после перезагрузки должен увидеть календарный, а
@@ -425,7 +416,6 @@ export function isNarrowed(
     | "onlyUncategorized"
     | "onlyWithComment"
     | "onlyWithoutComment"
-    | "commentExcludes"
     | "onlyNew"
   >
 ): boolean {
@@ -441,7 +431,6 @@ export function isNarrowed(
     f.onlyUncategorized ||
     f.onlyWithComment ||
     f.onlyWithoutComment ||
-    f.commentExcludes.trim().length > 0 ||
     f.onlyNew
   );
 }
@@ -476,13 +465,6 @@ export function applyFilters(
   const search = state.search.trim().toLowerCase();
   // Раскладка не важна: «ghjl» находит «Продукты», «ё» равна «е».
   const matchesSearch = queryMatcher(search);
-  // «Комментарий не содержит»: каждое слово — в любой раскладке.
-  const commentBans = state.commentExcludes
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(queryMatcher);
   // Пары «долговой счёт → контрагент» разбираем один раз на прогон, а не на
   // каждую операцию.
   const debtPicks = debtSelection(state.accounts);
@@ -563,7 +545,6 @@ export function applyFilters(
     if (state.hideZero && t.amountBase === 0) return false;
     if (state.onlyWithComment && !(t.comment && t.comment.trim())) return false;
     if (state.onlyWithoutComment && t.comment && t.comment.trim()) return false;
-    if (commentBans.length && t.comment && commentBans.some((ban) => ban(t.comment))) return false;
     if (state.onlyNew && !t.unseen) return false;
     return true;
   });

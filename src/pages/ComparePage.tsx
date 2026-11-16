@@ -580,7 +580,6 @@ export function ComparePage() {
     filters.onlyUncategorized ||
     filters.onlyWithComment ||
     filters.onlyWithoutComment ||
-    filters.commentExcludes.trim().length > 0 ||
     filters.onlyNew;
   const smearApplies =
     !narrowed && !!planLeft && planLeft.from === trackFullA.from && planLeft.to === trackFullA.to;

@@ -19,7 +19,6 @@ const values = (over: Partial<FilterValues> = {}): FilterValues => ({
   hideZero: false,
   onlyWithComment: false,
   onlyWithoutComment: false,
-  commentExcludes: "",
   onlyNew: false,
   ...over,
 });
@@ -121,7 +120,6 @@ describe("isEmptySnapshot", () => {
       { hideZero: true },
       { onlyWithComment: true },
       { onlyWithoutComment: true },
-      { commentExcludes: "возврат" },
       { onlyNew: true },
     ];
     for (const c of cases) {
