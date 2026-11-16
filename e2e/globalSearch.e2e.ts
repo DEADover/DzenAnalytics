@@ -23,7 +23,7 @@ test("набор уходит в фильтр после паузы, лента 
   await expect.poll(() => rows.count()).toBeGreaterThan(0);
   for (const text of await rows.allInnerTexts()) expect(text).toContain("Пятёрочка");
 
-  await field.locator("xpath=..").getByRole("button").click();
+  await field.locator("xpath=..").getByRole("button", { name: "Очистить фильтр" }).click();
   await expect(field).toHaveValue("");
   expect(await storeSearch(page)).toBe("");
 });
