@@ -645,7 +645,9 @@ export function GlobalFilters({
             <SlidersHorizontal className="w-3.5 h-3.5 shrink-0 text-muted" />
             <span className="flex-1 min-w-0 text-left truncate">Дополнительно</span>
             {extraCount > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-accent-fg text-[11px] font-medium leading-none shrink-0">
+              // `-my-px`: счётчик на 2 px выше строки подписи — без этого
+              // кнопка вырастала с 34 до 36 px, и вся панель дёргалась.
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] -my-px px-1 rounded-full bg-accent text-accent-fg text-[11px] font-medium leading-none shrink-0">
                 {extraCount}
               </span>
             )}
