@@ -1,3 +1,4 @@
+import { useScrollLock } from "../hooks/useScrollLock";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useEscapeLayer } from "../lib/escapeStack";
 import { createPortal } from "react-dom";
@@ -254,6 +255,9 @@ export function TopNav({
 
   // Панель закрывается по Escape — она большая, накрывает пол-экрана, и уводить
   // руку к мыши ради «передумал» незачем. Боковое меню узкого окна — так же.
+  // Пока открыта панель «Ещё» или боковое меню, страница под ними не
+  // прокручивается: колесо над панелью уводило фон, а панель оставалась висеть.
+  useScrollLock(moreOpen || mobileOpen);
   useEscapeLayer(moreOpen || mobileOpen, () => {
     setMoreOpen(false);
     setMobileOpen(false);

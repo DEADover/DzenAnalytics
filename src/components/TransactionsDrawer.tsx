@@ -1,3 +1,4 @@
+import { useScrollLock } from "../hooks/useScrollLock";
 import { txAccountKey, txInKey } from "../lib/accountKey";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
 import { AccountName } from "./AccountName";
@@ -127,29 +128,8 @@ export function TransactionsDrawer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, escOnTop, selected, close]);
 
-  useEffect(() => {
-    if (!open) return;
-    // The page scrolls on <html> (it has `overflow-y: scroll`), so locking
-    // only <body> left the html scrollbar visible beside the drawer — it
-    // moved the hidden page behind the overlay and looked broken. Lock the
-    // real scroller and reserve its scrollbar width so the background doesn't
-    // shift when the drawer opens/closes.
-    const html = document.documentElement;
-    const scrollbarW = window.innerWidth - html.clientWidth;
-    const prev = {
-      htmlOverflow: html.style.overflow,
-      htmlPad: html.style.paddingRight,
-      bodyOverflow: document.body.style.overflow,
-    };
-    html.style.overflow = "hidden";
-    if (scrollbarW > 0) html.style.paddingRight = `${scrollbarW}px`;
-    document.body.style.overflow = "hidden";
-    return () => {
-      html.style.overflow = prev.htmlOverflow;
-      html.style.paddingRight = prev.htmlPad;
-      document.body.style.overflow = prev.bodyOverflow;
-    };
-  }, [open]);
+  // Страница под шторкой стоит на месте.
+  useScrollLock(open);
 
   // Reset search every time the drawer re-opens — implemented via the
   // "adjust state on prior props" pattern (no setState-in-effect).
