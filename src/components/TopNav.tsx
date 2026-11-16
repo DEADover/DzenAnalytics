@@ -463,7 +463,7 @@ export function TopNav({
             filtersAvailable
               ? filtersOpen
                 ? "Скрыть фильтры"
-                : `Фильтры · клавиша F\nПериод, счета, категории и поиск${filtersActive ? " — заданы" : ""}`
+                : `Фильтры · Клавиша F\nПериод, счета, категории и поиск${filtersActive ? " — заданы" : ""}`
               : "Фильтры\nНа этой странице их нет"
           }
           className={iconItem(filtersOpen && filtersAvailable)}
