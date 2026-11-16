@@ -395,7 +395,7 @@ export function TagsPage() {
               {tags.length} {pluralRu(tags.length, ["тег", "тега", "тегов"])} в{" "}
               {taggedCount}{" "}
               {pluralRu(taggedCount, ["операции", "операциях", "операциях"])}
-              {totalExpense > 0 && ` · по тегам ${formatMoney(totalExpense, base)}`}
+              {totalExpense > 0 && ` · По тегам ${formatMoney(totalExpense, base)}`}
             </>
           }
           right={

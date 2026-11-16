@@ -15,7 +15,7 @@ test("«Разбор месяца» с главной открывает иду�
   await expect(page).toHaveURL(/\/digest\?month=2026-10$/);
   // Месяц ещё идёт — он в списке первым, выбран и подписан «Идёт».
   const first = page.locator("main button", { hasText: "Октябрь 2026" }).first();
-  await expect(first).toContainText(/Идёт · день \d+ из 31/);
+  await expect(first).toContainText(/Идёт · День \d+ из 31/);
   await expect(page.getByText("Главное за Октябрь 2026")).toBeVisible();
   // Сравнение честное: с тем же числом дней, а не с целым месяцем.
   await expect(page.getByText(/сравниваем с тем же числом дней/)).toBeVisible();

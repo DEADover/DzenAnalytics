@@ -153,9 +153,9 @@ function computeSavingsRate(opts: ComputeOptions): HealthComponent {
       "Считаем за последние 6 полных месяцев. Хорошо — от 20%." +
       (recent.length
         ? `\n\nСредние за период:\n` +
-          `· доход — ${formatMoney(avgIncome, opts.baseCurrency)}\n` +
-          `· расход — ${formatMoney(avgExpense, opts.baseCurrency)}\n` +
-          `· остаётся — ${formatMoney(avgIncome - avgExpense, opts.baseCurrency)} в месяц`
+          `· Доход — ${formatMoney(avgIncome, opts.baseCurrency)}\n` +
+          `· Расход — ${formatMoney(avgExpense, opts.baseCurrency)}\n` +
+          `· Остаётся — ${formatMoney(avgIncome - avgExpense, opts.baseCurrency)} в месяц`
         : ""),
     hint:
       rate < 0.1
@@ -212,9 +212,9 @@ function computeEmergencyFund(opts: ComputeOptions): HealthComponent {
       `Цель — ${target} ${pluralRu(target, ["месяц", "месяца", "месяцев"])}.` +
       (avgExpense > 0
         ? "\n\nОткуда цифра:\n" +
-          `· накопления — ${formatMoney(liquid, opts.baseCurrency)}\n` +
-          `· средний расход — ${formatMoney(avgExpense, opts.baseCurrency)} в месяц (за 6 полных мес)\n` +
-          `· хватит на — ${coverage.toFixed(1)} мес`
+          `· Накопления — ${formatMoney(liquid, opts.baseCurrency)}\n` +
+          `· Средний расход — ${formatMoney(avgExpense, opts.baseCurrency)} в месяц (за 6 полных мес)\n` +
+          `· Хватит на — ${coverage.toFixed(1)} мес`
         : ""),
     extra:
       avgMonthlyObligatory > 0
@@ -257,8 +257,8 @@ function computeUncategorized(opts: ComputeOptions): HealthComponent {
       "Доля операций, которым присвоена категория. Чем больше — тем точнее вся аналитика. Хорошо — от 95%." +
       (total > 0
         ? "\n\nОткуда цифра:\n" +
-          `· без категории — ${formatNum(uncategorized)} из ${formatNum(total)} ${pluralRu(total, ["операции", "операций", "операций"])}\n` +
-          `· это ${(pct * 100).toFixed(1)}% — переводы между своими счетами не считаем`
+          `· Без категории — ${formatNum(uncategorized)} из ${formatNum(total)} ${pluralRu(total, ["операции", "операций", "операций"])}\n` +
+          `· Это ${(pct * 100).toFixed(1)}% — переводы между своими счетами не считаем`
         : ""),
     hint:
       pct > 0.1
@@ -319,10 +319,10 @@ function computeStability(opts: ComputeOptions): HealthComponent {
     detail:
       "Насколько ровно вы откладываете из месяца в месяц. Чем ровнее суммы — тем лучше. То густо, то пусто — балл ниже.\n\n" +
       "Откуда цифра:\n" +
-      `· месяцев в расчёте — ${rates.length} (берём последние 12, считаем те, где был доход)\n` +
-      `· откладываете в среднем — ${(m * 100).toFixed(0)}% дохода\n` +
-      `· разброс по месяцам — ±${(sd * 100).toFixed(0)} п.п.\n` +
-      `· оценка = разброс ÷ среднее = ${cv.toFixed(2)}; хорошо — до 0.50`,
+      `· Месяцев в расчёте — ${rates.length} (берём последние 12, считаем те, где был доход)\n` +
+      `· Откладываете в среднем — ${(m * 100).toFixed(0)}% дохода\n` +
+      `· Разброс по месяцам — ±${(sd * 100).toFixed(0)} п.п.\n` +
+      `· Оценка = разброс ÷ среднее = ${cv.toFixed(2)}; хорошо — до 0.50`,
     hint:
       cv > 1
         ? "Суммы сильно скачут. Настройте автоперевод на накопления в начале месяца — так ровнее."
@@ -362,11 +362,11 @@ function computeFixedLoad(opts: ComputeOptions): HealthComponent {
       "Какая часть дохода уходит на то, без чего не обойтись: жильё, продукты, кредиты, транспорт. Чем меньше — тем больше остаётся на цели и накопления. Хорошо — меньше 50%. Отметить обязательные категории можно на странице «Категории»." +
       (avgIncome > 0
         ? "\n\nСредние за 6 полных месяцев:\n" +
-          `· доход — ${formatMoney(avgIncome, opts.baseCurrency)} в месяц\n` +
-          `· обязательные траты — ${formatMoney(monthlyObligatory, opts.baseCurrency)} в месяц\n` +
+          `· Доход — ${formatMoney(avgIncome, opts.baseCurrency)} в месяц\n` +
+          `· Обязательные траты — ${formatMoney(monthlyObligatory, opts.baseCurrency)} в месяц\n` +
           // Один знак после запятой — как в самой карточке: «61%» против
           // «60.5%» на строке выше читалось бы как расхождение.
-          `· доля — ${(share * 100).toFixed(1)}%`
+          `· Доля — ${(share * 100).toFixed(1)}%`
         : ""),
     hint:
       share > 0.8

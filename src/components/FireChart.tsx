@@ -210,8 +210,8 @@ export function FireChart({
 
   const subline =
     mode === "months"
-      ? `${firePct.toFixed(0)}% пути к цели · на ${asOf}`
-      : `Среднее за год · на ${asOf}`;
+      ? `${firePct.toFixed(0)}% пути к цели · На ${asOf}`
+      : `Среднее за год · На ${asOf}`;
 
   return (
     <div className={bare ? "" : "card card-pad"}>

@@ -190,7 +190,7 @@ export function CounterpartiesPage() {
       return (new Date(y, m - 1, dd).getDay() + 6) % 7 === day;
     });
     if (list.length === 0) return;
-    showDrill(name, list, `${WEEKDAY_FULL[day]} · за всё время`);
+    showDrill(name, list, `${WEEKDAY_FULL[day]} · За всё время`);
   }
   function openOne(name: string, id: string) {
     const tx = byPlace.get(name)?.find((t) => t.id === id);
@@ -733,7 +733,7 @@ function PlaceCard({
             уже — карточка во всю ширину над таблицей, и строке можно переноситься. */}
         <div className="text-xs text-muted mt-0.5 flex items-center gap-x-1.5 gap-y-1 flex-wrap min-h-5 xl:flex-nowrap xl:h-5 xl:whitespace-nowrap tabular-nums">
           За 12 месяцев {formatMoney(last, base)}
-          {prev <= 0 && <span>· раньше операций не было</span>}
+          {prev <= 0 && <span>· Раньше операций не было</span>}
           {prev > 0 && (
             <>
               <span>·</span>

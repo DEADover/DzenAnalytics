@@ -710,7 +710,7 @@ export function CounterpartyManager() {
                 Получателей без контрагента:{" "}
                 <strong className="tabular-nums">{formatNum(orphanPayees.length)}</strong>
                 <span className="text-muted">
-                  {" "}· операций с ними:{" "}
+                  {" "}· Операций с ними:{" "}
                   <strong className="tabular-nums text-text">
                     {formatNum(orphanPayees.reduce((n, o) => n + o.count, 0))}
                   </strong>

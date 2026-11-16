@@ -44,9 +44,9 @@ describe("computeHealthScore — «Норма сбережений» показ�
     const d = detail();
     expect(stripAmountMarks(d)).toContain("(доход − расход) ÷ доход");
     // formatMoney разделяет разряды НЕРАЗРЫВНЫМ пробелом — матчим по \s.
-    expect(stripAmountMarks(d)).toMatch(/доход — 10\s000/);
-    expect(stripAmountMarks(d)).toMatch(/расход — 6\s000/);
-    expect(stripAmountMarks(d)).toMatch(/остаётся — 4\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Доход — 10\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Расход — 6\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Остаётся — 4\s000/);
   });
 
   it("не приписывает цифры, когда данных нет", () => {
@@ -81,9 +81,9 @@ describe("computeHealthScore — остальные метрики показы�
       tx({ id: "e" + i, date: `2026-${m}-15`, kind: "expense", amount: 1000, amountBase: 1000 })
     );
     const d = detailOf("emergency_fund", { transactions: txs, extraLiquid: 3000 });
-    expect(stripAmountMarks(d)).toMatch(/накопления — 3\s000/);
-    expect(stripAmountMarks(d)).toMatch(/средний расход — 1\s000/);
-    expect(stripAmountMarks(d)).toContain("хватит на — 3.0 мес");
+    expect(stripAmountMarks(d)).toMatch(/Накопления — 3\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Средний расход — 1\s000/);
+    expect(stripAmountMarks(d)).toContain("Хватит на — 3.0 мес");
   });
 
   it("«Чистота категоризации» называет, сколько операций без категории", () => {
@@ -94,7 +94,7 @@ describe("computeHealthScore — остальные метрики показы�
       tx({ id: "d", date: "2026-01-13", kind: "expense", category: "Еда" }),
     ];
     const d = detailOf("uncategorized", { transactions: txs });
-    expect(stripAmountMarks(d)).toContain("без категории — 2 из 4 операций");
+    expect(stripAmountMarks(d)).toContain("Без категории — 2 из 4 операций");
     expect(stripAmountMarks(d)).toContain("50.0%");
   });
 
@@ -111,9 +111,9 @@ describe("computeHealthScore — остальные метрики показы�
       }),
     ]);
     const d = detailOf("stability", { transactions: txs });
-    expect(stripAmountMarks(d)).toContain("месяцев в расчёте — 6");
-    expect(stripAmountMarks(d)).toContain("откладываете в среднем — 30% дохода");
-    expect(stripAmountMarks(d)).toContain("разброс по месяцам — ±10 п.п.");
+    expect(stripAmountMarks(d)).toContain("Месяцев в расчёте — 6");
+    expect(stripAmountMarks(d)).toContain("Откладываете в среднем — 30% дохода");
+    expect(stripAmountMarks(d)).toContain("Разброс по месяцам — ±10 п.п.");
     expect(stripAmountMarks(d)).toMatch(/разброс ÷ среднее = 0\.33/);
   });
 
@@ -133,9 +133,9 @@ describe("computeHealthScore — остальные метрики показы�
       transactions: txs,
       categoryMeta: { "Жильё": { required: true } },
     });
-    expect(stripAmountMarks(d)).toMatch(/доход — 10\s000/);
-    expect(stripAmountMarks(d)).toMatch(/обязательные траты — 4\s000/);
-    expect(stripAmountMarks(d)).toContain("доля — 40.0%");
+    expect(stripAmountMarks(d)).toMatch(/Доход — 10\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Обязательные траты — 4\s000/);
+    expect(stripAmountMarks(d)).toContain("Доля — 40.0%");
   });
 
   it("без данных цифры не приписываются", () => {
@@ -164,15 +164,15 @@ describe("computeHealthScore — месяц отчётный, а не кален
 
   it("«Норма сбережений» берёт отрезок 28.08–27.09 как один месяц", () => {
     const d = run(28).components.find((c) => c.id === "savings_rate")!.detail;
-    expect(stripAmountMarks(d)).toMatch(/доход — 10\s000/);
-    expect(stripAmountMarks(d)).toMatch(/расход — 6\s000/);
-    expect(stripAmountMarks(d)).toMatch(/остаётся — 4\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Доход — 10\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Расход — 6\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Остаётся — 4\s000/);
   });
 
   it("по умолчанию (день 1) те же операции остаются двумя месяцами", () => {
     const d = run().components.find((c) => c.id === "savings_rate")!.detail;
-    expect(stripAmountMarks(d)).toMatch(/доход — 5\s000/);
-    expect(stripAmountMarks(d)).toMatch(/расход — 3\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Доход — 5\s000/);
+    expect(stripAmountMarks(d)).toMatch(/Расход — 3\s000/);
   });
 
   it("средние обязательные траты тоже считаются по отчётным месяцам", () => {

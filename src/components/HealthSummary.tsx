@@ -192,7 +192,7 @@ function ScoreRow({ c, base, cushion }: { c: HealthComponent; base: string; cush
 
           {c.extra && (
             <div className="text-[11px] text-muted mt-1.5 tabular-nums">
-              По обязательным — {formatFixed(c.extra.obligatoryMonths)} мес · в
+              По обязательным — {formatFixed(c.extra.obligatoryMonths)} мес · В
               среднем {formatMoney(c.extra.avgMonthly, base)} / мес
             </div>
           )}

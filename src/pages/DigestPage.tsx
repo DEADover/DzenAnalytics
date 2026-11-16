@@ -251,7 +251,7 @@ export function DigestPage() {
                     <div className="truncate font-medium">{e.label}</div>
                     <div className="text-[11px] text-muted truncate">
                       {e.running
-                        ? `Идёт · день ${e.running.day} из ${e.running.days}`
+                        ? `Идёт · День ${e.running.day} из ${e.running.days}`
                         : `${formatMoney(e.expense, baseCurrency)} расход`}
                     </div>
                   </div>

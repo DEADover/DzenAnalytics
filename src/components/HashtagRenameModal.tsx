@@ -333,7 +333,7 @@ export function HashtagRenameModal({
               {plan.rows.length > PREVIEW_LIMIT && (
                 <span className="text-muted font-normal">
                   {" "}
-                  · показаны первые {PREVIEW_LIMIT}, изменены будут все
+                  · Показаны первые {PREVIEW_LIMIT}, изменены будут все
                 </span>
               )}
             </div>

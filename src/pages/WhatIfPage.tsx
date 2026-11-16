@@ -358,7 +358,7 @@ export function WhatIfPage() {
           tone={toneOf(actProj.yearsToFire, nowProj.yearsToFire, true)}
           note={
             actProj.fireYm
-              ? `${monthYear(actProj.fireYm)} · цель ${formatMoney(actProj.fireTarget, base, { compact: true })}`
+              ? `${monthYear(actProj.fireYm)} · Цель ${formatMoney(actProj.fireTarget, base, { compact: true })}`
               : `Цель ${formatMoney(actProj.fireTarget, base, { compact: true })}`
           }
         />
@@ -479,7 +479,7 @@ export function WhatIfPage() {
                   {months.length === 0
                     ? "Нет полностью прошедших месяцев"
                     : `${monthYear(months[0])}${months.length > 1 ? ` – ${monthYear(months[months.length - 1]).toLowerCase()}` : ""}${
-                        assumptions.basis === "median" ? " · типичный месяц, без разовых всплесков" : ""
+                        assumptions.basis === "median" ? " · Типичный месяц, без разовых всплесков" : ""
                       }`}
                 </div>
               </div>

@@ -370,7 +370,7 @@ function runWords(run: RuleRun): string {
   if (run.changed === undefined) return when;
   return run.changed > 0
     ? `${when} · ${run.changed} ${pluralRu(run.changed, ["правка", "правки", "правок"])}`
-    : `${when} · без правок`;
+    : `${when} · Без правок`;
 }
 
 /** Подпись поля: пояснение живёт в подсказке, чтобы не занимать собой строку. */

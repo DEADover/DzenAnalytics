@@ -171,7 +171,7 @@ function ShareCard({
       value={formatPct(r.share, 0)}
       sub={
         <>
-          {formatMoney(r.amount, base)} в месяц при доходе {formatMoney(r.income, base)} · норма — до{" "}
+          {formatMoney(r.amount, base)} в месяц при доходе {formatMoney(r.income, base)} · Норма — до{" "}
           {formatPct(r.limit, 0)}
         </>
       }
@@ -357,7 +357,7 @@ function GrowthCard({ r, base }: { r: GrowthResult; base: string }) {
       value={growthPct(r.expenseGrowth)}
       sub={
         <>
-          Расходы {growthWords(r.expenseGrowth)}, доходы {growthWords(r.incomeGrowth)} · последние{" "}
+          Расходы {growthWords(r.expenseGrowth)}, доходы {growthWords(r.incomeGrowth)} · Последние{" "}
           {monthsOf(r.months)} к предыдущим {r.months}
         </>
       }
@@ -400,7 +400,7 @@ function InvestCard({ r, base }: { r: TargetShareResult; base: string }) {
       sub={
         <>
           {r.amount >= 0 ? "Вкладываете" : "Забираете"} {formatMoney(Math.abs(r.amount), base)} в месяц при доходе{" "}
-          {formatMoney(r.income, base)} · цель — от {formatPct(r.target, 0)}
+          {formatMoney(r.income, base)} · Цель — от {formatPct(r.target, 0)}
         </>
       }
       meter={{ fill: share / scale, mark: r.target / scale, status: r.status }}

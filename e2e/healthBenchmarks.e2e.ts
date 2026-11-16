@@ -75,7 +75,7 @@ test("настроенные ориентиры считают по заверш
 
   // Жильё: аренда 35 000 ₽ в месяц — ниже трети дохода.
   await expect(card(page, "housing")).toContainText("В норме");
-  await expect(card(page, "housing")).toContainText("норма — до 33%");
+  await expect(card(page, "housing")).toContainText("Норма — до 33%");
   await expect(card(page, "housing")).toContainText("35 000");
 
   // Вложения — переводы на накопительный счёт, 20 000 ₽ в месяц.
@@ -83,7 +83,7 @@ test("настроенные ориентиры считают по заверш
   await expect(card(page, "invest")).toContainText("20 000");
   // 20 000 из 150 000 ₽ — 13%, цель по умолчанию 10%.
   await expect(card(page, "invest")).toContainText("13%");
-  await expect(card(page, "invest")).toContainText("цель — от 10%");
+  await expect(card(page, "invest")).toContainText("Цель — от 10%");
   await expect(card(page, "invest")).toContainText("Цель выполнена");
 
   // Правило 72: 12% годовых — 6 лет, 250 000 ₽ станут 500 000 ₽.
@@ -103,7 +103,7 @@ test("выключенный ориентир пропадает, порог м�
   await expect(card(page, "doubling")).toHaveCount(0);
   await expect(card(page, "invest")).toHaveCount(0);
   await expect(card(page, "housing")).toContainText("Намного выше нормы");
-  await expect(card(page, "housing")).toContainText("норма — до 10%");
+  await expect(card(page, "housing")).toContainText("Норма — до 10%");
 });
 
 test("оценка: главный шаг, история по месяцам и цель по подушке", async ({ page }) => {
@@ -144,7 +144,7 @@ test("подписки в доходе и рост расходов к дохо�
 
   // Подписки: кинотеатр и аренда — оба платятся раз в месяц одной суммой.
   const subs = card(page, "recurring");
-  await expect(subs).toContainText("норма — до 10%");
+  await expect(subs).toContainText("Норма — до 10%");
   await expect(subs).toContainText("Намного выше нормы");
   const count = async () => Number((await subs.textContent())!.match(/(\d+) подпис/)![1]);
   const before = await count();

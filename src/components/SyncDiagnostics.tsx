@@ -196,8 +196,8 @@ function FailureFact({
         <div className={active ? "text-expense" : "text-muted"}>
           <div>
             {when(failure.at)}
-            {failure.streak > 1 && active && ` · подряд ${failure.streak}`}
-            {!active && " · уже прошла"}
+            {failure.streak > 1 && active && ` · Подряд ${failure.streak}`}
+            {!active && " · Уже прошла"}
           </div>
           <div className="text-xs mt-0.5">
             {friendlyFailure(failure)}

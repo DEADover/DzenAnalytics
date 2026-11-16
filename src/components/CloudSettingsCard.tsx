@@ -33,7 +33,7 @@ export function CloudSettingsCard() {
         : error
           ? `Не сверились — повторим при следующей синхронизации (${error})`
           : lastSyncAt
-            ? `Включено · сверено ${new Date(lastSyncAt).toLocaleString("ru-RU", {
+            ? `Включено · Сверено ${new Date(lastSyncAt).toLocaleString("ru-RU", {
                 day: "numeric",
                 month: "long",
                 hour: "2-digit",

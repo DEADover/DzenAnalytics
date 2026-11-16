@@ -399,7 +399,7 @@ export function ZenPlannedList({
                   ) : (
                     `через ${inDays} дн.`
                   )}
-                  {p.forecast ? " · прогноз" : ""}
+                  {p.forecast ? " · Прогноз" : ""}
                   {p.comment ? ` · ${p.comment}` : ""}
                 </span>
               </span>

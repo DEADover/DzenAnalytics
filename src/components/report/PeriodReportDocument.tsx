@@ -330,7 +330,7 @@ function Flow({ report }: { report: PeriodReport }) {
         <h2 className="pr-h2">Движение денег</h2>
         <p className="pr-sub">
           {report.bucket === "day" ? "По дням" : "По отчётным месяцам"} · {t.count} {pluralRu(t.count, ["операция", "операции", "операций"])}
-          {months > 1 && ` · в среднем за месяц доходы ${money(t.income / months, base)}, расходы ${money(t.expense / months, base)}`}
+          {months > 1 && ` · В среднем за месяц доходы ${money(t.income / months, base)}, расходы ${money(t.expense / months, base)}`}
         </p>
       </div>
       <div className="pr-legend">
@@ -597,7 +597,7 @@ function Budget({ report }: { report: PeriodReport }) {
       <div>
         <h2 className="pr-h2">Бюджет</h2>
         <p className="pr-sub">
-          {monthTitle(budget.month)} · план и факт — как в разделе «Бюджеты»
+          {monthTitle(budget.month)} · План и факт — как в разделе «Бюджеты»
           {report.running ? ", факт идущего месяца — на сегодня" : ""}
         </p>
       </div>

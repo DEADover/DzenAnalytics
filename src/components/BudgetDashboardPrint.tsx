@@ -591,7 +591,7 @@ export function BudgetDashboardPrint({ dashboard: d, base }: Props) {
                   {chunks.length > 1 ? ` · ${chunkIndex + 1} из ${chunks.length}` : ""}
                 </h2>
                 <p>
-                  {monthName} {d.year} · сравнение с {d.year - 1}
+                  {monthName} {d.year} · Сравнение с {d.year - 1}
                 </p>
               </header>
               <div className="print-column">

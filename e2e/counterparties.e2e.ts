@@ -186,7 +186,7 @@ test("столбики в карточке открывают операции �
   await expect(page.getByText(/^Октябрь 2026/)).toBeVisible();
   await page.keyboard.press("Escape");
   await card.getByRole("button", { name: /: показать операции$/ }).and(card.locator(":enabled")).first().click();
-  await expect(page.getByText(/· за всё время$/)).toBeVisible();
+  await expect(page.getByText(/· За всё время$/)).toBeVisible();
 });
 
 test("число операций в таблице открывает их в боковой панели", async ({ page }) => {

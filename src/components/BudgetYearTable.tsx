@@ -548,7 +548,7 @@ export function BudgetYearTable({
     const rowYear = monthCells(
       { plan: row.plan, fact: row.fact },
       row.kind,
-      `${row.subcategory ?? row.category} · за год`,
+      `${row.subcategory ?? row.category} · За год`,
       "год",
       null,
       { strong: true, slot: "year" }

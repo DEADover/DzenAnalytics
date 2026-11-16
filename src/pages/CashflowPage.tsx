@@ -702,7 +702,7 @@ export function CashflowPage() {
             )}
             <span>
               <span className={clsx("font-medium", NET_TONE[netVerdict.tone])}>{netVerdict.text}</span>
-              {" · "}сглаженный остаток за месяц:{" "}
+              {" · "}Сглаженный остаток за месяц:{" "}
               <span className="tabular-nums text-text">{formatMoney(netVerdict.last, base, { signed: true })}</span>
               {netVerdict.direction !== "flat" && (
                 <>
@@ -726,7 +726,7 @@ export function CashflowPage() {
           <CardHeader
             icon={CalendarRange}
             title="Год к году"
-            subtitle="Сравнение с тем же месяцем годом ранее · вся история (период не влияет)"
+            subtitle="Сравнение с тем же месяцем годом ранее · Вся история (период не влияет)"
             right={
               <>
                 <KindSwitcher kind={yoyKind} onChange={setYoyKind} />
@@ -789,7 +789,7 @@ export function CashflowPage() {
             icon={Sparkles}
             tone="warn"
             title="Сезонность расходов"
-            subtitle="Средний расход по месяцу года, цветом — отклонение от общего среднего · вся история (период не влияет)"
+            subtitle="Средний расход по месяцу года, цветом — отклонение от общего среднего · Вся история (период не влияет)"
           />
           <div className="h-64">
             <ChartContainer>

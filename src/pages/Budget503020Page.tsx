@@ -285,7 +285,7 @@ export function Budget503020Page() {
                 ? "Нет необязательных категорий — см. «?»"
                 : `${formatMoney(s.key === "savings" ? split.savings : s.value, base, {
                     signed: s.key === "savings",
-                  })} · ориентир ${s.target}`
+                  })} · Ориентир ${s.target}`
             }
             tooltip={cellTip(s)}
           />

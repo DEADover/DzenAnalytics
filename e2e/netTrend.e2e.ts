@@ -9,7 +9,7 @@ test("тренд остатка: линия в легенде и вывод сл
   const verdict = page.locator("[data-net-trend]");
   await expect(verdict).toBeVisible();
   await expect(verdict).toContainText(/остаётся|Остаток|Расходы/);
-  await expect(verdict).toContainText("сглаженный остаток за месяц:");
+  await expect(verdict).toContainText("Сглаженный остаток за месяц:");
   await expect(page.getByText("Тренд остатка", { exact: true })).toBeVisible();
   // Вывод — одной строкой и не шире карточки.
   const box = await verdict.boundingBox();
