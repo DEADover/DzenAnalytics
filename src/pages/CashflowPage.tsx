@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { ChartContainer } from "../components/ChartContainer";
 import {
+  MoveRight,
   TrendingDown,
   TrendingUp,
   Wallet,
@@ -38,7 +39,7 @@ import { useFiltersStore, applyFilters, presetToRange } from "../store/useFilter
 import { useLocalPeriod } from "../hooks/useLocalPeriod";
 import { useDrillStore } from "../store/useDrillStore";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { periodKey, periodRange, shiftDays, spanDays } from "../lib/period";
+import { localToday, periodKey, periodRange, shiftDays, spanDays } from "../lib/period";
 import {
   groupByMonth,
   computeKPI,
@@ -71,6 +72,14 @@ import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
 import { PageHeader } from "../components/PageHeader";
 import { CardHeader } from "../components/CardHeader";
+import { netTrendVerdict, smoothSeries, type NetTrendVerdict } from "../lib/netTrend";
+
+/** Цвет вывода по тренду остатка. */
+const NET_TONE: Record<NetTrendVerdict["tone"], string> = {
+  good: "text-income",
+  bad: "text-expense",
+  neutral: "text-text",
+};
 import { Segmented } from "../components/Segmented";
 import { KindSwitcher } from "../components/KindSwitcher";
 import { YearPicker } from "../components/MonthPicker";
@@ -291,8 +300,21 @@ export function CashflowPage() {
       netForecastTop: p.isForecast ? Math.round(p.optimistic) : null,
       netForecastBottom: p.isForecast ? Math.round(p.pessimistic) : null,
       netForecastMid: p.isForecast ? Math.round(p.realistic) : null,
+      // Сглаженный остаток — заполняется ниже, только у полных месяцев.
+      netTrend: null as number | null,
       isForecast: p.isForecast,
     }));
+  // Тренд остатка: сглаженная линия по ПОЛНЫМ месяцам (идущий неполон и
+  // обвалил бы её вниз) и вывод словами под графиком. По дням не считается.
+  const runningYm = periodKey(localToday(), monthStartDay);
+  const fullRows = daily ? [] : chartData.filter((r) => !r.isForecast && r.ym < runningYm);
+  const smoothedNet = smoothSeries(fullRows.map((r) => r.net ?? 0));
+  const netVerdict = netTrendVerdict(
+    smoothedNet,
+    fullRows.reduce((sum, r) => sum + r.expense, 0) / Math.max(fullRows.length, 1)
+  );
+  // Линию рисуем вместе с выводом: без него она — просто ещё одна кривая.
+  if (netVerdict) fullRows.forEach((r, i) => (r.netTrend = Math.round(smoothedNet[i])));
   // Стык сплошной линии «Чистый поток» с пунктиром прогноза: последнему
   // месяцу истории даём и прогнозные значения, чтобы линии и коридор
   // сходились. Только когда прогноз есть — иначе у прошлого периода в
@@ -504,8 +526,13 @@ export function CashflowPage() {
                       { label: "Доходы", color: chartColor.income, bar: true },
                       { label: "Расходы", color: chartColor.expense, bar: true },
                       { label: "Чистый поток", color: chartColor.accent, bar: false },
+                      { label: "Тренд остатка", color: chartColor.muted, bar: false, dashed: true },
                       { label: "Прогноз", color: chartColor.accent2, bar: false, dashed: true },
-                    ].filter((it) => it.label !== "Прогноз" || forecast.length > 0).map((it) => (
+                    ].filter(
+                      (it) =>
+                        (it.label !== "Прогноз" || forecast.length > 0) &&
+                        (it.label !== "Тренд остатка" || netVerdict !== null)
+                    ).map((it) => (
                       <span key={it.label} className="inline-flex items-center gap-1.5" style={{ color: it.color }}>
                         {it.bar ? (
                           <span style={{ width: 12, height: 12, borderRadius: 2, background: it.color }} />
@@ -553,6 +580,21 @@ export function CashflowPage() {
                 dot={{ r: 3 }}
                 isAnimationActive={false}
               />
+              {/* Сглаженный остаток — тонким серым пунктиром под основной
+                  линией: он поясняет её, а не спорит с ней за внимание. */}
+              {netVerdict && (
+                <Line
+                  type="monotone"
+                  dataKey="netTrend"
+                  name="Тренд остатка"
+                  stroke={chartColor.muted}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              )}
               {/* Forecast coridor — violet band (hidden from legend) + dashed
                   violet «Прогноз» line, distinct from the cyan actual flow. */}
               <Area
@@ -647,6 +689,31 @@ export function CashflowPage() {
             </ChartContainer>
           )}
         </div>
+        {/* Вывод по тренду остатка — словами: по зубцам чистого потока не
+            видно, остаётся ли денег больше, чем раньше. */}
+        {vizMode === "bars" && netVerdict && (
+          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-muted" data-net-trend>
+            {netVerdict.direction === "down" ? (
+              <TrendingDown className={clsx("w-4 h-4 shrink-0", NET_TONE[netVerdict.tone])} aria-hidden />
+            ) : netVerdict.direction === "flat" ? (
+              <MoveRight className={clsx("w-4 h-4 shrink-0", NET_TONE[netVerdict.tone])} aria-hidden />
+            ) : (
+              <TrendingUp className={clsx("w-4 h-4 shrink-0", NET_TONE[netVerdict.tone])} aria-hidden />
+            )}
+            <span>
+              <span className={clsx("font-medium", NET_TONE[netVerdict.tone])}>{netVerdict.text}</span>
+              {" · "}сглаженный остаток за месяц:{" "}
+              <span className="tabular-nums text-text">{formatMoney(netVerdict.last, base, { signed: true })}</span>
+              {netVerdict.direction !== "flat" && (
+                <>
+                  , на{" "}
+                  <span className="tabular-nums text-text">{formatMoney(Math.abs(netVerdict.change), base)}</span>{" "}
+                  {netVerdict.change > 0 ? "больше" : "меньше"}, чем в начале периода
+                </>
+              )}
+            </span>
+          </div>
+        )}
         {vizMode !== "mirror" && vsAvgRow}
         </SummarySplit>
       </div>
