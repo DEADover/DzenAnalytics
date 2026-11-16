@@ -5,7 +5,8 @@
  */
 import { test, expect, connectZen, horizontalOverflow } from "./harness";
 
-test("тренды категорий: группы, изменение и выбор линий на графике", async ({ page }) => {
+// Список выключен флагом SHOW_CATEGORY_TRENDS в TrendsPage — тест ждёт его возвращения.
+test.skip("тренды категорий: группы, изменение и выбор линий на графике", async ({ page }) => {
   await connectZen(page, "/trends");
   const block = page.locator("[data-trend-table]");
   await expect(block).toBeVisible();

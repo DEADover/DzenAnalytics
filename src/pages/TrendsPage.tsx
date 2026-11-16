@@ -72,6 +72,13 @@ import {
   type TrendGroup,
 } from "../lib/categoryTrends";
 
+/**
+ * Список «Тренды категорий» под графиком (растёт / плавает / снижается).
+ * Выключен 17.11.2026: владельцу пока не нравится и непонятно, нужен ли.
+ * Код и тесты расчёта (`lib/categoryTrends`) оставлены — включается здесь.
+ */
+const SHOW_CATEGORY_TRENDS: boolean = false;
+
 /** Группа тренда словом и её место при сортировке: растущие — первыми. */
 const TREND_LABEL: Record<TrendGroup, string> = {
   rising: "Растёт",
@@ -185,6 +192,12 @@ export function TrendsPage() {
   const weekendTotal = weekend.reduce((s, d) => s + d.total, 0);
   const weekdayTotal = weekday.reduce((s, d) => s + d.total, 0);
 
+  function toggleCategory(cat: string) {
+    setSelected((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  }
+
   // Expense-side drill-downs include refunds so the rows in the
   // drawer add up to the net figure the user clicked on. Parameter
   // is the full `TxKind` (incl. "transfer") because the callers pass
@@ -260,6 +273,26 @@ export function TrendsPage() {
             </>
           }
         />
+        {/* Пока список трендов выключен, линии выбирают ярлыками, как раньше. */}
+        {!SHOW_CATEGORY_TRENDS && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {allCategories.slice(0, 30).map((cat) => {
+            const isActive = activeCategories.includes(cat);
+            const isSelected = selected.includes(cat);
+            const color = colorForCategory(cat, categoryMeta);
+            return (
+              <button
+                key={cat}
+                onClick={() => toggleCategory(cat)}
+                className={`chip chip-sm ${isSelected ? "chip-on" : isActive ? "text-text" : ""}`}
+                style={isActive ? { borderLeftWidth: 3, borderLeftColor: color } : {}}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+        )}
         <div className="h-80">
           <ChartContainer>
             <LineChart
@@ -305,7 +338,7 @@ export function TrendsPage() {
             поэтому список: маленький график, группа тренда и изменение между
             первым и последним полным месяцем. Отметка в строке включает линию
             категории на графике выше — вместо прежних ярлыков над ним. */}
-        {trendMonths.length >= 2 ? (
+        {!SHOW_CATEGORY_TRENDS ? null : trendMonths.length >= 2 ? (
           <div className="mt-5" data-trend-table>
             <div className="flex items-center gap-3 text-xs text-muted mb-2">
               <span className="min-w-0 flex-1">
