@@ -79,6 +79,7 @@ export function ScopedSearchInput({
         }}
         placeholder={placeholder}
         title={shown ? undefined : title}
+        syntax
         badge={
           hasText && scope === "all" ? (
             <button

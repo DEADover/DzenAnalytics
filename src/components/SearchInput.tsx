@@ -1,6 +1,8 @@
 import { Search, X } from "lucide-react";
 import clsx from "clsx";
 import type { InputHTMLAttributes, ReactNode } from "react";
+import { SyntaxInput } from "./SyntaxInput";
+import { SearchSyntaxHint } from "./SearchSyntaxHint";
 
 /**
  * Поле поиска: лупа слева, крестик «очистить», пока что-то набрано.
@@ -25,6 +27,7 @@ export function SearchInput({
   className,
   inputProps,
   badge,
+  syntax = false,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -46,14 +49,25 @@ export function SearchInput({
   >;
   /** Метка внутри поля справа, перед крестиком, — например, где идёт поиск. Только у `field`. */
   badge?: ReactNode;
+  /**
+   * Поле понимает условия поиска («-слово», «комм:пусто»): подсвечивает их,
+   * дописывает «комм:» по Tab и показывает знак вопроса с памяткой. Только у `field`.
+   */
+  syntax?: boolean;
 }) {
+  const extras = !!badge || syntax;
+  const fieldClass = clsx(
+    "input pl-9",
+    badge ? (syntax ? "pr-36" : "pr-28") : syntax ? "pr-16" : "pr-9",
+    size === "sm" ? "h-[34px] text-xs" : "h-[38px] text-sm"
+  );
   const clear = value ? (
     <button
       type="button"
       onClick={() => onChange("")}
       className={clsx(
         "btn-icon btn-icon-sm shrink-0",
-        variant === "field" && !badge && "absolute right-1.5 top-1/2 -translate-y-1/2"
+        variant === "field" && !extras && "absolute right-1.5 top-1/2 -translate-y-1/2"
       )}
       aria-label="Очистить поиск"
     >
@@ -85,23 +99,32 @@ export function SearchInput({
         className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
         aria-hidden="true"
       />
-      <input
-        {...inputProps}
-        autoFocus={autoFocus}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={ariaLabel ?? placeholder}
-        className={clsx(
-          "input pl-9",
-          badge ? "pr-28" : "pr-9",
-          size === "sm" ? "h-[34px] text-xs" : "h-[38px] text-sm"
-        )}
-      />
-      {badge ? (
+      {syntax ? (
+        <SyntaxInput
+          {...inputProps}
+          autoFocus={autoFocus}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          aria-label={ariaLabel ?? placeholder}
+          className={fieldClass}
+        />
+      ) : (
+        <input
+          {...inputProps}
+          autoFocus={autoFocus}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={ariaLabel ?? placeholder}
+          className={fieldClass}
+        />
+      )}
+      {extras ? (
         <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {badge}
           {clear}
+          {syntax && <SearchSyntaxHint />}
         </div>
       ) : (
         clear

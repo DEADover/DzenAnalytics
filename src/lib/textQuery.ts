@@ -22,16 +22,6 @@ export interface TextQuery {
   test: (text: string, comment: string | null | undefined) => boolean;
 }
 
-/** Подсказка об условиях — одна на все поля, где они работают. */
-export const TEXT_QUERY_HINT =
-  "Условия поиска:\n" +
-  "-слово — не содержит\n" +
-  "комм:слово — есть в комментарии\n" +
-  "-комм:слово — нет в комментарии\n" +
-  "комм:пусто — без комментария\n" +
-  "комм:есть — с комментарием\n" +
-  "Условие с пробелом — в кавычках: -\"на вынос\"";
-
 const TOKEN = /(-?)(?:(комментарий|коммент|комм):)?(?:"([^"]*)"?|(\S+))/giu;
 const PREFIX_ONLY = /^(комментарий|коммент|комм):$/iu;
 const EMPTY_WORDS = new Set(["пусто", "пустой", "нет"]);
@@ -94,4 +84,48 @@ export function parseTextQuery(raw: string): TextQuery {
       return true;
     },
   };
+}
+
+/** Кусок запроса для подсветки в поле: `op` — служебная часть условия. */
+export interface QueryPiece {
+  text: string;
+  op: boolean;
+}
+
+const OP_PIECE = /(^|\s)(-?(?:комментарий|коммент|комм):|-(?=[^\s-]))/giu;
+
+/**
+ * Разбить запрос на куски для подсветки: «комм:», «-комм:» и минус перед
+ * словом — служебные, остальное — обычный текст. Склейка кусков даёт запрос
+ * символ в символ: слой подсветки лежит поверх поля и обязан с ним совпадать.
+ */
+export function queryPieces(value: string): QueryPiece[] {
+  const out: QueryPiece[] = [];
+  let at = 0;
+  for (const m of value.matchAll(OP_PIECE)) {
+    const start = (m.index ?? 0) + m[1].length;
+    if (start > at) out.push({ text: value.slice(at, start), op: false });
+    out.push({ text: m[2], op: true });
+    at = start + m[2].length;
+  }
+  if (at < value.length) out.push({ text: value.slice(at), op: false });
+  return out;
+}
+
+const COMMENT_START = /(^|\s)(-?)(комм[а-яё]*)$/iu;
+
+/**
+ * Человек дописывает «комм…» в конце запроса — предложить условие по
+ * комментарию. Возвращает запрос с подставленным «комм:» или `null`.
+ */
+export function completeCommentPrefix(value: string): string | null {
+  const m = COMMENT_START.exec(value);
+  if (!m) return null;
+  if (!"комментарий".startsWith(m[3].toLowerCase())) return null;
+  return value.slice(0, m.index + m[1].length) + m[2] + "комм:";
+}
+
+/** Запрос кончается на «комм:» без значения — самое время подсказать, что писать. */
+export function awaitsCommentValue(value: string): boolean {
+  return /(^|\s)-?(?:комментарий|коммент|комм):$/iu.test(value);
 }

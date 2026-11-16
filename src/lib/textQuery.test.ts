@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTextQuery } from "./textQuery";
+import { awaitsCommentValue, completeCommentPrefix, parseTextQuery, queryPieces } from "./textQuery";
 
 const hit = (q: string, text: string, comment = "") => parseTextQuery(q).test(`${text} ${comment}`, comment);
 
@@ -45,5 +45,32 @@ describe("parseTextQuery (#135)", () => {
     expect(hit("комм:есть", "Магазин", "")).toBe(false);
     expect(hit("-комм:пусто", "Магазин", "")).toBe(false);
     expect(hit("магазин комм:пусто", "Кафе", "")).toBe(false);
+  });
+});
+
+describe("подсветка и дописывание условий", () => {
+  it("queryPieces: куски склеиваются обратно в запрос", () => {
+    for (const q of ["аптека -комм:мама", "комм:пусто", "т-банк - карта", "-кофе  -\"на вынос\"", ""]) {
+      expect(queryPieces(q).map((p) => p.text).join("")).toBe(q);
+    }
+    expect(queryPieces("аптека -комм:мама").filter((p) => p.op).map((p) => p.text)).toEqual(["-комм:"]);
+    expect(queryPieces("-кофе комм:есть").filter((p) => p.op).map((p) => p.text)).toEqual(["-", "комм:"]);
+    expect(queryPieces("т-банк - карта").some((p) => p.op)).toBe(false);
+  });
+
+  it("completeCommentPrefix: «комм» в конце превращается в «комм:»", () => {
+    expect(completeCommentPrefix("комм")).toBe("комм:");
+    expect(completeCommentPrefix("аптека -коммен")).toBe("аптека -комм:");
+    expect(completeCommentPrefix("Комментарий")).toBe("комм:");
+    expect(completeCommentPrefix("ком")).toBeNull();
+    expect(completeCommentPrefix("коммуналка")).toBeNull();
+    expect(completeCommentPrefix("комм ")).toBeNull();
+    expect(completeCommentPrefix("комм:")).toBeNull();
+    expect(completeCommentPrefix("подкомм")).toBeNull();
+  });
+
+  it("awaitsCommentValue", () => {
+    expect(awaitsCommentValue("аптека -комм:")).toBe(true);
+    expect(awaitsCommentValue("комм:п")).toBe(false);
   });
 });

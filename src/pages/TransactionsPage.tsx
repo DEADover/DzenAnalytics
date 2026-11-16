@@ -70,7 +70,7 @@ import {
   OperationListRow,
   OperationListTray,
 } from "../components/operations/OperationList";
-import { parseTextQuery, TEXT_QUERY_HINT } from "../lib/textQuery";
+import { parseTextQuery } from "../lib/textQuery";
 import { TOUR_OP_EVENT } from "../lib/tour";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
@@ -660,7 +660,7 @@ export function TransactionsPage() {
               onScopeChange={setSearchScope}
               counts={{ filter: inFilter.length, all: everywhere.length }}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде: выбор всплывает под полем. Не сохраняется и на другие страницы не влияет." + "\n\n" + TEXT_QUERY_HINT}
+              title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде: выбор всплывает под полем. Не сохраняется и на другие страницы не влияет."}
               className="flex-1 min-w-[220px]"
             />
             {apiConnected && (

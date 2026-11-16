@@ -85,3 +85,37 @@ test("условия в текстовом поиске: «-слово», «ко
   await quick.fill(`комм:${facts.word} -${facts.word}`);
   await expect(page.locator(".op-row").filter({ hasText: new RegExp(facts.word, "i") })).toHaveCount(0);
 });
+
+test("поле поиска: Tab дописывает «комм:», условие подсвечено, памятка по знаку вопроса (#135)", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await connectZen(page, "/transactions");
+  const panel = page.locator('[data-tour="filters"]');
+  await expect(panel).toBeVisible();
+  const before = await panel.boundingBox();
+
+  for (const field of [
+    panel.getByPlaceholder(/Фильтр: получатель/),
+    page.getByPlaceholder("Быстрый поиск по таблице…"),
+  ]) {
+    await field.click();
+    await field.pressSequentially("аптека -комм");
+    const wrap = field.locator("xpath=..");
+    await expect(wrap.locator("[data-syntax-suggest]")).toContainText("Искать в комментарии");
+    await page.keyboard.press("Tab");
+    await expect(field).toHaveValue("аптека -комм:");
+    await expect(field).toBeFocused();
+    await expect(wrap.locator("[data-syntax-op]")).toHaveText("-комм:");
+    await field.fill("");
+    // Обычный текст слой не включает, и Tab остаётся обычным переходом.
+    await field.pressSequentially("коммуналка");
+    await expect(wrap.locator("[data-syntax-layer]")).toHaveCount(0);
+    await field.fill("");
+  }
+
+  // Знак вопроса в поле открывает памятку.
+  await panel.getByRole("button", { name: "Как искать" }).click();
+  await expect(page.getByRole("dialog", { name: "Как искать" })).toContainText("комм:пусто");
+  await page.keyboard.press("Escape");
+  // Высота панели от знака вопроса не изменилась.
+  expect((await panel.boundingBox())?.height).toBe(before?.height);
+});

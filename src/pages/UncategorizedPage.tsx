@@ -65,7 +65,7 @@ import { EditTransactionModal } from "../components/EditTransactionModal";
 import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
-import { parseTextQuery, TEXT_QUERY_HINT } from "../lib/textQuery";
+import { parseTextQuery } from "../lib/textQuery";
 import { txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 
@@ -390,7 +390,8 @@ export function UncategorizedPage() {
               value={pageSearch}
               onChange={setPageSearch}
               placeholder="Быстрый поиск по таблице…"
-              title={"Быстрый поиск по этой таблице\nИщет по контрагенту, комментарию и счёту. Не сохраняется и на другие страницы не влияет." + "\n\n" + TEXT_QUERY_HINT}
+              syntax
+              title={"Быстрый поиск по этой таблице\nИщет по контрагенту, комментарию и счёту. Не сохраняется и на другие страницы не влияет."}
               className="flex-1 min-w-[220px]"
             />
             {stats.confident > 0 && (

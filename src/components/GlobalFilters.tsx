@@ -58,7 +58,8 @@ import {
 import { useMembersStore } from "../store/useMembersStore";
 import { useDebouncedField } from "../hooks/useDebouncedField";
 import { FilterResetButton } from "./FilterResetButton";
-import { TEXT_QUERY_HINT } from "../lib/textQuery";
+import { SyntaxInput } from "./SyntaxInput";
+import { SearchSyntaxHint } from "./SearchSyntaxHint";
 
 /**
  * Пресеты периода.
@@ -966,29 +967,33 @@ export function GlobalFilters({
 
         <div
           className="relative flex-1 min-w-[220px]"
-          title={"Фильтр по получателю и комментарию — входит в сохранённый фильтр и влияет на все виджеты\n\n" + TEXT_QUERY_HINT}
+          title="Фильтр по получателю и комментарию — входит в сохранённый фильтр и влияет на все виджеты"
         >
           {/* Значок поля — такой же тихий, как у соседних кнопок: фиолетовый
               выбивался из ряда единственным цветным пятном. */}
           <Filter className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-          <input
+          {/* Поле понимает условия («-слово», «комм:пусто») — #135. */}
+          <SyntaxInput
             value={search}
-            onChange={(e) => setSearchSoon(e.target.value)}
+            onChange={(next) => setSearchSoon(next)}
             placeholder="Фильтр: получатель, комментарий"
             aria-label="Фильтр: получатель, комментарий"
             /* Высота ступени 34, как у соседних кнопок и дорожек: с py-1.5
                поле выходило на 30 и просаживалось в ряду. */
-            className="input pl-9 pr-9 text-[12.5px] leading-4 h-[34px] py-0"
+            className="input pl-9 pr-16 text-[12.5px] leading-4 h-[34px] py-0"
           />
-          {search && (
-            <button
-              onClick={() => setSearchSoon("", true)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-text"
-              aria-label="Очистить фильтр"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {search && (
+              <button
+                onClick={() => setSearchSoon("", true)}
+                className="btn-icon btn-icon-sm shrink-0"
+                aria-label="Очистить фильтр"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <SearchSyntaxHint />
+          </div>
         </div>
         </div>
         </div>
