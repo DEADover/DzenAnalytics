@@ -54,7 +54,7 @@ import { Select } from "./Select";
 import { Tooltip } from "./Tooltip";
 import { Combobox } from "./Combobox";
 import { RuleModePanel } from "./RuleModeControl";
-import { ruleModeFields, ruleModeOf } from "../lib/ruleMode";
+import { ruleModeFields, ruleModeOf, type RuleMode } from "../lib/ruleMode";
 import type { RuleSchedule } from "../lib/ruleSchedule";
 import { useDataStore } from "../store/useDataStore";
 import { isServiceCategory } from "../lib/zenmoneyMap";
@@ -321,6 +321,18 @@ const REGEX_HINT = (
     </div>
   </div>
 );
+
+/**
+ * Что будет с найденными операциями после сохранения правила — по его режиму.
+ * Прежняя подпись «…только те, что вы отметите в окне» не говорила, в каком
+ * окне и где его искать.
+ */
+const NEXT_STEP: Record<RuleMode, string> = {
+  manual:
+    "Само правило их не изменит. После сохранения нажмите «Проверить и применить» над списком правил и отметьте, какие операции изменить.",
+  auto: "В режиме «Авто» правило меняет операции само, при синхронизации — когда и какие, указано выше, в блоке «Режим».",
+  off: "Правило выключено и ничего не изменит, пока вы не включите его выше, в блоке «Режим».",
+};
 
 /** Сколько совпадений показать сразу и сколько добавляет «Посмотреть ещё».
  *  Всё разом не рисуем: список на тысячи операций подвешивал бы окно на каждое
@@ -1273,13 +1285,12 @@ export function RuleEditModal({
                         : `${formatNum(settled.size)} уже ${pluralRu(settled.size, ["соответствует", "соответствуют", "соответствуют"])}`}
                     </span>
                   )}
-                  {/* Раньше про отложенную запись говорил значок у каждого
-                      действия. Теперь так работают все три поля — значит это
-                      свойство правила, а не отдельного действия, и сказать о
-                      нём достаточно один раз. */}
-                  <span className="block text-xs text-muted mt-0.5">
-                    Изменятся после кнопки «Проверить и применить» и только те, что
-                    вы отметите в окне
+                  {/* Счётчик читают как «сейчас изменится N», а сохранение
+                      правила ничего не меняет. Что нужно сделать дальше —
+                      зависит от режима, и сказать это надо словами: где кнопка
+                      и что она откроет. */}
+                  <span className="block text-xs text-muted mt-0.5" data-rule-next-step>
+                    {NEXT_STEP[ruleModeOf({ enabled: draft.enabled, autoApply: draft.autoApply })]}
                   </span>
                 </>
               ) : (

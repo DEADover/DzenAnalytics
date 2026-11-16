@@ -37,6 +37,12 @@ test("правило: строка из выписки, «уже соответ�
   await editor.getByLabel("Значение условия").first().fill("IKI");
   await editor.getByLabel("Без учёта регистра").first().uncheck();
   await expect(editor.getByText(/Подойд[её]т 3 операции/)).toBeVisible();
+  // Подпись под счётчиком говорит, что делать дальше, и зависит от режима.
+  const next = editor.locator("[data-rule-next-step]");
+  await expect(next).toContainText("«Проверить и применить» над списком правил");
+  await editor.getByRole("radio", { name: "Выкл" }).click();
+  await expect(next).toContainText("Правило выключено");
+  await editor.getByRole("radio", { name: "По кнопке" }).click();
 
   // Действие «Контрагент = Iki»: одна операция уже такая.
   await editor.locator('[aria-label="Что менять"]').first().click();
