@@ -48,7 +48,7 @@ export type { RuleField };
 export const FIELD_LABELS: Record<RuleField, string> = {
   kind: "Тип операции",
   account: "Счёт",
-  category: "Текущая категория",
+  category: "Категория",
   payee: "Контрагент",
   statement: "Строка из выписки",
   comment: "Комментарий",
