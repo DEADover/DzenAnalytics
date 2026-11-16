@@ -672,11 +672,17 @@ export type MatchRange = [number, number];
  * «содержит IKI» с учётом регистра — а в строке «Iki». Подсвечиваем только
  * утвердительные условия: у «не содержит» и «не заполнено» показывать нечего.
  */
-export function matchRanges(text: string, field: RuleField, rule: CategoryRuleV2): MatchRange[] {
+export function matchRanges(
+  text: string,
+  /** Поле условия; несколько — когда один и тот же текст стоит в двух полях. */
+  field: RuleField | readonly RuleField[],
+  rule: CategoryRuleV2
+): MatchRange[] {
   if (!text) return [];
+  const fields: readonly RuleField[] = typeof field === "string" ? [field] : field;
   const out: MatchRange[] = [];
   for (const c of allConditions(rule)) {
-    if (c.field !== field || !POSITIVE_TEXT_OPS.has(c.op) || !conditionHasValue(c)) continue;
+    if (!fields.includes(c.field) || !POSITIVE_TEXT_OPS.has(c.op) || !conditionHasValue(c)) continue;
     if (c.op === "regex") {
       const re = compileCondition(c);
       if (!re || !safeTest(re, text)) continue;

@@ -416,15 +416,28 @@ function Marked({ text, ranges }: { text: string; ranges: MatchRange[] }) {
 /**
  * Тексты под именем контрагента: что пришло от банка или было набрано
  * раньше. В ленте их не видно, а условие «Контрагент» смотрит и на них.
+ *
+ * Часто такой текст — та же строка из выписки, слово в слово. Тогда рядом с
+ * именем его не повторяем: он уже стоит строкой «В выписке», и подсветка
+ * условия «Контрагент» ложится туда (`statementAlsoPayee`).
  */
 function payeeUnderTexts(t: Transaction): string[] {
   const shown = displayPayee(t).trim();
+  const statement = (t.payeeRaw ?? "").trim();
   const out: string[] = [];
   for (const v of [t.payee, t.payeeOriginal]) {
     const x = (v ?? "").trim();
-    if (x && x !== shown && !out.includes(x)) out.push(x);
+    if (x && x !== shown && x !== statement && !out.includes(x)) out.push(x);
   }
   return out;
+}
+
+/** Строка из выписки записана и текстом под именем контрагента. */
+function statementAlsoPayee(t: Transaction): boolean {
+  const statement = (t.payeeRaw ?? "").trim();
+  const shown = displayPayee(t).trim();
+  if (!statement || statement === shown) return false;
+  return [t.payee, t.payeeOriginal].some((v) => (v ?? "").trim() === statement);
 }
 
 /**
@@ -1310,7 +1323,14 @@ export function RuleEditModal({
                     {statement && (
                       <div className="text-xs text-muted truncate" data-rule-statement>
                         В выписке:{" "}
-                        <Marked text={statement} ranges={matchRanges(statement, "statement", probeRule)} />
+                        <Marked
+                          text={statement}
+                          ranges={matchRanges(
+                            statement,
+                            statementAlsoPayee(t) ? ["statement", "payee"] : "statement",
+                            probeRule
+                          )}
+                        />
                       </div>
                     )}
                     {comment && (

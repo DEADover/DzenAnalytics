@@ -13,14 +13,16 @@ test("правило: строка из выписки, «уже соответ�
     const store = (window as unknown as { __store: (n: string) => Promise<Record<string, S>> }).__store;
     const { useDataStore } = await store("useDataStore");
     const all = useDataStore.getState().transactionsRaw;
-    const pick = all.filter((t) => t.payee === "Кофейня у дома").slice(0, 2).map((t) => t.id);
+    const pick = all.filter((t) => t.payee === "Кофейня у дома").slice(0, 3).map((t) => t.id);
     useDataStore.setState({
       transactionsRaw: all.map((t) =>
         t.id === pick[0]
           ? { ...t, payee: "IKI", payeeOriginal: "IKI", brand: "Iki", payeeRaw: "IKI VILNIUS LT" }
           : t.id === pick[1]
             ? { ...t, payee: "IKI", payeeOriginal: "IKI", brand: undefined, payeeRaw: "IKI KAUNAS LT", comment: "Кофе на вынос" }
-            : t
+            : t.id === pick[2]
+              ? { ...t, payee: "IKI SIAULIAI LT", payeeOriginal: "IKI SIAULIAI LT", brand: "Iki", payeeRaw: "IKI SIAULIAI LT" }
+              : t
       ),
     });
   });
@@ -34,22 +36,28 @@ test("правило: строка из выписки, «уже соответ�
   await expect(field).toHaveText(/Контрагент/);
   await editor.getByLabel("Значение условия").first().fill("IKI");
   await editor.getByLabel("Без учёта регистра").first().uncheck();
-  await expect(editor.getByText(/Подойд[её]т 2 операции/)).toBeVisible();
+  await expect(editor.getByText(/Подойд[её]т 3 операции/)).toBeVisible();
 
   // Действие «Контрагент = Iki»: одна операция уже такая.
   await editor.locator('[aria-label="Что менять"]').first().click();
   await page.getByRole("option", { name: "Контрагент" }).click();
   await editor.getByPlaceholder("Брокер").fill("Iki");
-  await expect(editor.locator("[data-rule-settled]")).toHaveText(/1 уже соответствует/);
+  await expect(editor.locator("[data-rule-settled]")).toHaveText(/2 уже соответствуют/);
   await editor.getByRole("button", { name: "Показать" }).click();
   const list = editor.locator("#rule-matches");
-  await expect(list.getByText("Уже соответствует", { exact: true })).toHaveCount(1);
+  await expect(list.getByText("Уже соответствует", { exact: true })).toHaveCount(2);
   // В строке — имя, текст под ним и строка из выписки; подсвечено то, на чём
   // сошлось условие: «Iki» с учётом регистра не подходит, подошёл текст «IKI».
   const first = list.locator("[data-rule-match]").first();
   await expect(first).toContainText("Iki · IKI");
   await expect(first.locator("[data-rule-statement]")).toHaveText("В выписке: IKI VILNIUS LT");
   await expect(first.locator("[data-rule-mark]")).toHaveText(["IKI"]);
+  // Текст под именем слово в слово повторяет строку из выписки — рядом с именем
+  // его нет, а подсветка условия «Контрагент» стоит в строке «В выписке».
+  const third = list.locator("[data-rule-match]").filter({ hasText: "IKI SIAULIAI LT" });
+  await expect(third).toHaveCount(1);
+  await expect(third.locator("div.truncate").first()).toHaveText("Iki");
+  await expect(third.locator("[data-rule-statement] [data-rule-mark]")).toHaveText(["IKI"]);
 
   // То же по строке из выписки: «KAUNAS» есть только у одной.
   await field.click();
