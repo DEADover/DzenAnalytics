@@ -15,6 +15,7 @@ import { Modal, ModalBody, ModalFooter, ModalHeader } from "./Modal";
 import { SectionEmpty } from "./SectionEmpty";
 import { Callout } from "./Callout";
 import { Badge, type BadgeTone } from "./Badge";
+import { RuleMatchFacts } from "./RuleMatchFacts";
 
 /**
  * Окно «Что изменят правила» — предпросмотр и применение (пункты 9–12 issue #49).
@@ -143,7 +144,9 @@ export function RulePreviewModal({
           subtitle={
             <>
               Правил включено: {ruleCount} · Совпадений: {formatNum(plan.rows.length)} · К записи:{" "}
-              {formatNum(plan.pending.length)}
+              {/* Сколько запишет кнопка внизу, а не сколько можно записать:
+                  сняли отметку с операции — число уменьшилось. */}
+              <span data-rule-to-write>{formatNum(selected.size)}</span>
             </>
           }
         />
@@ -243,11 +246,11 @@ export function RulePreviewModal({
                     </span>
                     <CategoryDot category={row.tx.category} size="w-7 h-7" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="font-medium truncate">{rowTitle(row.tx)}</span>
-                        <span className="text-xs text-muted whitespace-nowrap">
-                          {formatDate(row.tx.date)}
-                        </span>
+                      {/* Сама операция — тем же блоком с подписями, что в окне
+                          правила: по одному имени и дате не понять, та ли это
+                          операция и что в ней сейчас стоит. */}
+                      <RuleMatchFacts tx={row.tx} />
+                      <div className="flex items-baseline gap-2 flex-wrap empty:hidden mt-1">
                         {/* Чьё это изменение. Пока правило одно на весь разбор,
                             подпись молчит: она повторялась бы в каждой строке,
                             а её и так видно в шапке окна. */}
@@ -276,7 +279,10 @@ export function RulePreviewModal({
                           </Badge>
                         )}
                       </div>
-                      <div className="mt-1 space-y-0.5">
+                      {/* Что изменится — отдельным блоком с чертой слева: рядом
+                          со строками самой операции «Комментарий: …» иначе
+                          читался бы как ещё одно её поле. */}
+                      <div className="mt-1.5 space-y-0.5 border-l-2 border-accent/40 pl-2" data-rule-changes>
                         {changes.map((c) => (
                           <div
                             key={c.label}

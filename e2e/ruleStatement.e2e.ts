@@ -110,3 +110,46 @@ test("список совпадений раскрывается пачками 
   await editor.getByLabel("Значение условия").first().fill("а");
   await expect(rows).toHaveCount(50);
 });
+
+test("«Что изменят правила»: операция с подписями, «К записи» идёт за отметками", async ({ page }) => {
+  await connectZen(page, "/rules");
+  await page.evaluate(async () => {
+    type S = { getState: () => { addMany: (r: unknown[]) => Promise<string[]>; hydrate: () => Promise<void>; loaded: boolean } };
+    const store = (window as unknown as { __store: (n: string) => Promise<Record<string, S>> }).__store;
+    const { useCategoryRulesStore } = await store("useCategoryRulesStore");
+    if (!useCategoryRulesStore.getState().loaded) await useCategoryRulesStore.getState().hydrate();
+    await useCategoryRulesStore.getState().addMany([
+      {
+        enabled: true,
+        autoApply: false,
+        title: "Пятёрочка — пометка",
+        join: "and",
+        conditions: [{ field: "payee", op: "equals", value: "Пятёрочка", caseInsensitive: true }],
+        actions: [{ kind: "setComment", value: "Тест" }],
+      },
+    ]);
+  });
+  await page.getByRole("button", { name: /Проверить и применить/ }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Что изменят правила" });
+  await expect(dialog).toBeVisible();
+
+  // Операция — строками с подписями; изменение — отдельным блоком под ними.
+  const firstRow = dialog.locator("[data-rule-changes]").first().locator("xpath=..");
+  await expect(firstRow).toContainText(/Дата: \d+ \S+ 2026 г\. · Тип операции: Расход/);
+  await expect(firstRow).toContainText("Категория: Продукты");
+  await expect(firstRow).toContainText("Контрагент: Пятёрочка");
+  await expect(firstRow.locator("[data-rule-changes]")).toContainText("Комментарий:");
+  await expect(firstRow.locator("[data-rule-changes]")).toContainText("Тест");
+
+  // «К записи» в шапке — сколько запишет кнопка: сняли отметку — стало меньше.
+  const toWrite = dialog.locator("[data-rule-to-write]");
+  const total = Number((await toWrite.textContent())?.replace(/\s/g, ""));
+  expect(total).toBeGreaterThan(1);
+  await dialog.getByRole("checkbox", { name: /^Выбрать операцию/ }).first().uncheck();
+  await expect(toWrite).toHaveText(String(total - 1));
+  await expect(dialog.getByRole("button", { name: `Применить правила (${total - 1})` })).toBeVisible();
+
+  // Про отмену в списке изменений окно больше не пишет.
+  await expect(dialog).not.toContainText("Отменить можно построчно");
+  if (process.env.E2E_SHOTS) await dialog.screenshot({ path: process.env.E2E_SHOTS + "/rule-preview.png" });
+});
