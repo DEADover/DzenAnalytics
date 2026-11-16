@@ -322,9 +322,10 @@ const REGEX_HINT = (
   </div>
 );
 
-/** Больше этого совпадений за раз не рисуем: список на тысячи операций подвешивал
- *  бы окно на каждое нажатие клавиши в условии, а листать его никто не станет.
- *  Правило при этом применяется ко всем совпадениям, не только к показанным. */
+/** Сколько совпадений показать сразу и сколько добавляет «Посмотреть ещё».
+ *  Всё разом не рисуем: список на тысячи операций подвешивал бы окно на каждое
+ *  нажатие клавиши в условии. Правило при этом применяется ко всем совпадениям,
+ *  не только к показанным. */
 const MATCH_LIMIT = 50;
 
 /**
@@ -482,6 +483,9 @@ export function RuleEditModal({
   onSave,
 }: Props) {
   const [showMatches, setShowMatches] = useState(false);
+  /** Сколько совпадений раскрыто кнопкой «Посмотреть ещё» — и при каких
+   *  условиях: условия поменялись — список снова с первой пачки. */
+  const [moreShown, setMoreShown] = useState<{ key: string; n: number }>({ key: "", n: MATCH_LIMIT });
 
   // Счёт в правиле — название и номер (`refId`): тёзки различаются только
   // номером. В пикере — ключ справочника с подписью.
@@ -690,6 +694,8 @@ export function RuleEditModal({
   }, [cleaned, usableGroups, transactions]);
 
   const count = matches.length;
+  const matchKey = useMemo(() => JSON.stringify(usableGroups), [usableGroups]);
+  const shownCount = Math.min(count, moreShown.key === matchKey ? moreShown.n : MATCH_LIMIT);
 
   /** То же правило с условиями, по которым считались совпадения. */
   const probeRule = useMemo<CategoryRuleV2>(
@@ -1305,7 +1311,7 @@ export function RuleEditModal({
               id="rule-matches"
               className="border-t border-border max-h-60 overflow-y-auto px-3 py-2 space-y-1"
             >
-              {matches.slice(0, MATCH_LIMIT).map((t) => {
+              {matches.slice(0, shownCount).map((t) => {
                 const name = displayPayee(t).trim();
                 const statement = (t.payeeRaw ?? "").trim();
                 const comment = (t.comment ?? "").trim();
@@ -1394,10 +1400,19 @@ export function RuleEditModal({
                 </div>
                 );
               })}
-              {count > MATCH_LIMIT && (
-                <div className="text-xs text-muted pt-1">
-                  Показаны первые {MATCH_LIMIT} из {formatNum(count)} — правило
-                  применится ко всем.
+              {count > shownCount && (
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="text-xs text-muted min-w-0 flex-1">
+                    Показаны первые {formatNum(shownCount)} из {formatNum(count)} — правило
+                    применится ко всем.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMoreShown({ key: matchKey, n: shownCount + MATCH_LIMIT })}
+                    className="btn-ghost text-xs shrink-0"
+                  >
+                    Посмотреть ещё
+                  </button>
                 </div>
               )}
             </div>

@@ -82,3 +82,25 @@ test("правило: строка из выписки, «уже соответ�
   await expect(page.getByRole("option", { name: "Контрагент" })).toBeVisible();
   await expect(page.getByRole("option", { name: "Строка из выписки" })).toHaveCount(0);
 });
+
+test("список совпадений раскрывается пачками по 50", async ({ page }) => {
+  await connectZen(page, "/rules");
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  // «о» есть в большинстве названий — совпадений больше пятидесяти.
+  await editor.getByLabel("Значение условия").first().fill("о");
+  await editor.getByRole("button", { name: "Показать" }).click();
+  const list = editor.locator("#rule-matches");
+  const rows = list.locator("[data-rule-match]");
+  await expect(rows).toHaveCount(50);
+  const total = Number(((await list.textContent()) ?? "").match(/Показаны первые 50 из (\d+)/)?.[1]);
+  expect(total).toBeGreaterThan(50);
+  const more = list.getByRole("button", { name: "Посмотреть ещё" });
+  await more.click();
+  await expect(rows).toHaveCount(Math.min(100, total));
+  // Показано всё — кнопки больше нет.
+  if (total <= 100) await expect(more).toHaveCount(0);
+  // Условие поменялось — список снова с первой пачки.
+  await editor.getByLabel("Значение условия").first().fill("а");
+  await expect(rows).toHaveCount(50);
+});
