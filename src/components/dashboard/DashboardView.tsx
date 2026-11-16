@@ -333,7 +333,16 @@ export function DashboardView() {
               ? m.netWorth
               : netWorthAt(m.netWorthSeries, periodRange(m.ym, m.monthStartDay).to),
         };
-        return <MonthHero m={hero} view={view} fixed />;
+        // Строка плана держит место, пока планы в «Бюджете» вообще есть: иначе
+        // под фильтром колонки итогов становились ниже и текст над ними съезжал.
+        return (
+          <MonthHero
+            m={hero}
+            view={view}
+            fixed
+            reservePlan={m.planIncome !== null || m.planExpense !== null}
+          />
+        );
       }
 
       case "freeMoney":

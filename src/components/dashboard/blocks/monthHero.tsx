@@ -41,7 +41,14 @@ function StatCol({
   tone,
   dense,
   divided,
+  reservePlan,
 }: {
+  /**
+   * Держать строку плана, даже когда плана нет. Под общими фильтрами план
+   * прячется, и без запаса колонка становилась ниже на строку — текст над ней
+   * съезжал при каждой смене фильтра.
+   */
+  reservePlan?: boolean;
   label: string;
   value: string;
   /** Плановая сумма месяца из «Бюджета». Стоит под фактом и не смешивается с ним. */
@@ -72,14 +79,16 @@ function StatCol({
       >
         {value}
       </div>
-      {plan && (
+      {(plan || reservePlan) && (
         <div
           className={clsx(
             "text-muted font-mono tabular-nums mt-1 truncate",
-            dense ? "text-[11.5px]" : "text-[12.5px]"
+            dense ? "text-[11.5px]" : "text-[12.5px]",
+            !plan && "invisible"
           )}
+          aria-hidden={!plan || undefined}
         >
-          План {plan}
+          План {plan ?? "—"}
         </div>
       )}
     </div>
@@ -245,7 +254,10 @@ export function MonthHero({
   m,
   view,
   fixed = false,
+  reservePlan,
 }: {
+  /** План бывает скрыт фильтрами — место под его строку держим, чтобы блок не прыгал. */
+  reservePlan?: boolean;
   m: DashboardModel;
   view: string | undefined;
   /**
@@ -264,7 +276,15 @@ export function MonthHero({
     );
   const titleTag = fixed ? "h2" : "h1";
   if (view === "split") return <HeroSplit m={shown} pill={pill("sm")} titleTag={titleTag} />;
-  return <HeroOpen m={shown} sunken={view === "framed"} pill={pill("md")} titleTag={titleTag} />;
+  return (
+    <HeroOpen
+      m={shown}
+      sunken={view === "framed"}
+      pill={pill("md")}
+      titleTag={titleTag}
+      reservePlan={reservePlan}
+    />
+  );
 }
 
 /**
@@ -277,10 +297,13 @@ function HeroOpen({
   sunken,
   pill,
   titleTag: Title = "h1",
+  reservePlan,
 }: {
   m: DashboardModel;
   sunken?: boolean;
   pill: ReactNode;
+  /** Место под строку плана остаётся, даже когда план скрыт фильтрами. */
+  reservePlan?: boolean;
   /** На странице со своим заголовком пилюля — заголовок второго уровня. */
   titleTag?: "h1" | "h2";
 }) {
@@ -418,6 +441,7 @@ function HeroOpen({
             plan={m.planIncome !== null ? formatMoney(m.planIncome, m.base) : undefined}
             tone="income"
             dense={sunken}
+            reservePlan={reservePlan}
           />
           <StatCol
             label="Расход"
@@ -425,6 +449,7 @@ function HeroOpen({
             plan={m.planExpense !== null ? formatMoney(m.planExpense, m.base) : undefined}
             tone="expense"
             dense={sunken}
+            reservePlan={reservePlan}
             divided
           />
         </div>

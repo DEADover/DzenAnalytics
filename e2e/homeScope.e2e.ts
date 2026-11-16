@@ -64,6 +64,9 @@ test("фильтр счетов пересчитывает статьи, ито�
   const rows = tile(page, "categories").locator("[data-categories-list] button");
   await expect.poll(() => rows.count()).toBeGreaterThan(1);
   await expect(tile(page, "accounts")).toContainText("Т-Банк");
+  // Где стоят кнопки «Итогов месяца» до фильтра — после него они не должны съехать.
+  const cta = tile(page, "month").getByRole("link", { name: "Лента операций" });
+  const before = await cta.boundingBox();
 
   await page.evaluate(async () => {
     type S = { getState: () => { setSet: (kind: string, values: Set<string>) => void } };
@@ -76,7 +79,10 @@ test("фильтр счетов пересчитывает статьи, ито�
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Еда вне дома");
   // План считается по всем счетам — под фильтром его рядом с фактом нет.
-  await expect(tile(page, "month")).not.toContainText("План");
+  await expect(tile(page, "month").getByText(/^План/).first()).toBeHidden();
+  // Строка плана скрыта, но место держит: блок не прыгает от смены фильтра.
+  const after = await cta.boundingBox();
+  expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
   // Остатки — только по отмеченному счёту.
   await expect(tile(page, "accounts")).toContainText("Наличные");
   await expect(tile(page, "accounts")).not.toContainText("Т-Банк");
