@@ -119,3 +119,43 @@ test("поле поиска: Tab дописывает «комм:», услов�
   // Высота панели от знака вопроса не изменилась.
   expect((await panel.boundingBox())?.height).toBe(before?.height);
 });
+
+test("поиск: условия по сумме, счёту и категории", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await connectZen(page, "/transactions");
+  const quick = page.getByPlaceholder("Быстрый поиск по таблице…");
+  const rows = page.locator(".op-row");
+  const amounts = async () =>
+    (await rows.locator('[data-cell="amount"]').allTextContents()).map((t) =>
+      Number(t.replace(/[^\d,]/g, "").replace(",", "."))
+    );
+
+  // Сумма: все найденные строки больше порога.
+  await quick.fill("сумма:>9000");
+  await expect(rows.first()).toBeVisible();
+  const big = await amounts();
+  expect(big.length).toBeGreaterThan(0);
+  expect(big.every((a) => a > 9000)).toBe(true);
+  // Диапазон.
+  await quick.fill("сумма:8000-9500");
+  await expect(rows.first()).toBeVisible();
+  expect((await amounts()).every((a) => a >= 8000 && a <= 9500)).toBe(true);
+
+  // Категория и счёт сочетаются с суммой.
+  await quick.fill("кат:вне сумма:9000");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Ресторан");
+  await quick.fill("кат:вне сумма:9000 -счёт:сбер");
+  await expect(rows).toHaveCount(0);
+
+  // Tab дописывает условие, подсказка говорит, что писать дальше.
+  await quick.fill("");
+  await quick.click();
+  await quick.pressSequentially("кофе сумм");
+  const wrap = quick.locator("xpath=..");
+  await expect(wrap.locator("[data-syntax-suggest]")).toContainText("Искать по сумме");
+  await page.keyboard.press("Tab");
+  await expect(quick).toHaveValue("кофе сумма:");
+  await expect(wrap.locator("[data-syntax-values]")).toContainText(">5000, <100 или 1000-5000");
+  await expect(wrap.locator("[data-syntax-op]")).toHaveText("сумма:");
+});

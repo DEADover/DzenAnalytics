@@ -65,7 +65,7 @@ import { EditTransactionModal } from "../components/EditTransactionModal";
 import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
-import { parseTextQuery } from "../lib/textQuery";
+import { parseTextQuery, txQueryFields } from "../lib/textQuery";
 import { txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 
@@ -171,7 +171,7 @@ export function UncategorizedPage() {
     const q = pageSearch.trim();
     if (!q) return list;
     const parsed = parseTextQuery(q);
-    return list.filter((t) => parsed.test(`${payeeSearchText(t)} ${t.comment} ${t.account}`, t.comment));
+    return list.filter((t) => parsed.test(`${payeeSearchText(t)} ${t.comment} ${t.account}`, t.comment, txQueryFields(t)));
   }, [list, pageSearch]);
 
   const sorted = useMemo(

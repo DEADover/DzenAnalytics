@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import clsx from "clsx";
-import { awaitsCommentValue, completeCommentPrefix, queryPieces } from "../lib/textQuery";
+import { awaitsValue, completePrefix, queryPieces } from "../lib/textQuery";
 
 /**
  * Поле текстового поиска, которое понимает условия (#135): подсвечивает
@@ -30,9 +30,9 @@ export function SyntaxInput({
   const [box, setBox] = useState<CSSProperties | null>(null);
 
   const pieces = queryPieces(value);
-  const completion = focused ? completeCommentPrefix(value) : null;
-  const awaits = focused && awaitsCommentValue(value);
-  const overlay = completion !== null || awaits || pieces.some((p) => p.op);
+  const completion = focused ? completePrefix(value) : null;
+  const awaits = focused ? awaitsValue(value) : null;
+  const overlay = completion !== null || awaits !== null || pieces.some((p) => p.op);
 
   // Слой повторяет отступы и шрифт поля — иначе буквы разъедутся.
   useLayoutEffect(() => {
@@ -82,7 +82,7 @@ export function SyntaxInput({
             e.currentTarget.selectionStart === value.length
           ) {
             e.preventDefault();
-            onChange(completion);
+            onChange(completion.next);
             return;
           }
           onKeyDown?.(e);
@@ -110,13 +110,13 @@ export function SyntaxInput({
             <span className="text-muted" data-syntax-suggest>
               <span className="ml-2 inline-flex items-center gap-1.5 text-[11px]">
                 <kbd className="kbd">Tab</kbd>
-                Искать в комментарии
+                {completion.label}
               </span>
             </span>
           )}
-          {awaits && (
+          {awaits !== null && (
             <span className="text-muted/70" data-syntax-values>
-              слово, -слово, есть или нет
+              {awaits}
             </span>
           )}
         </div>

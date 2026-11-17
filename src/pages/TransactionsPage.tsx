@@ -70,7 +70,7 @@ import {
   OperationListRow,
   OperationListTray,
 } from "../components/operations/OperationList";
-import { parseTextQuery } from "../lib/textQuery";
+import { parseTextQuery, txQueryFields } from "../lib/textQuery";
 import { TOUR_OP_EVENT } from "../lib/tour";
 
 type SortMode = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
@@ -347,7 +347,8 @@ export function TransactionsPage() {
     return (t: Transaction) =>
       parsed.test(
         `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`,
-        t.comment
+        t.comment,
+        txQueryFields(t)
       );
   }, [query]);
   const inFilter = useMemo(

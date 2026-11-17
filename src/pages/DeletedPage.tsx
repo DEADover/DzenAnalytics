@@ -50,7 +50,7 @@ import { InfoPopover, InfoTerm } from "../components/InfoPopover";
 import { useLazyList } from "../hooks/useLazyList";
 import { useColumnResize, type ResizeColumn } from "../hooks/useColumnResize";
 import type { Transaction } from "../types";
-import { parseTextQuery } from "../lib/textQuery";
+import { parseTextQuery, txQueryFields } from "../lib/textQuery";
 import { txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 
@@ -402,7 +402,8 @@ function DeletedFeed({
     return filtered.filter(({ tx: t }) =>
       parsed.test(
         `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")} ${t.account}`,
-        t.comment
+        t.comment,
+        txQueryFields(t)
       )
     );
   }, [filtered, pageSearch]);

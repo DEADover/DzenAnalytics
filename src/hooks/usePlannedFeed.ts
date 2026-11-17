@@ -40,7 +40,11 @@ export function usePlannedFeed(query = "") {
           accounts.has(p.accountKey ?? p.account) ||
           (p.toAccount != null && accounts.has(p.toAccountKey ?? p.toAccount))) &&
         (!match ||
-          match.test(`${p.payee} ${p.comment} ${p.category} ${p.account} ${p.toAccount ?? ""}`, p.comment))
+          match.test(`${p.payee} ${p.comment} ${p.category} ${p.account} ${p.toAccount ?? ""}`, p.comment, {
+            amount: p.amount,
+            account: `${p.account} ${p.toAccount ?? ""}`,
+            category: p.category,
+          }))
     );
   }, [planned, deletions, accounts, query]);
   const monthEnd = periodRange(periodKey(today, monthStartDay), monthStartDay).to;

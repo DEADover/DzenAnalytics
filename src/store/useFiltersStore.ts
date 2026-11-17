@@ -9,7 +9,7 @@ import { NO_CATEGORY } from "../lib/zenmoneyMap";
 import { debtSelection, matchesDebtSelection } from "../lib/debtFilter";
 import { MEMBER_SHARED } from "../lib/zenUsers";
 import { useReportPeriodStore } from "./useReportPeriodStore";
-import { parseTextQuery } from "../lib/textQuery";
+import { parseTextQuery, txQueryFields } from "../lib/textQuery";
 
 /** Текущий отчётный месяц по действующему первому дню — не календарный. */
 const currentYM = () => currentPeriod(useReportPeriodStore.getState().monthStartDay);
@@ -463,7 +463,7 @@ export function applyFilters(
       ? { from: state.from, to: state.to }
       : presetToRange(state.preset, maxDate, state.monthYM, monthStartDay, state.windowShift ?? 0);
   // Раскладка не важна: «ghjl» находит «Продукты», «ё» равна «е». Поле
-  // понимает и условия: «-слово», «комм:пусто» (см. `lib/textQuery`).
+  // понимает и условия: «-слово», «комм:нет», «сумма:>5000» (см. `lib/textQuery`).
   const search = parseTextQuery(state.search);
   // Пары «долговой счёт → контрагент» разбираем один раз на прогон, а не на
   // каждую операцию.
@@ -521,7 +521,7 @@ export function applyFilters(
     if (!search.empty) {
       // Вторые категории — тоже: «Отпуск» ищется, даже если он всегда второй (#69).
       const hay = `${payeeSearchText(t)} ${t.comment} ${t.categoryFull} ${(t.extraCategories ?? []).join(" ")}`;
-      if (!search.test(hay, t.comment)) return false;
+      if (!search.test(hay, t.comment, txQueryFields(t))) return false;
     }
     // ── «Дополнительно» ──
     if (state.minAmount != null || state.maxAmount != null) {
