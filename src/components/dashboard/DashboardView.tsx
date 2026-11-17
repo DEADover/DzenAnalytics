@@ -692,7 +692,10 @@ export function DashboardView() {
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
       {scope.on && (
-        <>
+        // Шапка и фильтры — с тем же зазором, что на остальных разделах
+        // (`space-y-6`): у виджетов главной свой, на ширинах до 3xl он меньше,
+        // и панель фильтров стояла здесь на 4 пикселя выше, чем везде.
+        <div className="flex flex-col gap-6">
           <PageHeader
             icon={LayoutDashboard}
             title="Главная"
@@ -735,7 +738,7 @@ export function DashboardView() {
             showDateRange={false}
             dateRangeHint="Месяц выбирается на графике или в шапке главной"
           />
-        </>
+        </div>
       )}
       <LayoutToolbar layout={layout} />
 
