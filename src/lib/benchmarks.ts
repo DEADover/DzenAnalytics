@@ -11,11 +11,19 @@ import { completeMonths, groupByMonth } from "./aggregations";
 import { txInKey, txOutKey } from "./accountKey";
 import { periodKey } from "./period";
 import { expenseDelta } from "./txKindStyle";
+import { displayPayee } from "./format";
 
 export interface BenchmarkSettings {
   housingOn: boolean;
   /** Категории жилья — листья, как в отборе по категориям (`categoryFull`). */
   housingCategories: string[];
+  /**
+   * Контрагенты жилья (#138) — имена, как в ленте. Нужны, когда жильё лежит в
+   * общей категории («Счета») и различается только получателем: энергосбыт,
+   * управляющая компания. Расход идёт в карточку, если подошла категория ИЛИ
+   * контрагент.
+   */
+  housingPayees: string[];
   /** Порог, % дохода. */
   housingLimit: number;
 
@@ -24,6 +32,8 @@ export interface BenchmarkSettings {
   debtAccounts: string[] | null;
   /** Категории, которыми платежи по кредитам записаны как расход. */
   debtCategories: string[];
+  /** Контрагенты, платежи которым — платежи по кредитам. */
+  debtPayees: string[];
   debtLimit: number;
 
   /** «Доля вложений в доходе». */
@@ -36,6 +46,8 @@ export interface BenchmarkSettings {
   investAccounts: string[];
   /** Категории, которыми вложения записаны как расход. */
   investCategories: string[];
+  /** Контрагенты, платежи которым — вложения. */
+  investPayees: string[];
   /** Ожидаемая доходность, % годовых. */
   investRate: number;
 
@@ -57,16 +69,19 @@ export type CushionTarget = (typeof CUSHION_TARGETS)[number];
 export const DEFAULT_BENCHMARKS: BenchmarkSettings = {
   housingOn: true,
   housingCategories: [],
+  housingPayees: [],
   housingLimit: 33,
   debtOn: true,
   debtAccounts: null,
   debtCategories: [],
+  debtPayees: [],
   debtLimit: 30,
   investOn: true,
   investTarget: 10,
   doublingOn: true,
   investAccounts: [],
   investCategories: [],
+  investPayees: [],
   investRate: 12,
   growthOn: true,
   recurringOn: true,
@@ -88,16 +103,19 @@ export function parseBenchmarks(raw: unknown): BenchmarkSettings {
   return {
     housingOn: bool(r.housingOn) ?? d.housingOn,
     housingCategories: strings(r.housingCategories) ?? d.housingCategories,
+    housingPayees: strings(r.housingPayees) ?? d.housingPayees,
     housingLimit: num(r.housingLimit, 5, 80) ?? d.housingLimit,
     debtOn: bool(r.debtOn) ?? d.debtOn,
     debtAccounts: r.debtAccounts === null ? null : (strings(r.debtAccounts) ?? d.debtAccounts),
     debtCategories: strings(r.debtCategories) ?? d.debtCategories,
+    debtPayees: strings(r.debtPayees) ?? d.debtPayees,
     debtLimit: num(r.debtLimit, 5, 80) ?? d.debtLimit,
     investOn: bool(r.investOn) ?? d.investOn,
     investTarget: num(r.investTarget, 1, 80) ?? d.investTarget,
     doublingOn: bool(r.doublingOn) ?? d.doublingOn,
     investAccounts: strings(r.investAccounts) ?? d.investAccounts,
     investCategories: strings(r.investCategories) ?? d.investCategories,
+    investPayees: strings(r.investPayees) ?? d.investPayees,
     investRate: num(r.investRate, 1, 40) ?? d.investRate,
     growthOn: bool(r.growthOn) ?? d.growthOn,
     recurringOn: bool(r.recurringOn) ?? d.recurringOn,
@@ -132,17 +150,23 @@ export function benchmarkWindow(
   return { yms: picked.map((m) => m.ym), income: new Map(picked.map((m) => [m.ym, m.income])) };
 }
 
-/** Расход по категориям за месяцы окна; возвраты вычитаются. */
+/**
+ * Расход по категориям и контрагентам за месяцы окна; возвраты вычитаются.
+ * Операция идёт в счёт, если подошла её категория ИЛИ контрагент (#138), — и
+ * считается один раз, даже когда подошло и то и другое.
+ */
 export function categoryFlow(
   analyticsTx: Transaction[],
   categories: ReadonlySet<string>,
   window: BenchmarkWindow,
-  monthStartDay: number
+  monthStartDay: number,
+  /** Имена контрагентов, как в ленте (`displayPayee`). */
+  payees: ReadonlySet<string> = new Set()
 ): Map<string, number> {
   const out = new Map(window.yms.map((ym) => [ym, 0]));
-  if (categories.size === 0) return out;
+  if (categories.size === 0 && payees.size === 0) return out;
   for (const t of analyticsTx) {
-    if (!categories.has(t.categoryFull)) continue;
+    if (!categories.has(t.categoryFull) && !(payees.size > 0 && payees.has(displayPayee(t)))) continue;
     const d = expenseDelta(t);
     if (d === 0) continue;
     const ym = periodKey(t.date, monthStartDay);

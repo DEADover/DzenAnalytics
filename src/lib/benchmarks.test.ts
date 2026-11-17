@@ -96,6 +96,25 @@ describe("доля в доходе", () => {
     expect(r.status).toBe("na");
   });
 
+  it("контрагент считается наравне с категорией и не задваивается (#138)", () => {
+    const bills = [
+      income("2026-10-10", 100_000),
+      // Жильё лежит в общей категории «Счета» и различается только получателем.
+      tx({ date: "2026-10-11", kind: "expense", amountBase: 4_000, categoryFull: "Счета", payee: "Энергосбыт" }),
+      tx({ date: "2026-10-12", kind: "expense", amountBase: 6_000, categoryFull: "Счета", brand: "Управляющая компания", payee: "UK DOM" }),
+      tx({ date: "2026-10-13", kind: "expense", amountBase: 1_500, categoryFull: "Счета", payee: "Мобильная связь" }),
+      // И категория, и контрагент подошли — операция всё равно одна.
+      tx({ date: "2026-10-14", kind: "expense", amountBase: 30_000, categoryFull: "Жильё / Аренда", payee: "Энергосбыт" }),
+      tx({ date: "2026-10-20", kind: "refund", amountBase: 500, categoryFull: "Счета", payee: "Энергосбыт" }),
+    ];
+    const win = benchmarkWindow(bills, 1, "2026-11-15");
+    const payees = new Set(["Энергосбыт", "Управляющая компания"]);
+    expect(categoryFlow(bills, new Set(), win, 1, payees).get("2026-10")).toBe(39_500);
+    expect(categoryFlow(bills, new Set(["Жильё / Аренда"]), win, 1, payees).get("2026-10")).toBe(39_500);
+    // Только категория — контрагенты не выбраны: как раньше.
+    expect(categoryFlow(bills, new Set(["Жильё / Аренда"]), win, 1).get("2026-10")).toBe(30_000);
+  });
+
   it("категории не выбраны — нули", () => {
     expect([...categoryFlow(txs, new Set(), w, 1).values()]).toEqual([0, 0]);
   });
@@ -171,6 +190,12 @@ describe("правило 72 и настройки", () => {
     expect(p.debtAccounts).toEqual(["a"]);
     expect(p.investRate).toBe(12);
     expect(parseBenchmarks({ debtAccounts: null }).debtAccounts).toBeNull();
+    // Контрагенты: список строк берётся, мусор — нет; в старых настройках их нет вовсе.
+    expect(parseBenchmarks({ housingPayees: ["Энергосбыт"], debtPayees: [1], investPayees: "x" })).toMatchObject({
+      housingPayees: ["Энергосбыт"],
+      debtPayees: [],
+      investPayees: [],
+    });
   });
 });
 

@@ -97,6 +97,30 @@ test("настроенные ориентиры считают по заверш
     .toEqual(["Дом"]);
 });
 
+test("жильё по контрагенту: категории не отмечены, отмечен получатель (#138)", async ({ page }) => {
+  await connectZen(page, "/health");
+  await expect(card(page, "housing")).toContainText("Не настроен");
+  // Аренда 35 000 ₽ в месяц уходит «Управляющей компании» — отмечаем её, а не категорию.
+  await configure(page, { housingPayees: ["Управляющая компания"] });
+  await expect(card(page, "housing")).toContainText("В норме");
+  await expect(card(page, "housing")).toContainText("35 000");
+  // Категория и контрагент вместе одну операцию дважды не считают.
+  await configure(page, { housingCategories: ["Дом"], housingPayees: ["Управляющая компания"] });
+  await expect(card(page, "housing")).toContainText("35 000");
+  await expect(card(page, "housing")).toContainText("23%");
+
+  // В настройках список контрагентов есть у жилья, кредитов и вложений.
+  await page.getByRole("button", { name: "Настроить ориентиры" }).click();
+  const dialog = page.getByRole("dialog");
+  for (const id of ["housing", "debt", "invest"]) {
+    await expect(dialog.locator(`[data-benchmark-settings="${id}"]`).getByText("Контрагенты", { exact: true }).first()).toBeVisible();
+  }
+  // В поле видно, сколько контрагентов отмечено.
+  const housing = dialog.locator('[data-benchmark-settings="housing"]');
+  await expect(housing).toContainText(/Контрагенты: 1 из \d+/);
+  if (process.env.E2E_SHOTS) await dialog.screenshot({ path: process.env.E2E_SHOTS + "/benchmark-payees.png" });
+});
+
 test("выключенный ориентир пропадает, порог меняет статус", async ({ page }) => {
   await connectZen(page, "/health");
   await configure(page, { housingCategories: ["Дом"], housingLimit: 10, doublingOn: false, investOn: false });

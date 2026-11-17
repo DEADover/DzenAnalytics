@@ -26,6 +26,7 @@ import { MultiSelect } from "./MultiSelect";
 import { SettingRow } from "./SettingRow";
 import { Slider } from "./Slider";
 import { Switch } from "./Switch";
+import { displayPayee } from "../lib/format";
 
 /** Заголовок с пояснением и выключателем карточки. */
 function Head({
@@ -134,6 +135,33 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
       }
     />
   );
+  // Контрагенты — те, кому платили: по ним и отбираются расходы карточки.
+  const payeeNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of transactions) {
+      if (t.kind === "transfer" || t.kind === "income") continue;
+      const name = displayPayee(t).trim();
+      if (name) set.add(name);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [transactions]);
+  const payeePicker = (value: string[], onChange: (next: string[]) => void) => (
+    <SettingRow
+      dense
+      title="Контрагенты"
+      control={
+        <MultiSelect
+          className="w-56"
+          label="Контрагенты"
+          options={payeeNames}
+          selected={listToSet(value, payeeNames)}
+          onChange={(next) => onChange(setToList(next, payeeNames))}
+          unitForms={["контрагент", "контрагента", "контрагентов"]}
+          searchPlaceholder="Поиск контрагента"
+        />
+      }
+    />
+  );
   const limit = (label: string, value: number, onChange: (v: number) => void) => (
     <Slider
       className="py-1.5"
@@ -167,6 +195,7 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
           {s.housingOn && (
             <Body>
               {categories("Что относится к жилью", s.housingCategories, (v) => void s.update({ housingCategories: v }))}
+              {payeePicker(s.housingPayees, (v) => void s.update({ housingPayees: v }))}
               {limit("Норма — не больше", s.housingLimit, (v) => void s.update({ housingLimit: v }))}
             </Body>
           )}
@@ -184,6 +213,7 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
             <Body>
               {accountPicker("Кредитные счета", s.debtAccounts ?? loanKeys, (v) => void s.update({ debtAccounts: v }))}
               {categories("Платежи, записанные расходом", s.debtCategories, (v) => void s.update({ debtCategories: v }))}
+              {payeePicker(s.debtPayees, (v) => void s.update({ debtPayees: v }))}
               {limit("Норма — не больше", s.debtLimit, (v) => void s.update({ debtLimit: v }))}
             </Body>
           )}
@@ -196,6 +226,7 @@ export function BenchmarkSettingsModal({ onClose }: { onClose: () => void }) {
           <Body>
             {accountPicker("Инвестиционные счета", s.investAccounts, (v) => void s.update({ investAccounts: v }))}
             {categories("Вложения, записанные расходом", s.investCategories, (v) => void s.update({ investCategories: v }))}
+            {payeePicker(s.investPayees, (v) => void s.update({ investPayees: v }))}
           </Body>
           <Head
             icon={PiggyBank}

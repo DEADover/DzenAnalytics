@@ -23,6 +23,7 @@ import {
   type TargetShareResult,
 } from "../lib/benchmarks";
 import { detectRecurring, recurringMonthly } from "../lib/aggregations";
+import { displayPayee } from "../lib/format";
 
 export interface BenchmarksModel {
   base: string;
@@ -63,12 +64,13 @@ export function useBenchmarks(): BenchmarksModel {
 
   return useMemo(() => {
     const window = benchmarkWindow(analyticsTx, monthStartDay, localToday());
-    const cats = (list: string[]) => categoryFlow(analyticsTx, new Set(list), window, monthStartDay);
+    const cats = (list: string[], payees: string[]) =>
+      categoryFlow(analyticsTx, new Set(list), window, monthStartDay, new Set(payees));
     const moves = (list: string[], net: boolean) =>
       accountInflow(transactions, new Set(list), window, monthStartDay, net);
 
     const debtAccounts = s.debtAccounts ?? loanKeys;
-    const invested = addFlows(moves(s.investAccounts, true), cats(s.investCategories));
+    const invested = addFlows(moves(s.investAccounts, true), cats(s.investCategories, s.investPayees));
     const investSet = new Set(s.investAccounts);
     const investLive = (live ?? []).filter((a) => investSet.has(accountKeyOf(a)));
 
@@ -79,11 +81,12 @@ export function useBenchmarks(): BenchmarksModel {
     let recurringCount = 0;
     if (s.recurringOn) {
       const own = new Set([...s.housingCategories, ...s.debtCategories]);
-      const fullOf = new Map(analyticsTx.map((t) => [t.id, t.categoryFull]));
+      const ownPayees = new Set([...s.housingPayees, ...s.debtPayees]);
+      const txOf = new Map(analyticsTx.map((t) => [t.id, t]));
       for (const c of detectRecurring(analyticsTx)) {
         if (!isSubscription(c)) continue;
-        const full = fullOf.get(c.txIds[c.txIds.length - 1]);
-        if (full && own.has(full)) continue;
+        const last = txOf.get(c.txIds[c.txIds.length - 1]);
+        if (last && (own.has(last.categoryFull) || ownPayees.has(displayPayee(last)))) continue;
         recurringSum += toBase(recurringMonthly(c), c.currency, rates);
         recurringCount++;
       }
@@ -94,23 +97,23 @@ export function useBenchmarks(): BenchmarksModel {
       months: window.yms.length,
       housing: s.housingOn
         ? {
-            configured: s.housingCategories.length > 0,
-            result: shareBenchmark(window, cats(s.housingCategories), s.housingLimit),
+            configured: s.housingCategories.length > 0 || s.housingPayees.length > 0,
+            result: shareBenchmark(window, cats(s.housingCategories, s.housingPayees), s.housingLimit),
           }
         : null,
       debt: s.debtOn
         ? {
-            configured: debtAccounts.length > 0 || s.debtCategories.length > 0,
+            configured: debtAccounts.length > 0 || s.debtCategories.length > 0 || s.debtPayees.length > 0,
             result: shareBenchmark(
               window,
-              addFlows(moves(debtAccounts, false), cats(s.debtCategories)),
+              addFlows(moves(debtAccounts, false), cats(s.debtCategories, s.debtPayees)),
               s.debtLimit
             ),
           }
         : null,
       invest: s.investOn
         ? {
-            configured: s.investAccounts.length > 0 || s.investCategories.length > 0,
+            configured: s.investAccounts.length > 0 || s.investCategories.length > 0 || s.investPayees.length > 0,
             result: targetShareBenchmark(window, invested, s.investTarget),
           }
         : null,
