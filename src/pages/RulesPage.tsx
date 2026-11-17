@@ -15,7 +15,11 @@ import {
   ListChecks,
   Download,
   Upload,
+  Lightbulb,
+  X,
 } from "lucide-react";
+import { useRuleHintsStore } from "../store/useRuleHintsStore";
+import { buildRuleSuggestions, type RuleSuggestion } from "../lib/ruleSuggestions";
 import clsx from "clsx";
 import {
   useCategoryRulesStore,
@@ -152,6 +156,24 @@ export function RulesPage() {
   useEffect(() => {
     void loadRuleRuns();
   }, [loadRuleRuns]);
+
+  // Подсказки правил: что человек уже несколько раз поправил руками.
+  const hintLog = useRuleHintsStore((s) => s.log);
+  const hintDismissed = useRuleHintsStore((s) => s.dismissed);
+  const hintsLoaded = useRuleHintsStore((s) => s.loaded);
+  const hydrateHints = useRuleHintsStore((s) => s.hydrate);
+  useEffect(() => {
+    if (!hintsLoaded) void hydrateHints();
+  }, [hintsLoaded, hydrateHints]);
+  const suggestions = useMemo(
+    () => buildRuleSuggestions(hintLog, rules.map(migrateRule), transactions, new Set(hintDismissed)),
+    [hintLog, rules, transactions, hintDismissed]
+  );
+  // Без вопроса: спрятанную подсказку возвращает «Отменить» на плашке.
+  function hideSuggestion(sg: RuleSuggestion) {
+    void useRuleHintsStore.getState().dismiss(sg.id);
+    toast("Подсказка скрыта", { undo: () => useRuleHintsStore.getState().restore(sg.id) });
+  }
 
   /** Черновик из окна операции («Создать правило») — открываем редактор сразу. */
   const [prefill, setPrefill] = useState(peekPendingRulePrefill);
@@ -522,6 +544,63 @@ export function RulesPage() {
           note="Результат выбранных правил, ещё не ставший правкой операции"
         />
       </StatRow>
+
+      {/* Подсказки стоят над списком правил и только когда они есть: пустая
+          карточка «подсказок нет» ничего бы не сообщала. */}
+      {suggestions.length > 0 && (
+        <div className="card-tray card-pad" data-rule-suggestions>
+          <CardHeader
+            icon={Lightbulb}
+            title="Подсказки правил"
+            subtitle="Вы несколько раз поправили одно и то же руками — правило сделает это само"
+          />
+          <ul className="divide-y divide-border">
+            {suggestions.map((sg) => (
+              <li key={sg.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0" data-rule-suggestion>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm truncate">
+                    <span className="text-muted">{sg.matchLabel}: </span>
+                    {sg.matchValue}
+                    <span className="text-muted"> → {sg.field === "category" ? "Категория" : "Контрагент"}: </span>
+                    {sg.to}
+                  </div>
+                  <div className="text-xs text-muted mt-0.5">
+                    Исправляли вручную: {formatNum(sg.count)} {pluralRu(sg.count, ["раз", "раза", "раз"])}
+                    {sg.field === "category" && sg.total != null && sg.total > 0 && (
+                      <>
+                        {" · "}Сейчас у контрагента {formatNum(sg.total)}{" "}
+                        {pluralRu(sg.total, ["операция", "операции", "операций"])}, в этой категории —{" "}
+                        {formatNum(sg.inTarget ?? 0)}
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost text-xs shrink-0"
+                  onClick={() => {
+                    setPrefill(sg.draft);
+                    setEditing("create");
+                  }}
+                >
+                  <Plus className="w-4 h-4" aria-hidden />
+                  Создать правило
+                </button>
+                <Tooltip content="Не предлагать">
+                  <button
+                    type="button"
+                    className="btn-icon shrink-0"
+                    aria-label={`Не предлагать правило: ${sg.matchValue} → ${sg.to}`}
+                    onClick={() => hideSuggestion(sg)}
+                  >
+                    <X className="w-4 h-4" aria-hidden />
+                  </button>
+                </Tooltip>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="card-tray card-pad">
         {/* Панель действий — как в справочниках: заголовок со счётчиком,

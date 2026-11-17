@@ -7,6 +7,8 @@
 // from server data, the overlay re-applies on top). Push-to-Zenmoney
 // is intentionally NOT implemented here — it's a separate feature.
 
+import { correctionsOf } from "../lib/ruleSuggestions";
+import { useRuleHintsStore } from "./useRuleHintsStore";
 import { create } from "zustand";
 import * as db from "../lib/db";
 import { serialQueue } from "../lib/serialQueue";
@@ -159,6 +161,27 @@ function trace(
     : markUserFields(origins, id, fields);
 }
 
+/**
+ * Ручные исправления категории и контрагента — в журнал подсказок правил
+ * (`lib/ruleSuggestions`). Правка уйдёт в Дзен-мани и исчезнет из очереди, а
+ * по журналу видно, что человек делает одно и то же раз за разом.
+ */
+function noteCorrections(
+  patches: Record<string, TransactionEdit>,
+  prev: Record<string, TransactionEdit>,
+  origin: EditOrigin,
+  now: number
+): void {
+  if (origin !== "user") return;
+  const serverOf = serverLookup();
+  const added = Object.entries(patches).flatMap(([id, patch]) => {
+    const raw = serverOf(id);
+    // Операция, какой её видели до этой правки: облако плюс прежние правки.
+    return raw ? correctionsOf({ ...raw, ...prev[id] }, patch, now) : [];
+  });
+  if (added.length > 0) void useRuleHintsStore.getState().record(added);
+}
+
 /** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */
 const queue = serialQueue();
 
@@ -185,6 +208,7 @@ export const useEditsStore = create<EditsState>((set, get) => ({
   }),
 
   setEdit: (id, patch, origin = "user") => queue(async () => {
+    noteCorrections({ [id]: patch }, get().edits, origin, Date.now());
     const next = { ...get().edits, [id]: { ...get().edits[id], ...patch } };
     const origins = trace(get().origins, id, patch, origin);
     const bases = recordBases(get().bases, id, patch, serverLookup()(id), Date.now());
@@ -200,6 +224,7 @@ export const useEditsStore = create<EditsState>((set, get) => ({
     let bases = get().bases;
     const serverOf = serverLookup();
     const now = Date.now();
+    noteCorrections(Object.fromEntries(ids.map((id) => [id, patch])), prev, origin, now);
     for (const id of ids) {
       next[id] = { ...prev[id], ...patch };
       origins = trace(origins, id, patch, origin);
@@ -218,6 +243,7 @@ export const useEditsStore = create<EditsState>((set, get) => ({
     let bases = get().bases;
     const serverOf = serverLookup();
     const now = Date.now();
+    noteCorrections(patches, prev, origin, now);
     for (const id of ids) {
       next[id] = { ...prev[id], ...patches[id] };
       origins = trace(origins, id, patches[id], origin);
