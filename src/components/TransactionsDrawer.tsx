@@ -28,7 +28,15 @@ import { deleteWithUndo } from "../lib/undoable";
 import { formatMoney, formatDate, formatNum, displayPayee, payeeSearchText, transferCounterparty } from "../lib/format";
 import { kindLabel, operationTone } from "../lib/txKindStyle";
 import { DataTable, type Column, type SortState } from "./DataTable";
-import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "./operations/OperationCells";
+import {
+  OperationActions,
+  OperationAmount,
+  OperationCategory,
+  OperationPayee,
+  OperationComment,
+} from "./operations/OperationCells";
+import { operationMarkClass, operationTime } from "../lib/operationMarks";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { buildCsv, csvFileName, downloadCsv, sortRows, TONE_CLASS } from "./table/tableKit";
 import { OperationListRow } from "./operations/OperationList";
 import { Checkbox } from "./Checkbox";
@@ -94,6 +102,8 @@ export function TransactionsDrawer() {
 
   const edits = useEditsStore((s) => s.edits);
   const drafts = useDraftsStore((s) => s.drafts);
+  const timeColumn = useDisplayStore((s) => s.timeColumn);
+  const newMark = useDisplayStore((s) => s.newMark);
   const editsLoaded = useEditsStore((s) => s.loaded);
   const hydrateEdits = useEditsStore((s) => s.hydrate);
   useEffect(() => {
@@ -191,12 +201,28 @@ export function TransactionsDrawer() {
     {
       key: "category",
       type: "text",
-      width: "16rem",
+      // Со столбцом «Время» категория и контрагент чуть уже — иначе
+      // комментарию не хватало места даже на подпись.
+      width: timeColumn ? "14rem" : "16rem",
       label: "Категория",
       sortValue: (t) => t.categoryFull,
       cellTitle: () => "",
       render: (t) => <OperationCategory tx={t} edited={!!edits[t.id]} draft={!!drafts[t.id]} />,
     },
+    // «Время» — перед счётом, как в ленте «Операций» (настройка в «Оформлении», #139).
+    ...(timeColumn
+      ? [
+          {
+            key: "time",
+            type: "date",
+            // Подпись со значком сортировки целиком: в 5rem она обрезалась.
+            width: "6.5rem",
+            label: "Время",
+            sortValue: (t) => operationTime(t),
+            render: (t) => operationTime(t),
+          } satisfies Column<Transaction>,
+        ]
+      : []),
     {
       key: "account",
       type: "text",
@@ -209,7 +235,7 @@ export function TransactionsDrawer() {
     {
       key: "payee",
       type: "text",
-      width: "14rem",
+      width: timeColumn ? "12rem" : "14rem",
       label: "Контрагент",
       sortValue: (t) => displayPayee(t) || transferCounterparty(t) || "",
       cellTitle: () => "",
@@ -457,7 +483,14 @@ export function TransactionsDrawer() {
                   };
                   const who = displayPayee(t) || (transferCounterparty(t) ? dir.label(txInKey(t)) : null);
                   return (
-                    <OperationListRow key={t.id} template="auto" selected={on} onToggleSelect={toggle} onOpen={() => setEditing(t)}>
+                    <OperationListRow
+                      key={t.id}
+                      template="auto"
+                      selected={on}
+                      onToggleSelect={toggle}
+                      onOpen={() => setEditing(t)}
+                      className={operationMarkClass(newMark, t, !!drafts[t.id])}
+                    >
                       <Checkbox checked={on} stopPropagation onChange={toggle} label="Выбрать операцию" />
                       <OperationCategory tx={t} edited={!!edits[t.id]} draft={!!drafts[t.id]} />
                       <div data-cell="payee" className="min-w-0 text-muted">
@@ -492,6 +525,7 @@ export function TransactionsDrawer() {
             sort={sort}
             onSortChange={setSort}
             onRowDoubleClick={(t) => setEditing(t)}
+            rowClassName={(t) => operationMarkClass(newMark, t, !!drafts[t.id])}
             selection={{ selected, onChange: setSelected, label: "Выбрать все операции" }}
             exportable={false}
             emptyText={transactions.length === 0 ? "Нет операций" : "По запросу ничего не найдено"}

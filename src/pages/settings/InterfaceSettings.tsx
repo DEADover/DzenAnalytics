@@ -65,6 +65,10 @@ export function InterfaceSettings() {
   const setStatementLine = useDisplayStore((s) => s.setStatementLine);
   const commentWrap = useDisplayStore((s) => s.commentWrap);
   const setCommentWrap = useDisplayStore((s) => s.setCommentWrap);
+  const timeColumn = useDisplayStore((s) => s.timeColumn);
+  const setTimeColumn = useDisplayStore((s) => s.setTimeColumn);
+  const newMark = useDisplayStore((s) => s.newMark);
+  const setNewMark = useDisplayStore((s) => s.setNewMark);
   const feedPlanned = useDisplayStore((s) => s.feedPlanned);
   const feedPlannedMode = useDisplayStore((s) => s.feedPlannedMode);
   const setFeedPlannedMode = useDisplayStore((s) => s.setFeedPlannedMode);
@@ -338,6 +342,61 @@ export function InterfaceSettings() {
               checked={commentWrap}
               label="Переносить длинные комментарии на вторую строку"
               onChange={(next) => setCommentWrap(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Столбец «Время»"
+          status={timeColumn ? "Показывается перед «Счётом»" : "Скрыт — время видно в окне операции"}
+          help={
+            <p>
+              В ленте «Операций» и в списке операций сбоку можно показать время
+              каждой операции — столбцом перед «Счётом». Удобно, когда за день
+              много операций и важен их порядок. У операций, загруженных из
+              файла выписки без времени, ячейка остаётся пустой.
+            </p>
+          }
+          control={
+            <Switch
+              checked={timeColumn}
+              label="Показывать столбец «Время»"
+              onChange={(next) => setTimeColumn(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Отметка новых операций"
+          status={
+            newMark === "strip"
+              ? "Полоска по левому краю строки"
+              : "Точка на значке категории"
+          }
+          help={
+            <>
+              <p>
+                Так в лентах помечены операции, которые пришли из банка и ещё не
+                открывались в Дзен-мани, и созданные здесь, но ещё не
+                отправленные.
+              </p>
+              <p>
+                <strong>Точка</strong> — маленький кружок на значке категории.{" "}
+                <strong>Полоска</strong> — цветная черта во всю высоту строки у
+                её левого края: на большом мониторе её видно сразу. Цвета те же:
+                новые — цветом акцента, неотправленные — красным.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              label="Отметка новых операций"
+              value={newMark}
+              onChange={(v) => void setNewMark(v)}
+              options={[
+                { value: "dot" as const, label: "Точка", title: "Точкой на значке категории" },
+                { value: "strip" as const, label: "Полоска", title: "Полоской по левому краю строки" },
+              ]}
             />
           }
         />

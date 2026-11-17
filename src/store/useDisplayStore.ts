@@ -106,6 +106,18 @@ interface DisplayState {
    */
   commentWrap: boolean;
   /**
+   * Столбец «Время» в ленте «Операций» и в списке операций сбоку — перед
+   * «Счётом» (#139). По умолчанию выключен: время в Дзен-мани есть не у всех
+   * операций, а лента и так широкая.
+   */
+  timeColumn: boolean;
+  /**
+   * Чем отмечать новые и ещё не отправленные операции: точкой на значке
+   * категории или полоской по левому краю строки (#139). На большом мониторе
+   * точку легко потерять, полоску видно сразу.
+   */
+  newMark: NewMarkStyle;
+  /**
    * Своя ширина столбцов: границы в шапках таблиц и лент можно тянуть мышью,
    * ширины запоминаются по таблицам (`useColumnWidthsStore`). Пока опыт —
    * по умолчанию выключено.
@@ -209,6 +221,8 @@ interface DisplayState {
   setTableFontLevel: (level: TableFontLevel) => Promise<void>;
   setStatementLine: (on: boolean) => Promise<void>;
   setCommentWrap: (on: boolean) => Promise<void>;
+  setTimeColumn: (on: boolean) => Promise<void>;
+  setNewMark: (style: NewMarkStyle) => Promise<void>;
   setColumnResize: (on: boolean) => Promise<void>;
   setFeedHeadSticky: (on: boolean) => Promise<void>;
   setHomeFilters: (on: boolean) => Promise<void>;
@@ -226,11 +240,16 @@ interface DisplayState {
   setContentWidth: (width: number) => Promise<void>;
 }
 
+/** Отметка новых и неотправленных операций в лентах: точка или полоска. */
+export type NewMarkStyle = "dot" | "strip";
+
 export const useDisplayStore = create<DisplayState>((set, get) => ({
   fractionDigits: 0,
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
   commentWrap: true,
+  timeColumn: false,
+  newMark: "dot",
   columnResize: false,
   feedHeadSticky: false,
   homeFilters: false,
@@ -257,6 +276,8 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel?: number;
       statementLine?: boolean;
       commentWrap?: boolean;
+      timeColumn?: boolean;
+      newMark?: string;
       columnResize?: boolean;
       feedHeadSticky?: boolean;
       homeFilters?: boolean;
@@ -284,6 +305,8 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
       commentWrap: stored?.commentWrap !== false,
+      timeColumn: stored?.timeColumn === true,
+      newMark: stored?.newMark === "strip" ? "strip" : "dot",
       columnResize: stored?.columnResize === true,
       feedHeadSticky: stored?.feedHeadSticky === true,
       homeFilters: stored?.homeFilters === true,
@@ -325,6 +348,16 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   setCommentWrap: async (on) => {
     set({ commentWrap: on });
     await db.saveJSON(KEY, { ...persisted(get()), commentWrap: on });
+  },
+
+  setTimeColumn: async (on) => {
+    set({ timeColumn: on });
+    await db.saveJSON(KEY, { ...persisted(get()), timeColumn: on });
+  },
+
+  setNewMark: async (style) => {
+    set({ newMark: style });
+    await db.saveJSON(KEY, { ...persisted(get()), newMark: style });
   },
 
   setColumnResize: async (on) => {
@@ -415,6 +448,8 @@ function persisted(s: DisplayState) {
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
     commentWrap: s.commentWrap,
+    timeColumn: s.timeColumn,
+    newMark: s.newMark,
     columnResize: s.columnResize,
     feedHeadSticky: s.feedHeadSticky,
     homeFilters: s.homeFilters,

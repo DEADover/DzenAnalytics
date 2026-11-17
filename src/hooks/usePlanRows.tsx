@@ -25,7 +25,8 @@ import { AccountName } from "../components/AccountName";
  * операций («Запланированные в ленте» → «В ленте»): строка плана везде одна.
  * `overlay` ставится в разметку один раз — там живут меню и окна.
  */
-export function usePlanRows(template: string) {
+/** `time` — в сетке есть столбец «Время» ленты: у плана времени нет, ячейка пустая. */
+export function usePlanRows(template: string, time = false) {
   const today = localToday();
   const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
   const [fact, setFact] = useState<PlannedOp | null>(null);
@@ -98,6 +99,7 @@ export function usePlanRows(template: string) {
             </span>
           )}
         </div>
+        {time && <span aria-hidden />}
         <AccountName
           className="op-muted truncate block"
           accountKey={p.accountKey ?? p.account}

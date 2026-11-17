@@ -32,7 +32,15 @@ import { confirm, useConfirmStore } from "../store/useConfirmStore";
 import { pluralRu } from "../lib/plural";
 import { EditTransactionModal } from "../components/EditTransactionModal";
 import { Checkbox } from "../components/Checkbox";
-import { OperationActions, OperationAmount, OperationCategory, OperationPayee, OperationComment } from "../components/operations/OperationCells";
+import {
+  OperationActions,
+  OperationAmount,
+  OperationCategory,
+  OperationPayee,
+  OperationComment,
+  OperationTime,
+} from "../components/operations/OperationCells";
+import { operationMarkClass } from "../lib/operationMarks";
 import { downloadCsv, TONE_CLASS } from "../components/table/tableKit";
 import { SplitTransactionModal } from "../components/SplitTransactionModal";
 import { MakeRecurringModal } from "../components/operations/MakeRecurringModal";
@@ -127,6 +135,8 @@ const OPS_COLUMNS: ResizeColumn[] = [
   { key: "select", size: "20px", resizable: false },
   { key: "date", label: "Дата", size: "84px" },
   { key: "category", label: "Категория", size: "minmax(0, 1.3fr)" },
+  // Только при настройке «Столбец „Время“» (#139) — см. `opsColumns`.
+  { key: "time", label: "Время", size: "56px" },
   { key: "account", label: "Счёт", size: "minmax(0, 1fr)" },
   { key: "payee", label: "Контрагент", size: "minmax(0, 1.3fr)" },
   { key: "comment", label: "Комментарий", size: "minmax(0, 2.6fr)" },
@@ -135,7 +145,10 @@ const OPS_COLUMNS: ResizeColumn[] = [
   // на 6 px в поле строки.
   { key: "actions", size: "118px", resizable: false },
 ];
-const OPS_COLUMNS_NODATE = OPS_COLUMNS.filter((c) => c.key !== "date");
+/** Колонки ленты: без даты — когда лента по дням, без времени — когда оно выключено. */
+function opsColumns(byDate: boolean, time: boolean): ResizeColumn[] {
+  return OPS_COLUMNS.filter((c) => (c.key !== "date" || !byDate) && (c.key !== "time" || time));
+}
 
 const PAGE_SIZE = 100;
 
@@ -544,11 +557,13 @@ export function TransactionsPage() {
 
   // Лента по дням — без колонки даты: дата стоит в шапке дня.
   const byDate = sortMode === "date-desc" || sortMode === "date-asc";
-  const resize = useColumnResize("operations", byDate ? OPS_COLUMNS_NODATE : OPS_COLUMNS, {
+  const timeColumn = useDisplayStore((s) => s.timeColumn);
+  const columns = useMemo(() => opsColumns(byDate, timeColumn), [byDate, timeColumn]);
+  const resize = useColumnResize("operations", columns, {
     mode: "grid",
   });
   // Строки планов в режиме «В ленте» — те же, что в ленте одних планов.
-  const planRows = usePlanRows(resize.template);
+  const planRows = usePlanRows(resize.template, timeColumn);
   const renderPlan = (t: Transaction, grouped: boolean) => {
     const p = planById.get(t.id);
     return p ? planRows.renderRow(p, grouped) : null;
@@ -813,6 +828,7 @@ export function TransactionsPage() {
             />
             <PlannedFeedList
               template={resize.template}
+              time={timeColumn}
               grouped={byDate}
               query={deferredSearch}
             />
@@ -1026,6 +1042,7 @@ function HeaderRow({
   someSelected: boolean;
   onToggleAll: () => void;
 }) {
+  const timeColumn = useDisplayStore((s) => s.timeColumn);
   return (
     <OperationListHead template={template}>
       {noSelect ? (
@@ -1051,6 +1068,11 @@ function HeaderRow({
       <ListHeadCell col="category" resize={handle("category")}>
         Категория
       </ListHeadCell>
+      {timeColumn && (
+        <ListHeadCell col="time" resize={handle("time")}>
+          Время
+        </ListHeadCell>
+      )}
       <ListHeadCell col="account" resize={handle("account")}>
         Счёт
       </ListHeadCell>
@@ -1169,12 +1191,15 @@ const Row = memo(function Row({
 }) {
   const open = () => onEdit(tx);
   const toggle = () => onToggleSelect(tx.id);
+  const timeColumn = useDisplayStore((s) => s.timeColumn);
+  const newMark = useDisplayStore((s) => s.newMark);
   return (
     <OperationListRow
       template={template}
       selected={selected}
       onToggleSelect={toggle}
       onOpen={open}
+      className={operationMarkClass(newMark, tx, draft)}
     >
       <Checkbox
         checked={selected}
@@ -1189,6 +1214,7 @@ const Row = memo(function Row({
       )}
       {/* Без `title`: подсказка повторяла бы название, которое тут же и написано. */}
       <OperationCategory tx={tx} edited={edited} draft={draft} />
+      {timeColumn && <OperationTime tx={tx} />}
       <AccountName accountKey={txAccountKey(tx)} title={tx.account} className="truncate text-muted" />
       <OperationPayee tx={tx} />
       <OperationComment text={tx.comment} />

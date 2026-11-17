@@ -11,6 +11,7 @@ import { useAccountDirectory } from "../../hooks/useAccountDirectory";
 import { ArrowLeftRight, Copy, HandCoins, Pencil, Scissors, Trash2 } from "lucide-react";
 import type { Transaction } from "../../types";
 import { useDisplayStore } from "../../store/useDisplayStore";
+import { operationTime } from "../../lib/operationMarks";
 import {
   crossCurrencyReceived,
   displayPayee,
@@ -24,6 +25,11 @@ import { ExtraCategoriesLine } from "../ExtraCategoriesLine";
 import { Tooltip } from "../Tooltip";
 import { CounterpartyNoteMark } from "../CounterpartyNote";
 
+/** Ячейка «Время» лент и шторки (настройка «Столбец „Время“»). */
+export function OperationTime({ tx }: { tx: Transaction }) {
+  return <div className="text-muted tabular-nums whitespace-nowrap">{operationTime(tx)}</div>;
+}
+
 /** Категория: значок 28 с отметками, название, подкатегория и вторые категории строками ниже. */
 export function OperationCategory({
   tx,
@@ -34,6 +40,9 @@ export function OperationCategory({
   edited: boolean;
   draft?: boolean;
 }) {
+  // Полоской отмечает сама строка (`operationMarkClass`) — точки не нужны,
+  // а смысл отметки остаётся для экранного диктора.
+  const strip = useDisplayStore((s) => s.newMark) === "strip";
   return (
     <div data-cell="category" className="flex items-center gap-2 min-w-0">
       <span className="relative inline-flex shrink-0">
@@ -43,7 +52,10 @@ export function OperationCategory({
           parent={tx.subcategory ? tx.category : undefined}
           size="w-7 h-7"
         />
-        {draft && (
+        {strip && (draft || tx.unseen) && (
+          <span className="sr-only">{draft ? "Новая операция — не отправлена" : "Новая операция"}</span>
+        )}
+        {!strip && draft && (
           <span
             className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-expense border-2 border-panel"
             aria-label="Новая операция — не отправлена"
@@ -51,7 +63,7 @@ export function OperationCategory({
         )}
         {/* «Новая» — приехала из банка, и в Дзен-мани её ещё не открывали. С
             точкой черновика не сталкивается: у черновиков этой пометки нет. */}
-        {tx.unseen && !draft && (
+        {!strip && tx.unseen && !draft && (
           <Tooltip content="Новая — вы ещё не открывали её в Дзен-мани">
             <span
               className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-panel"

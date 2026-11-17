@@ -191,6 +191,12 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useDisplayStore, "display.commentWrap", (s) => s.commentWrap, (v, s) =>
     isBool(v) ? s.setCommentWrap(v) : undefined
   ),
+  field(useDisplayStore, "display.timeColumn", (s) => s.timeColumn, (v, s) =>
+    isBool(v) ? s.setTimeColumn(v) : undefined
+  ),
+  field(useDisplayStore, "display.newMark", (s) => s.newMark, (v, s) =>
+    v === "dot" || v === "strip" ? s.setNewMark(v) : undefined
+  ),
   field(useDisplayStore, "display.columnResize", (s) => s.columnResize, (v, s) =>
     isBool(v) ? s.setColumnResize(v) : undefined
   ),

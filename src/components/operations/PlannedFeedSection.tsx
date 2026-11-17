@@ -109,12 +109,15 @@ export function PlannedBar({
  */
 export function PlannedFeedList({
   template,
+  time = false,
   grouped,
   query = "",
   ops: opsProp,
   emptyText,
 }: {
   template: string;
+  /** В сетке есть столбец «Время» ленты. */
+  time?: boolean;
   /** Лента разбита по дням — тогда и планы идут с заголовками дней, без колонки даты. */
   grouped: boolean;
   /** Быстрый поиск ленты — ищет и по планам. */
@@ -131,7 +134,7 @@ export function PlannedFeedList({
   const ops = opsProp ?? feed.ops;
   const today = feed.today;
   const base = useDataStore((s) => s.rates.base);
-  const rows = usePlanRows(template);
+  const rows = usePlanRows(template, time);
   const renderRow = (p: PlannedOp) => rows.renderRow(p, grouped);
 
   const overdueOps = useMemo(() => ops.filter((p) => p.date < today), [ops, today]);
