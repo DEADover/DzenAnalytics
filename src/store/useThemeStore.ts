@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import { create } from "zustand";
 import {
   DEFAULT_DARK_SCHEME,
@@ -84,6 +85,45 @@ function applyTheme(resolved: ResolvedTheme, scheme: SchemeChoice) {
   root.style.colorScheme = resolved;
 }
 
+/**
+ * Сменить тему на глазах у человека — плавным наплывом всей страницы.
+ *
+ * Мгновенная смена мигала: у полей, кнопок и дорожек свои CSS-переходы цвета
+ * разной длины, и пару кадров тёмные поля стояли на уже светлом фоне. Теперь
+ * на время смены переходы у элементов выключены (`theme-switching`), а
+ * браузер снимает кадр со старой темы и проявляет поверх него новую
+ * (View Transitions; анимация — `[data-vt="theme"]` в index.css). Новый кадр
+ * живой, поэтому без выключенных переходов вспышки были бы видны и в нём.
+ *
+ * Где браузер этого не умеет или человек просил поменьше движения — смена
+ * мгновенная, но тоже без переходов у элементов: кадр меняется целиком.
+ * `update` — то, что меняется вместе с темой (состояние стора: значок кнопки).
+ */
+function applyThemeSmooth(resolved: ResolvedTheme, scheme: SchemeChoice, update: () => void) {
+  if (typeof document === "undefined") return update();
+  const root = document.documentElement;
+  const apply = () => {
+    root.classList.add("theme-switching");
+    applyTheme(resolved, scheme);
+    update();
+  };
+  const done = () => {
+    delete root.dataset.vt;
+    root.classList.remove("theme-switching");
+  };
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (typeof document.startViewTransition !== "function" || reduce) {
+    apply();
+    // Стили с новой темой посчитаны — переходы можно возвращать: менять уже нечего.
+    void root.offsetHeight;
+    requestAnimationFrame(done);
+    return;
+  }
+  root.dataset.vt = "theme";
+  const vt = document.startViewTransition(() => flushSync(apply));
+  vt.finished.then(done, done);
+}
+
 interface ThemeState {
   mode: ThemeMode;
   resolved: ResolvedTheme;
@@ -133,8 +173,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         // ignore
       }
       const resolved = resolveMode(mode);
-      applyTheme(resolved, schemeFor(resolved));
-      set({ mode, resolved });
+      applyThemeSmooth(resolved, schemeFor(resolved), () => set({ mode, resolved }));
     },
     setScheme: (id) => {
       // Своя тема, которой ещё нет, — сначала копия текущей.
@@ -202,8 +241,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         if (get().mode !== "auto") return;
         const r = resolveAuto();
         if (r === get().resolved) return;
-        applyTheme(r, schemeFor(r));
-        set({ resolved: r });
+        applyThemeSmooth(r, schemeFor(r), () => set({ resolved: r }));
       };
       const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
       mql?.addEventListener?.("change", follow);

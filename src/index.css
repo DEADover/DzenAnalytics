@@ -596,6 +596,25 @@ h2,
       opacity: 0;
     }
   }
+  /* Смена темы (`applyThemeSmooth`): новая тема проявляется поверх старой
+     целиком — и страница, и шапка своим слоем, — чуть дольше перехода между
+     страницами: цвет меняется везде сразу, и короткий наплыв читался бы
+     вспышкой. Старый кадр стоит как есть. */
+  :root[data-vt="theme"]::view-transition-old(*) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  :root[data-vt="theme"]::view-transition-new(*) {
+    animation: 420ms cubic-bezier(0.4, 0, 0.2, 1) both vt-page-in;
+    mix-blend-mode: normal;
+  }
+  /* Шапке при смене темы свой слой не нужен — она меняется вместе со
+     страницей. Своим слоем её стекло снималось без того, что под ним, и фон
+     за шапкой весь наплыв стоял серым, а в конце рывком становился белым или
+     тёмным. */
+  :root[data-vt="theme"] .app-header {
+    view-transition-name: none;
+  }
   /* Метка стоит на СТРОКЕ шапки, не на `<header>`: элемент с
      `view-transition-name` — корень размытия для потомков, и стекло панели
      фильтров под строкой переставало размывать страницу (TopNav). */
@@ -2082,6 +2101,16 @@ h2,
 .op-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 41px;
+}
+
+/* На время смены темы — никаких переходов у элементов: иначе поля и кнопки
+   перекрашиваются каждый со своей скоростью, и пару кадров видна смесь двух
+   тем (`applyThemeSmooth` в useThemeStore). */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }
 
 /* Отметка «новая» / «не отправлена» полоской по левому краю строки — вместо
