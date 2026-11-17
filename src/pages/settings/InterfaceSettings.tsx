@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Palette, ChevronsLeftRight, ChevronsRightLeft, PanelTop, RotateCcw } from "lucide-react";
+import { Palette, ChevronsLeftRight, ChevronsRightLeft, Funnel, List, PanelTop, RotateCcw, Table2 } from "lucide-react";
 import { SettingsSectionHeader } from "../../components/SettingsSectionHeader";
 import { useColumnWidthsStore } from "../../store/useColumnWidthsStore";
 import { SettingRow } from "../../components/SettingRow";
@@ -105,16 +105,13 @@ export function InterfaceSettings() {
   const setHideForeignMembers = useMembersStore((s) => s.setHideForeignPrivate);
   return (
     <>
+      {/* Оформление — четырьмя карточками по тому, к чему настройка относится:
+          весь сервис, лента операций, таблицы, фильтры. Одной карточкой на
+          восемнадцать строк нужное приходилось искать глазами. */}
 
-      {/* Одна карточка вместо трёх отдельных: настройки вида короткие, а
-          каждая со своим абзацем пояснений занимала пол-экрана.
-
-*/}
       <div className="card-tray card-pad">
-        <SettingsSectionHeader icon={Palette} title="Внешний вид" className="mb-1" />
-        <p className="text-xs text-muted mb-3">
-          Как сервис выглядит и как им удобнее пользоваться.
-        </p>
+        <SettingsSectionHeader icon={Palette} title="Общий вид" className="mb-1" />
+        <p className="text-xs text-muted mb-3">Тема, меню и то, как сервис выглядит целиком.</p>
 
         <SettingRow
           title="Тема"
@@ -172,6 +169,64 @@ export function InterfaceSettings() {
         />
 
         <SettingRow
+          title="Ширина сервиса"
+          status={
+            shownWidth === 0
+              ? "Во весь экран"
+              : `${formatContentWidth(shownWidth)} — ${
+                  screenWiderThanColumn ? "колонкой по центру экрана" : "шире этого экрана, сервис и так во весь экран"
+                }`
+          }
+          help={
+            <>
+              <p>
+                На широком мониторе (например, 21:9) сервис растягивается до
+                краёв окна, и строки таблиц и графики приходится читать
+                поворотом головы. Сдвиньте бегунок влево — шапка, панель
+                фильтров и страница встанут колонкой по центру экрана, а фон и
+                подложка шапки останутся во всю ширину.
+              </p>
+              <p className="mt-2">
+                Ширина — от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
+                {formatNum(CONTENT_WIDTH_MAX)} пикселей; крайнее правое
+                положение — «Во весь экран», как по умолчанию. Пока бегунок
+                тянут, края будущей колонки показаны линиями, а сервис стоит
+                на месте; отпустите — и он плавно встанет в новую ширину.
+                Если экран меньше выбранной ширины, ничего не меняется. Боковая
+                панель операций и окна остаются своей ширины.
+              </p>
+            </>
+          }
+          control={
+            <SettingRange
+              value={contentWidthToSlider(shownWidth)}
+              min={CONTENT_WIDTH_MIN}
+              max={CONTENT_WIDTH_SLIDER_FULL}
+              step={CONTENT_WIDTH_STEP}
+              onChange={(v) => setContentWidthDraft(sliderToContentWidth(v))}
+              onCommit={(v, via) => {
+                // Стрелки жмут подряд: применяем, когда человек остановился, —
+                // иначе каждое нажатие перестраивало бы вёрстку, а нажатие во
+                // время смены кадров терялось. Мышь — сразу при отпускании.
+                window.clearTimeout(widthCommitTimer.current);
+                const apply = () => {
+                  const next = sliderToContentWidth(v);
+                  setContentWidthDraft(null);
+                  if (next === useDisplayStore.getState().contentWidth) return;
+                  withViewTransition(() => void setContentWidth(next));
+                };
+                if (via === "key") widthCommitTimer.current = window.setTimeout(apply, 400);
+                else apply();
+              }}
+              ariaLabel="Ширина сервиса"
+              valueText={formatContentWidth(shownWidth)}
+              start={<ChevronsRightLeft className="w-3.5 h-3.5" />}
+              end={<ChevronsLeftRight className="w-[18px] h-[18px]" />}
+            />
+          }
+        />
+
+        <SettingRow
           title="Дробная часть сумм"
           status={`Например: ${formatMoneyExample(1234.1, rates.base)}`}
           help={
@@ -195,46 +250,80 @@ export function InterfaceSettings() {
         />
 
         <SettingRow
-          tourId="filters-mode"
-          title="Панель фильтров"
+          title="Быстрые настройки"
           status={
-            filtersMode === "button"
-              ? "По кнопке в шапке — не занимает места"
-              : "На странице — всегда на виду"
+            quickSettingsOn
+              ? "Шестерёнка в шапке открывает панель быстрых настроек"
+              : "Шестерёнка в шапке сразу открывает «Настройки»"
           }
           help={
-            <>
-              <p>
-                Общие фильтры — период, счета, категории, валюты и поиск —
-                работают на всех аналитических страницах. Показывать их можно
-                двумя способами.
-              </p>
-              <p className="mt-2">
-                <strong>По кнопке в шапке.</strong> Панель не занимает места на
-                странице: открывается кнопкой с ползунками справа в шапке, с
-                любого места прокрутки выезжает поверх страницы и ничего не
-                сдвигает. Прячется той же кнопкой, клавишей Escape и при
-                переходе в другой раздел. Точка на кнопке — фильтры заданы.
-              </p>
-              <p className="mt-2">
-                <strong>На странице.</strong> Так работает по умолчанию:
-                панель стоит первым блоком каждой страницы и всегда на виду;
-                кнопки в шапке в этом случае нет.
-              </p>
-            </>
+            <p>
+              Панель под шестерёнкой — то, что удобно переключать на ходу:
+              скрыть суммы, счета вне баланса, дробную часть сумм и другое, что вы
+              в неё поставите. Выключите — и шестерёнка снова будет сразу вести
+              сюда, в «Настройки». Клавиши H, B и F работают в любом случае.
+            </p>
           }
           control={
-            <Segmented
-              label="Панель фильтров"
-              value={filtersMode}
-              onChange={(m) => setFiltersMode(m)}
-              options={[
-                { value: "button", label: "По кнопке" },
-                { value: "page", label: "На странице" },
-              ]}
+            <Switch
+              checked={quickSettingsOn}
+              label="Быстрые настройки"
+              onChange={(next) => setQuickSettingsOn(next)}
             />
           }
         />
+
+        <SettingRow
+          title="Всплывающие подсказки"
+          status={
+            hintsOn
+              ? "Пояснения появляются при наведении на кнопки и значки"
+              : "Пояснений при наведении нет — только значения на графиках"
+          }
+          help={
+            <p>
+              Пузырь с пояснением, который появляется, если задержать мышь на
+              кнопке, значке или подписи. Освоились — выключите, чтобы не мешали.
+              Значения на графиках и полный текст обрезанной подписи остаются:
+              это сами данные. Окошки «?» открываются кликом, как и раньше.
+            </p>
+          }
+          control={
+            <Switch
+              checked={hintsOn}
+              label="Всплывающие подсказки"
+              onChange={(next) => setHintsOn(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Убрать значок благодарности"
+          status={
+            hideThanks
+              ? "Сердечко скрыто"
+              : "Сердечко «Поддержать проект» — в шапке рядом со справкой"
+          }
+          help={
+            <p>
+              Значок с сердечком ведёт на страницу, где можно оставить автору
+              чаевые. Если он мешает — включите, и значок пропадёт из шапки и из
+              меню. Больше ничего не меняется.
+            </p>
+          }
+          control={
+            <Switch
+              checked={hideThanks}
+              label="Убрать значок благодарности"
+              onChange={(next) => setHideThanks(next)}
+            />
+          }
+        />
+      </div>
+
+      <div className="card-tray card-pad">
+        <SettingsSectionHeader icon={List} title="Лента операций" className="mb-1" />
+        <p className="text-xs text-muted mb-3">Что видно в строках «Операций» и в списке операций сбоку.</p>
 
         <SettingRow
           title="Запланированные в ленте"
@@ -283,6 +372,61 @@ export function InterfaceSettings() {
                 { value: "bar" as const, label: "Строкой", title: "Строкой «Запланировано» над лентой" },
                 { value: "inline" as const, label: "В ленте", title: "Среди операций, до конца выбранного периода" },
               ]}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Отметка новых операций"
+          status={
+            newMark === "strip"
+              ? "Полоска по левому краю строки"
+              : "Точка на значке категории"
+          }
+          help={
+            <>
+              <p>
+                Так в лентах помечены операции, которые пришли из банка и ещё не
+                открывались в Дзен-мани, и созданные здесь, но ещё не
+                отправленные.
+              </p>
+              <p>
+                <strong>Точка</strong> — маленький кружок на значке категории.{" "}
+                <strong>Полоска</strong> — цветная черта во всю высоту строки у
+                её левого края: на большом мониторе её видно сразу. Цвета те же:
+                новые — цветом акцента, неотправленные — красным.
+              </p>
+            </>
+          }
+          control={
+            <Segmented
+              label="Отметка новых операций"
+              value={newMark}
+              onChange={(v) => void setNewMark(v)}
+              options={[
+                { value: "dot" as const, label: "Точка", title: "Точкой на значке категории" },
+                { value: "strip" as const, label: "Полоска", title: "Полоской по левому краю строки" },
+              ]}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Столбец «Время»"
+          status={timeColumn ? "Показывается перед «Счётом»" : "Скрыт — время видно в окне операции"}
+          help={
+            <p>
+              В ленте «Операций» и в списке операций сбоку можно показать время
+              каждой операции — столбцом перед «Счётом». Удобно, когда за день
+              много операций и важен их порядок. У операций, загруженных из
+              файла выписки без времени, ячейка остаётся пустой.
+            </p>
+          }
+          control={
+            <Switch
+              checked={timeColumn}
+              label="Показывать столбец «Время»"
+              onChange={(next) => setTimeColumn(next)}
             />
           }
         />
@@ -347,79 +491,177 @@ export function InterfaceSettings() {
         />
 
         <SettingRow
-          title="Столбец «Время»"
-          status={timeColumn ? "Показывается перед «Счётом»" : "Скрыт — время видно в окне операции"}
+          title="Выделение строки кликом"
+          status={
+            rowClickSelect
+              ? "Клик по операции отмечает её, двойной — открывает"
+              : "Клик по операции ничего не делает: отмечать — галочкой, открывать — двойным кликом"
+          }
           help={
             <p>
-              В ленте «Операций» и в списке операций сбоку можно показать время
-              каждой операции — столбцом перед «Счётом». Удобно, когда за день
-              много операций и важен их порядок. У операций, загруженных из
-              файла выписки без времени, ячейка остаётся пустой.
+              В лентах операций — «Операции», «Без категории», «Дубликаты»,
+              «Удалённые» и список операций в шторке — один клик по строке
+              отмечает её для действий над выбранными. Если строки
+              отмечаются случайно, когда вы просто кликаете по ленте,
+              выключите: отмечать можно галочкой в начале строки, открывать
+              операцию — двойным кликом, как и раньше.
             </p>
           }
           control={
             <Switch
-              checked={timeColumn}
-              label="Показывать столбец «Время»"
-              onChange={(next) => setTimeColumn(next)}
+              checked={rowClickSelect}
+              label="Выделение строки кликом"
+              onChange={(next) => setRowClickSelect(next)}
             />
           }
         />
+      </div>
+
+      <div className="card-tray card-pad">
+        <SettingsSectionHeader icon={Table2} title="Таблицы и списки" className="mb-1" />
+        <p className="text-xs text-muted mb-3">Размер текста и ширина столбцов во всех таблицах.</p>
 
         <SettingRow
-          title="Отметка новых операций"
+          title="Размер текста в таблицах"
+          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
+          help={
+            <p>
+              Размер шрифта в списках операций: лента «Операции», поиск, окно
+              операций, дубликаты, удалённые и подобные таблицы. Остальной
+              интерфейс не меняется.
+            </p>
+          }
+          control={
+            <SettingRange
+              value={tableFontLevel}
+              min={1}
+              max={5}
+              onChange={(v) => setTableFontLevel(v as TableFontLevel)}
+              ariaLabel="Размер текста в таблицах"
+              valueText={TABLE_FONT_LABELS[tableFontLevel]}
+              start={<span className="text-[12px]">А</span>}
+              end={<span className="text-[18px]">А</span>}
+            />
+          }
+        >
+          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
+              масштабируется прямо во время перетаскивания. */}
+          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
+            <span
+              className="text-muted truncate"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              01.06.2026 · Ёлочка · Еда дома
+            </span>
+            <span
+              className="tabular-nums font-medium text-expense whitespace-nowrap"
+              style={{ fontSize: "var(--tbl-font)" }}
+            >
+              {formatMoneyExample(-1234, rates.base)}
+            </span>
+          </div>
+        </SettingRow>
+
+        <SettingRow
+          title="Своя ширина столбцов"
           status={
-            newMark === "strip"
-              ? "Полоска по левому краю строки"
-              : "Точка на значке категории"
+            !columnResize
+              ? "Выключено — ширины колонок подбираются сами"
+              : customWidthTables > 0
+                ? `Своя ширина — в ${formatNum(customWidthTables)} ${pluralRu(customWidthTables, [
+                    "таблице",
+                    "таблицах",
+                    "таблицах",
+                  ])}`
+                : "Потяните границу между колонками в шапке любой таблицы"
           }
           help={
             <>
               <p>
-                Так в лентах помечены операции, которые пришли из банка и ещё не
-                открывались в Дзен-мани, и созданные здесь, но ещё не
-                отправленные.
+                Когда настройка включена, между колонками в шапке
+                таблиц и лент операций видны тонкие границы. Потяните границу
+                мышью — две колонки по её сторонам поделят место между собой,
+                остальные останутся на месте. Таблица всегда во всю ширину,
+                прокрутки вбок нет.
               </p>
+              <p className="mt-2">
+                Ширины запоминаются для каждой таблицы отдельно и растут вместе
+                с размером текста. Уже подписи и сумм колонку не сжать —
+                заголовки и числа не обрезаются, а длинный текст сокращается
+                многоточием и на вторую строку не переносится (кроме
+                комментариев, если включены «Длинные комментарии»). Двойной
+                клик по границе возвращает таблице ширины
+                по умолчанию, а кнопка здесь — всем таблицам сразу. Границу
+                можно двигать и с клавиатуры: Tab до неё, затем стрелки влево и
+                вправо.
+              </p>
+            </>
+          }
+          control={
+            <div className="flex items-center gap-3">
+              {columnResize && customWidthTables > 0 && (
+                <button
+                  type="button"
+                  className="btn-ghost text-xs"
+                  onClick={resetColumnWidths}
+                  aria-label="Сбросить ширины столбцов во всех таблицах"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" aria-hidden />
+                  Сбросить
+                </button>
+              )}
+              <Switch
+                checked={columnResize}
+                label="Своя ширина столбцов"
+                onChange={(next) => setColumnResize(next)}
+              />
+            </div>
+          }
+        />
+      </div>
+
+      <div className="card-tray card-pad">
+        <SettingsSectionHeader icon={Funnel} title="Фильтры" className="mb-1" />
+        <p className="text-xs text-muted mb-3">Как работают общие фильтры и чьи счета в них попадают.</p>
+
+        <SettingRow
+          tourId="filters-mode"
+          title="Панель фильтров"
+          status={
+            filtersMode === "button"
+              ? "По кнопке в шапке — не занимает места"
+              : "На странице — всегда на виду"
+          }
+          help={
+            <>
               <p>
-                <strong>Точка</strong> — маленький кружок на значке категории.{" "}
-                <strong>Полоска</strong> — цветная черта во всю высоту строки у
-                её левого края: на большом мониторе её видно сразу. Цвета те же:
-                новые — цветом акцента, неотправленные — красным.
+                Общие фильтры — период, счета, категории, валюты и поиск —
+                работают на всех аналитических страницах. Показывать их можно
+                двумя способами.
+              </p>
+              <p className="mt-2">
+                <strong>По кнопке в шапке.</strong> Панель не занимает места на
+                странице: открывается кнопкой с ползунками справа в шапке, с
+                любого места прокрутки выезжает поверх страницы и ничего не
+                сдвигает. Прячется той же кнопкой, клавишей Escape и при
+                переходе в другой раздел. Точка на кнопке — фильтры заданы.
+              </p>
+              <p className="mt-2">
+                <strong>На странице.</strong> Так работает по умолчанию:
+                панель стоит первым блоком каждой страницы и всегда на виду;
+                кнопки в шапке в этом случае нет.
               </p>
             </>
           }
           control={
             <Segmented
-              label="Отметка новых операций"
-              value={newMark}
-              onChange={(v) => void setNewMark(v)}
+              label="Панель фильтров"
+              value={filtersMode}
+              onChange={(m) => setFiltersMode(m)}
               options={[
-                { value: "dot" as const, label: "Точка", title: "Точкой на значке категории" },
-                { value: "strip" as const, label: "Полоска", title: "Полоской по левому краю строки" },
+                { value: "button", label: "По кнопке" },
+                { value: "page", label: "На странице" },
               ]}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Убрать значок благодарности"
-          status={
-            hideThanks
-              ? "Сердечко скрыто"
-              : "Сердечко «Поддержать проект» — в шапке рядом со справкой"
-          }
-          help={
-            <p>
-              Значок с сердечком ведёт на страницу, где можно оставить автору
-              чаевые. Если он мешает — включите, и значок пропадёт из шапки и из
-              меню. Больше ничего не меняется.
-            </p>
-          }
-          control={
-            <Switch
-              checked={hideThanks}
-              label="Убрать значок благодарности"
-              onChange={(next) => setHideThanks(next)}
             />
           }
         />
@@ -513,231 +755,6 @@ export function InterfaceSettings() {
             }
           />
         )}
-
-        <SettingRow
-          title="Своя ширина столбцов"
-          status={
-            !columnResize
-              ? "Выключено — ширины колонок подбираются сами"
-              : customWidthTables > 0
-                ? `Своя ширина — в ${formatNum(customWidthTables)} ${pluralRu(customWidthTables, [
-                    "таблице",
-                    "таблицах",
-                    "таблицах",
-                  ])}`
-                : "Потяните границу между колонками в шапке любой таблицы"
-          }
-          help={
-            <>
-              <p>
-                Когда настройка включена, между колонками в шапке
-                таблиц и лент операций видны тонкие границы. Потяните границу
-                мышью — две колонки по её сторонам поделят место между собой,
-                остальные останутся на месте. Таблица всегда во всю ширину,
-                прокрутки вбок нет.
-              </p>
-              <p className="mt-2">
-                Ширины запоминаются для каждой таблицы отдельно и растут вместе
-                с размером текста. Уже подписи и сумм колонку не сжать —
-                заголовки и числа не обрезаются, а длинный текст сокращается
-                многоточием и на вторую строку не переносится (кроме
-                комментариев, если включены «Длинные комментарии»). Двойной
-                клик по границе возвращает таблице ширины
-                по умолчанию, а кнопка здесь — всем таблицам сразу. Границу
-                можно двигать и с клавиатуры: Tab до неё, затем стрелки влево и
-                вправо.
-              </p>
-            </>
-          }
-          control={
-            <div className="flex items-center gap-3">
-              {columnResize && customWidthTables > 0 && (
-                <button type="button" className="btn-ghost text-xs" onClick={resetColumnWidths}>
-                  <RotateCcw className="w-3.5 h-3.5" aria-hidden />
-                  Сбросить ширины
-                </button>
-              )}
-              <Switch
-                checked={columnResize}
-                label="Своя ширина столбцов"
-                onChange={(next) => setColumnResize(next)}
-              />
-            </div>
-          }
-        />
-
-        <SettingRow
-          title="Быстрые настройки"
-          status={
-            quickSettingsOn
-              ? "Шестерёнка в шапке открывает панель быстрых настроек"
-              : "Шестерёнка в шапке сразу открывает «Настройки»"
-          }
-          help={
-            <p>
-              Панель под шестерёнкой — то, что удобно переключать на ходу:
-              скрыть суммы, счета вне баланса, дробную часть сумм и другое, что вы
-              в неё поставите. Выключите — и шестерёнка снова будет сразу вести
-              сюда, в «Настройки». Клавиши H, B и F работают в любом случае.
-            </p>
-          }
-          control={
-            <Switch
-              checked={quickSettingsOn}
-              label="Быстрые настройки"
-              onChange={(next) => setQuickSettingsOn(next)}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Всплывающие подсказки"
-          status={
-            hintsOn
-              ? "Пояснения появляются при наведении на кнопки и значки"
-              : "Пояснений при наведении нет — только значения на графиках"
-          }
-          help={
-            <p>
-              Пузырь с пояснением, который появляется, если задержать мышь на
-              кнопке, значке или подписи. Освоились — выключите, чтобы не мешали.
-              Значения на графиках и полный текст обрезанной подписи остаются:
-              это сами данные. Окошки «?» открываются кликом, как и раньше.
-            </p>
-          }
-          control={
-            <Switch
-              checked={hintsOn}
-              label="Всплывающие подсказки"
-              onChange={(next) => setHintsOn(next)}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Выделение строки кликом"
-          status={
-            rowClickSelect
-              ? "Клик по операции отмечает её, двойной — открывает"
-              : "Клик по операции ничего не делает: отмечать — галочкой, открывать — двойным кликом"
-          }
-          help={
-            <p>
-              В лентах операций — «Операции», «Без категории», «Дубликаты»,
-              «Удалённые» и список операций в шторке — один клик по строке
-              отмечает её для действий над выбранными. Если строки
-              отмечаются случайно, когда вы просто кликаете по ленте,
-              выключите: отмечать можно галочкой в начале строки, открывать
-              операцию — двойным кликом, как и раньше.
-            </p>
-          }
-          control={
-            <Switch
-              checked={rowClickSelect}
-              label="Выделение строки кликом"
-              onChange={(next) => setRowClickSelect(next)}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Ширина сервиса"
-          status={
-            shownWidth === 0
-              ? "Во весь экран"
-              : `${formatContentWidth(shownWidth)} — ${
-                  screenWiderThanColumn ? "колонкой по центру экрана" : "шире этого экрана, сервис и так во весь экран"
-                }`
-          }
-          help={
-            <>
-              <p>
-                На широком мониторе (например, 21:9) сервис растягивается до
-                краёв окна, и строки таблиц и графики приходится читать
-                поворотом головы. Сдвиньте бегунок влево — шапка, панель
-                фильтров и страница встанут колонкой по центру экрана, а фон и
-                подложка шапки останутся во всю ширину.
-              </p>
-              <p className="mt-2">
-                Ширина — от {formatNum(CONTENT_WIDTH_MIN)} до{" "}
-                {formatNum(CONTENT_WIDTH_MAX)} пикселей; крайнее правое
-                положение — «Во весь экран», как по умолчанию. Пока бегунок
-                тянут, края будущей колонки показаны линиями, а сервис стоит
-                на месте; отпустите — и он плавно встанет в новую ширину.
-                Если экран меньше выбранной ширины, ничего не меняется. Боковая
-                панель операций и окна остаются своей ширины.
-              </p>
-            </>
-          }
-          control={
-            <SettingRange
-              value={contentWidthToSlider(shownWidth)}
-              min={CONTENT_WIDTH_MIN}
-              max={CONTENT_WIDTH_SLIDER_FULL}
-              step={CONTENT_WIDTH_STEP}
-              onChange={(v) => setContentWidthDraft(sliderToContentWidth(v))}
-              onCommit={(v, via) => {
-                // Стрелки жмут подряд: применяем, когда человек остановился, —
-                // иначе каждое нажатие перестраивало бы вёрстку, а нажатие во
-                // время смены кадров терялось. Мышь — сразу при отпускании.
-                window.clearTimeout(widthCommitTimer.current);
-                const apply = () => {
-                  const next = sliderToContentWidth(v);
-                  setContentWidthDraft(null);
-                  if (next === useDisplayStore.getState().contentWidth) return;
-                  withViewTransition(() => void setContentWidth(next));
-                };
-                if (via === "key") widthCommitTimer.current = window.setTimeout(apply, 400);
-                else apply();
-              }}
-              ariaLabel="Ширина сервиса"
-              valueText={formatContentWidth(shownWidth)}
-              start={<ChevronsRightLeft className="w-3.5 h-3.5" />}
-              end={<ChevronsLeftRight className="w-[18px] h-[18px]" />}
-            />
-          }
-        />
-
-        <SettingRow
-          title="Размер текста в таблицах"
-          status={`${TABLE_FONT_LABELS[tableFontLevel]} (${tableFontLevel}/5)`}
-          help={
-            <p>
-              Размер шрифта в списках операций: лента «Операции», поиск, окно
-              операций, дубликаты, удалённые и подобные таблицы. Остальной
-              интерфейс не меняется.
-            </p>
-          }
-          control={
-            <SettingRange
-              value={tableFontLevel}
-              min={1}
-              max={5}
-              onChange={(v) => setTableFontLevel(v as TableFontLevel)}
-              ariaLabel="Размер текста в таблицах"
-              valueText={TABLE_FONT_LABELS[tableFontLevel]}
-              start={<span className="text-[12px]">А</span>}
-              end={<span className="text-[18px]">А</span>}
-            />
-          }
-        >
-          {/* Живой пример — на той же CSS-переменной, что и таблицы, поэтому
-              масштабируется прямо во время перетаскивания. */}
-          <div className="mt-3 rounded-lg border border-border bg-panel2/40 px-3 py-2 flex items-center justify-between gap-3">
-            <span
-              className="text-muted truncate"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
-              01.06.2026 · Ёлочка · Еда дома
-            </span>
-            <span
-              className="tabular-nums font-medium text-expense whitespace-nowrap"
-              style={{ fontSize: "var(--tbl-font)" }}
-            >
-              {formatMoneyExample(-1234, rates.base)}
-            </span>
-          </div>
-        </SettingRow>
       </div>
 
     </>

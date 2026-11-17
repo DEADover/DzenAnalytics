@@ -113,11 +113,9 @@ test("быстрые настройки можно выключить — шес
   await connectZen(page, "/settings?tab=interface");
   const toggle = page.getByRole("switch", { name: "Быстрые настройки", exact: true });
   await expect(toggle).toHaveAttribute("aria-checked", "true");
-  // Сразу после «Своей ширины столбцов».
-  const order = await page.evaluate(() =>
-    [...document.querySelectorAll('[role="switch"]')].map((e) => e.getAttribute("aria-label"))
-  );
-  expect(order.indexOf("Быстрые настройки")).toBe(order.indexOf("Своя ширина столбцов") + 1);
+  // В карточке «Общий вид» — настройка всего сервиса, а не ленты или таблиц.
+  const card = page.locator(".card-tray").filter({ hasText: "Общий вид" });
+  await expect(card.getByRole("switch", { name: "Быстрые настройки", exact: true })).toBeVisible();
 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
