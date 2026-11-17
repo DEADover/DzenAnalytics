@@ -1,11 +1,13 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import clsx from "clsx";
-import { awaitsValue, completePrefix, queryPieces } from "../lib/textQuery";
+import { awaitsValue, completePrefix, completeValue, queryPieces } from "../lib/textQuery";
+import { useQueryValueLists } from "../hooks/useQueryValueLists";
 
 /**
  * Поле текстового поиска, которое понимает условия (#135): подсвечивает
- * «комм:» и минус перед словом, а на набранное «комм» предлагает условие по
- * комментарию — Tab подставляет «комм:».
+ * «комм:» и минус перед словом, на набранное «комм» предлагает условие по
+ * комментарию — Tab подставляет «комм:», — а после «счёт:» и «кат:» дописывает
+ * название счёта или категории.
  *
  * В самом `<input>` раскрасить часть текста нельзя, поэтому поверх поля лежит
  * слой с тем же текстом по кускам, а текст поля на это время прозрачен (каретка
@@ -30,7 +32,10 @@ export function SyntaxInput({
   const [box, setBox] = useState<CSSProperties | null>(null);
 
   const pieces = queryPieces(value);
-  const completion = focused ? completePrefix(value) : null;
+  const lists = useQueryValueLists();
+  // Сначала — условие («сумм» → «сумма:»), а после двоеточия — название счёта
+  // или категории целиком.
+  const completion = focused ? (completePrefix(value) ?? completeValue(value, lists)) : null;
   const awaits = focused ? awaitsValue(value) : null;
   const overlay = completion !== null || awaits !== null || pieces.some((p) => p.op);
 

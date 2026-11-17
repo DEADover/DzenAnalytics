@@ -130,16 +130,23 @@ test("поиск: условия по сумме, счёту и категори
       Number(t.replace(/[^\d,]/g, "").replace(",", "."))
     );
 
-  // Сумма: все найденные строки больше порога.
+  // Сумма: все найденные строки больше порога. Список перестраивается чуть
+  // позже набора (отложенный поиск), поэтому ждём условие, а не первую строку.
   await quick.fill("сумма:>9000");
-  await expect(rows.first()).toBeVisible();
-  const big = await amounts();
-  expect(big.length).toBeGreaterThan(0);
-  expect(big.every((a) => a > 9000)).toBe(true);
+  await expect
+    .poll(async () => {
+      const a = await amounts();
+      return a.length > 0 && a.every((v) => v > 9000);
+    })
+    .toBe(true);
   // Диапазон.
   await quick.fill("сумма:8000-9500");
-  await expect(rows.first()).toBeVisible();
-  expect((await amounts()).every((a) => a >= 8000 && a <= 9500)).toBe(true);
+  await expect
+    .poll(async () => {
+      const a = await amounts();
+      return a.length > 0 && a.every((v) => v >= 8000 && v <= 9500);
+    })
+    .toBe(true);
 
   // Категория и счёт сочетаются с суммой.
   await quick.fill("кат:вне сумма:9000");
@@ -158,4 +165,35 @@ test("поиск: условия по сумме, счёту и категори
   await expect(quick).toHaveValue("кофе сумма:");
   await expect(wrap.locator("[data-syntax-values]")).toContainText(">5000, <100 или 1000-5000");
   await expect(wrap.locator("[data-syntax-op]")).toHaveText("сумма:");
+});
+
+test("поиск: Tab дописывает название счёта и категории", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await connectZen(page, "/transactions");
+  const quick = page.getByPlaceholder("Быстрый поиск по таблице…");
+  const wrap = quick.locator("xpath=..");
+  const rows = page.locator(".op-row");
+
+  // Категория из нескольких слов подставляется в кавычках и сразу отбирает.
+  await quick.click();
+  await quick.pressSequentially("кат:вне");
+  await expect(wrap.locator("[data-syntax-suggest]")).toContainText("Еда вне дома");
+  await page.keyboard.press("Tab");
+  await expect(quick).toHaveValue('кат:"Еда вне дома"');
+  await expect(quick).toBeFocused();
+  await expect(rows.first()).toContainText("Еда вне дома");
+
+  // Счёт — тем же приёмом, вместе с минусом.
+  await quick.pressSequentially(" -счёт:сб");
+  await expect(wrap.locator("[data-syntax-suggest]")).toContainText("Сбер");
+  await page.keyboard.press("Tab");
+  await expect(quick).toHaveValue('кат:"Еда вне дома" -счёт:Сбер');
+
+  // То же поле общего фильтра.
+  await quick.fill("");
+  const field = page.locator('[data-tour="filters"]').getByPlaceholder(/Фильтр: получатель/);
+  await field.click();
+  await field.pressSequentially("счёт:сб");
+  await page.keyboard.press("Tab");
+  await expect(field).toHaveValue("счёт:Сбер");
 });

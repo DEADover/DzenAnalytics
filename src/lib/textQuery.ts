@@ -257,3 +257,44 @@ export function awaitsValue(value: string): string | null {
   const field = m ? FIELD_OF.get(m[2].toLowerCase()) : undefined;
   return field ? FIELD_HINTS[field].values : null;
 }
+
+/** Названия, которые поле подставляет после «счёт:» и «кат:». */
+export interface QueryValueLists {
+  /** Счета, самые ходовые — первыми. */
+  account: readonly string[];
+  /** Категории и подкатегории по отдельности, самые ходовые — первыми. */
+  category: readonly string[];
+}
+
+const fold = (v: string) => v.toLowerCase().replace(/ё/g, "е");
+
+// Значение условия в конце запроса: без кавычек — до пробела, с открытой
+// кавычкой — со всеми пробелами внутри.
+const VALUE_TAIL = new RegExp(`(^|\\s)(-?)(${PREFIX_ALT}):(\\s*)(-?)(?:"([^"]*)|([^\\s"]+))$`, "iu");
+
+/**
+ * Человек набирает значение после «счёт:» или «кат:» — предложить название
+ * целиком. Сначала ищем то, что с набранного начинается, потом то, где оно
+ * встречается внутри. Название с пробелом подставляется в кавычках, иначе
+ * условие оборвалось бы на первом слове. `null` — предложить нечего или
+ * название уже дописано.
+ */
+export function completeValue(
+  value: string,
+  lists: QueryValueLists
+): { next: string; label: string } | null {
+  const m = VALUE_TAIL.exec(value);
+  if (!m) return null;
+  const field = FIELD_OF.get(m[3].toLowerCase());
+  if (field !== "account" && field !== "category") return null;
+  const typed = fold((m[6] ?? m[7] ?? "").trim());
+  if (!typed) return null;
+  const names = lists[field];
+  const hit = names.find((n) => fold(n).startsWith(typed)) ?? names.find((n) => fold(n).includes(typed));
+  if (!hit || fold(hit) === typed) return null;
+  const written = /\s/.test(hit) ? `"${hit}"` : hit;
+  return {
+    next: `${value.slice(0, m.index + m[1].length)}${m[2]}${m[3]}:${m[4]}${m[5]}${written}`,
+    label: hit,
+  };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { amountPredicate, awaitsValue, completePrefix, parseTextQuery, queryPieces, txQueryFields } from "./textQuery";
+import { amountPredicate, awaitsValue, completePrefix, completeValue, parseTextQuery, queryPieces, txQueryFields } from "./textQuery";
 
 const hit = (q: string, text: string, comment = "") => parseTextQuery(q).test(`${text} ${comment}`, comment);
 
@@ -188,5 +188,39 @@ describe("условия по сумме, счёту и категории", () 
     expect(awaitsValue("сумма:")).toBe(">5000, <100 или 1000-5000");
     expect(awaitsValue("кофе счёт:")).toBe("слово или -слово");
     expect(awaitsValue("комм:")).toBe("слово, -слово, есть или нет");
+  });
+});
+
+describe("подстановка названий после «счёт:» и «кат:»", () => {
+  const lists = { account: ["Т-Банк", "Сбер", "Т-Банк - Нак.счет"], category: ["Еда дома", "Еда вне дома", "Кафе", "Подписки"] };
+  const done = (v: string) => completeValue(v, lists)?.next ?? null;
+
+  it("дописывает название; с пробелом — в кавычках", () => {
+    expect(done("счёт:сб")).toBe("счёт:Сбер");
+    expect(done("кат:под")).toBe("кат:Подписки");
+    expect(done("кат:еда")).toBe('кат:"Еда дома"');
+    expect(completeValue("кат:еда", lists)?.label).toBe("Еда дома");
+  });
+  it("сначала — то, что начинается с набранного, потом — где оно внутри", () => {
+    expect(done("кат:вне")).toBe('кат:"Еда вне дома"');
+    expect(done("счёт:нак")).toBe('счёт:"Т-Банк - Нак.счет"');
+    expect(done("счёт:т")).toBe("счёт:Т-Банк");
+  });
+  it("сохраняет минус, пробел после двоеточия и текст перед условием", () => {
+    expect(done("кофе -счёт:сб")).toBe("кофе -счёт:Сбер");
+    expect(done("счет: -сб")).toBe("счет: -Сбер");
+    expect(done("сумма:>500 категория:каф")).toBe("сумма:>500 категория:Кафе");
+  });
+  it("открытая кавычка: слова с пробелом дописываются до названия", () => {
+    expect(done('кат:"еда в')).toBe('кат:"Еда вне дома"');
+  });
+  it("нечего предложить — null", () => {
+    expect(done("счёт:")).toBeNull();
+    expect(done("счёт:сбер")).toBeNull(); // уже дописано
+    expect(done("счёт:яяя")).toBeNull();
+    expect(done("комм:еда")).toBeNull(); // у комментария списка нет
+    expect(done("сумма:5")).toBeNull();
+    expect(done("счёт:сб ")).toBeNull(); // условие закончено пробелом
+    expect(done("еда")).toBeNull();
   });
 });
