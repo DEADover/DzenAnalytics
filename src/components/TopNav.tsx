@@ -11,6 +11,7 @@ import {
   LayoutTemplate,
   Menu,
   X,
+  Monitor,
   Moon,
   Sun,
   CloudDownload,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { useThemeStore } from "../store/useThemeStore";
+import { NEXT_THEME_MODE, themeModeNow } from "../lib/themeCycle";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { HeaderSyncActions } from "./HeaderSyncActions";
 import { SliceSwitcher } from "./SliceSwitcher";
@@ -122,6 +124,7 @@ export function TopNav({
   // запомнить логин нужно и у единственного — к моменту, когда заведут второй.
   useProfileLoginSync();
   const theme = useThemeStore((s) => s.resolved);
+  const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
   const zenToken = useZenmoneyStore((s) => s.token);
   const hideThanks = useDisplayStore((s) => s.hideThanks);
@@ -795,15 +798,22 @@ export function TopNav({
                   Отблагодарить автора
                 </a>
               )}
-              {/* Подпись — то, на что переключит, как значок в шапке. Меню не
+              {/* Как кнопка в шапке: значок и подпись — текущий режим, клик —
+                  следующий по кругу (светлая → тёмная → авто). Меню не
                   закрывается: смену темы видно сразу за ним. */}
               <button
                 type="button"
-                onClick={() => setThemeMode(theme === "dark" ? "light" : "dark")}
+                onClick={() => setThemeMode(NEXT_THEME_MODE[themeMode])}
                 className={clsx(sheetRow(), "w-full")}
               >
-                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+                {themeMode === "auto" ? (
+                  <Monitor className="w-4 h-4" />
+                ) : themeMode === "dark" ? (
+                  <Moon className="w-4 h-4" />
+                ) : (
+                  <Sun className="w-4 h-4" />
+                )}
+                Тема: {themeModeNow(themeMode, theme)}
               </button>
               {/* Как в шапке: вне главной пункт не пропадает, а гаснет — и
                   говорит, где он работает. */}
