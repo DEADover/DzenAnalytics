@@ -1,7 +1,7 @@
 {
   "name": "dzenanalytics",
   "private": true,
-  "version": "1.29.0",
+  "version": "1.29.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:prod": "node scripts/prod-smoke.mjs",
     "preview": "vite preview",
     "release:notes": "node scripts/release-notes.js"
   },

@@ -82,6 +82,10 @@ jobs:
       - name: Fonts
         run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core fonts-liberation
       - run: npm run test:e2e
+      # Сборка обязана запускаться: тесты выше идут на сервере разработки и
+      # не видят файлов, зацикленных друг на друга (так вышел v1.29.0).
+      - name: Production build starts
+        run: npm run build && npm run test:prod
       - name: Traces of failed tests
         if: failure()
         uses: actions/upload-artifact@v4

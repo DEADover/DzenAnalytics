@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import clsx from "clsx";
 import { awaitsValue, completePrefix, completeValue, queryPieces } from "../lib/textQuery";
-import { useQueryValueLists } from "../hooks/useQueryValueLists";
+import { queryValueLists } from "../lib/queryValueLists";
 
 /**
  * Поле текстового поиска, которое понимает условия (#135): подсвечивает
@@ -32,10 +32,9 @@ export function SyntaxInput({
   const [box, setBox] = useState<CSSProperties | null>(null);
 
   const pieces = queryPieces(value);
-  const lists = useQueryValueLists();
   // Сначала — условие («сумм» → «сумма:»), а после двоеточия — название счёта
-  // или категории целиком.
-  const completion = focused ? (completePrefix(value) ?? completeValue(value, lists)) : null;
+  // или категории целиком. Списки названий нужны только в этот момент.
+  const completion = focused ? (completePrefix(value) ?? completeValue(value, queryValueLists())) : null;
   const awaits = focused ? awaitsValue(value) : null;
   const overlay = completion !== null || awaits !== null || pieces.some((p) => p.op);
 

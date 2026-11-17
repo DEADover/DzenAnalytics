@@ -28,7 +28,10 @@ import {
 import { makeCategoryChecker, makeKindChecks } from "../lib/zenmoneyPush";
 
 import { applyEdits } from "../lib/applyEdits";
-import { setEditBaseSource, useEditsStore, type TransactionEdit } from "./useEditsStore";
+import { setEditBaseSource, setUserEditListener, useEditsStore, type TransactionEdit } from "./useEditsStore";
+import { correctionsOf } from "../lib/ruleSuggestions";
+import { setQueryValueSource } from "../lib/queryValueLists";
+import { useRuleHintsStore } from "./useRuleHintsStore";
 import { useDeletedStore, loadDeletedSet } from "./useDeletedStore";
 import { useDeletedPayloadsStore, loadDeletedPayloads } from "./useDeletedPayloadsStore";
 import { loadZenCache } from "../lib/zenmoneyCache";
@@ -1013,3 +1016,10 @@ export function rawTransactionLookup(): (id: string) => Transaction | undefined 
 
 // Правка запоминает, поверх какой версии операции она сделана (lib/editBases).
 setEditBaseSource(rawTransactionLookup);
+// Поля поиска подставляют названия счетов и категорий из нынешних операций.
+setQueryValueSource(() => useDataStore.getState().transactions);
+// Ручные исправления категории и контрагента — в журнал подсказок правил.
+setUserEditListener((before, patch, at) => {
+  const added = correctionsOf(before, patch, at);
+  if (added.length > 0) void useRuleHintsStore.getState().record(added);
+});

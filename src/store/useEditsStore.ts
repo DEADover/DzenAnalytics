@@ -7,8 +7,6 @@
 // from server data, the overlay re-applies on top). Push-to-Zenmoney
 // is intentionally NOT implemented here — it's a separate feature.
 
-import { correctionsOf } from "../lib/ruleSuggestions";
-import { useRuleHintsStore } from "./useRuleHintsStore";
 import { create } from "zustand";
 import * as db from "../lib/db";
 import { serialQueue } from "../lib/serialQueue";
@@ -166,20 +164,30 @@ function trace(
  * (`lib/ruleSuggestions`). Правка уйдёт в Дзен-мани и исчезнет из очереди, а
  * по журналу видно, что человек делает одно и то же раз за разом.
  */
+type UserEditListener = (before: Transaction, patch: TransactionEdit, at: number) => void;
+/**
+ * Кто слушает ручные правки. Задаёт стор данных — как `setEditBaseSource`:
+ * этот стор лежит в самом низу, и прямой импорт журнала подсказок отсюда
+ * замыкал круг модулей — собранная панель падала на старте (v1.29.0).
+ */
+let userEditListener: UserEditListener | null = null;
+export function setUserEditListener(fn: UserEditListener): void {
+  userEditListener = fn;
+}
+
 function noteCorrections(
   patches: Record<string, TransactionEdit>,
   prev: Record<string, TransactionEdit>,
   origin: EditOrigin,
   now: number
 ): void {
-  if (origin !== "user") return;
+  if (origin !== "user" || !userEditListener) return;
   const serverOf = serverLookup();
-  const added = Object.entries(patches).flatMap(([id, patch]) => {
+  for (const [id, patch] of Object.entries(patches)) {
     const raw = serverOf(id);
     // Операция, какой её видели до этой правки: облако плюс прежние правки.
-    return raw ? correctionsOf({ ...raw, ...prev[id] }, patch, now) : [];
-  });
-  if (added.length > 0) void useRuleHintsStore.getState().record(added);
+    if (raw) userEditListener({ ...raw, ...prev[id] }, patch, now);
+  }
 }
 
 /** Действия по одному — без гонки «прочитал → записал» (lib/serialQueue). */

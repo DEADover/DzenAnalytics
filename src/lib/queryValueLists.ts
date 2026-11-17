@@ -1,6 +1,4 @@
-import { useMemo } from "react";
-import { useDataStore } from "../store/useDataStore";
-import type { QueryValueLists } from "../lib/textQuery";
+import type { QueryValueLists } from "./textQuery";
 import type { Transaction } from "../types";
 
 /**
@@ -8,9 +6,17 @@ import type { Transaction } from "../types";
  * поиска (`SyntaxInput`). Самые ходовые — первыми: при наборе «т» первым
  * должен предложиться счёт, которым платят каждый день, а не архивный.
  *
- * Полей поиска на странице два, а список один — считаем его раз на набор
- * операций, а не в каждом поле.
+ * Операции сюда отдаёт стор данных (`setQueryValueSource`), а не поле берёт их
+ * из стора само: импорт стора данных из поля поиска менял разбиение сборки на
+ * файлы так, что два файла ждали друг друга, и собранная панель падала на
+ * старте (v1.29.0). В режиме разработки этого не видно.
  */
+let source: () => readonly Transaction[] = () => [];
+
+export function setQueryValueSource(fn: () => readonly Transaction[]): void {
+  source = fn;
+}
+
 const cache = new WeakMap<readonly Transaction[], QueryValueLists>();
 
 function build(transactions: readonly Transaction[]): QueryValueLists {
@@ -38,17 +44,13 @@ function build(transactions: readonly Transaction[]): QueryValueLists {
   return { account: byUse(accounts), category: byUse(categories) };
 }
 
-/** Списки для набора операций — из кэша, если этот набор уже считали. */
-function listsFor(transactions: readonly Transaction[]): QueryValueLists {
+/** Списки по нынешним операциям; для одного набора операций считаются один раз. */
+export function queryValueLists(): QueryValueLists {
+  const transactions = source();
   let lists = cache.get(transactions);
   if (!lists) {
     lists = build(transactions);
     cache.set(transactions, lists);
   }
   return lists;
-}
-
-export function useQueryValueLists(): QueryValueLists {
-  const transactions = useDataStore((s) => s.transactions);
-  return useMemo(() => listsFor(transactions), [transactions]);
 }
