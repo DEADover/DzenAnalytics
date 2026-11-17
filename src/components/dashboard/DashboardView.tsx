@@ -29,13 +29,19 @@ import { GlobalFilters } from "../GlobalFilters";
 import { PeriodStepper } from "../PeriodStepper";
 import { KindSwitcher } from "../KindSwitcher";
 import { Segmented } from "../Segmented";
-import { Filter, LayoutDashboard } from "lucide-react";
+import { CalendarClock, CloudUpload, Filter, LayoutDashboard, Sparkles, Tag } from "lucide-react";
 import { useHomeScope } from "../../hooks/useHomeScope";
 import { CashflowBars } from "./blocks/cashflow";
 import { CapitalBlock } from "./blocks/capital";
 import { AccountsBlock, CategoriesList, ObservationsList, UpcomingList, ZenPlannedList } from "./blocks/lists";
 import { ActivityHeat } from "./blocks/activity";
 import { MonthOverMonthBlock } from "./blocks/monthOverMonth";
+import { PaceBlock } from "./blocks/pace";
+import { TriageBlock, type TriageItem } from "./blocks/triage";
+import { buildSpendingPace, paceCategories } from "../../lib/spendingPace";
+import { useTriage } from "../../hooks/useTriage";
+import { useSmoothNavigate } from "../../hooks/useSmoothNavigate";
+import { MONTHS } from "../../lib/months";
 import { FreeMoneyBlock, FreeMoneyCompactBlock } from "./blocks/freeMoney";
 import { LinksRow } from "./LinksRow";
 import {
@@ -164,6 +170,29 @@ export function DashboardView() {
     return MONTHS_IN[mo - 1] ?? "";
   }, [momAgainstYm]);
 
+  // «Темп трат»: идущий месяц обрывается на сегодня, прошедший берётся целиком.
+  const paceToday = localToday();
+  const pace = useMemo(
+    () => buildSpendingPace(transactions, m.ym, monthStartDay, paceToday),
+    [transactions, m.ym, monthStartDay, paceToday]
+  );
+  const paceCats = useMemo(
+    () => paceCategories(transactions, m.ym, monthStartDay, paceToday),
+    [transactions, m.ym, monthStartDay, paceToday]
+  );
+  const paceLabels = useMemo(() => {
+    const mo = Number(m.ym.slice(5, 7));
+    const prevMo = Number(shiftPeriod(m.ym, -1).slice(5, 7));
+    return {
+      month: MONTHS[mo - 1] ?? "",
+      prev: MONTHS[prevMo - 1] ?? "",
+      prevIn: MONTHS_IN[prevMo - 1] ?? "",
+    };
+  }, [m.ym]);
+
+  const triage = useTriage();
+  const smoothNavigate = useSmoothNavigate();
+
   const layout = useDashboardLayoutStore((s) => s.layout);
   const editing = useDashboardLayoutStore((s) => s.editing);
   const setEditing = useDashboardLayoutStore((s) => s.setEditing);
@@ -193,6 +222,15 @@ export function DashboardView() {
         (p) => p.kind !== "transfer" && plannedDeletions[p.id] === undefined
       ) ?? null,
     [zenPlannedAll, plannedDeletions]
+  );
+  // Просроченные — для «Разобрать». С переводами: пропущенный перевод на
+  // вклад такой же просроченный платёж.
+  const overduePlanned = useMemo(
+    () =>
+      (zenPlannedAll ?? []).filter(
+        (p) => p.date < todayIso && plannedDeletions[p.id] === undefined
+      ).length,
+    [zenPlannedAll, plannedDeletions, todayIso]
   );
   const zenPlannedOut = useMemo(
     () =>
@@ -626,6 +664,94 @@ export function DashboardView() {
             <ActivityHeat m={m} onDay={onDay} />
           </>
         );
+
+      case "pace":
+        return (
+          <>
+            <BlockTitle
+              title="Темп трат"
+              info={
+                <p>
+                  Сколько потрачено с начала месяца к каждому дню. Пока месяц идёт,
+                  от прошлого берётся <b>столько же дней</b> — и для числа, и для
+                  статей. Возвраты уменьшают расход, переводы не считаются. Среднее
+                  считается по полным месяцам, не больше трёх. Клик по статье
+                  открывает её операции за этот месяц.
+                </p>
+              }
+              to="/compare"
+              linkLabel="Сравнение"
+            />
+            <PaceBlock
+              pace={pace}
+              categories={paceCats}
+              base={m.base}
+              labels={paceLabels}
+              view={widgetView(widgetMeta("pace"), p.view)?.id === "chart" ? "chart" : "categories"}
+              onCategory={(name) => drillCategory("expense", name)}
+            />
+          </>
+        );
+
+      case "triage": {
+        const items: TriageItem[] = [
+          {
+            key: "unseen",
+            icon: Sparkles,
+            label: "Новые операции",
+            hint: "Ещё не просмотрены",
+            count: triage.unseen.length,
+            onOpen: () => showDrill("Новые операции", triage.unseen, "Ещё не просмотрены"),
+          },
+          {
+            key: "uncategorized",
+            icon: Tag,
+            label: "Без категории",
+            hint: "Отчёты по категориям без них неполные",
+            count: triage.uncategorized.length,
+            onOpen: () => showDrill("Без категории", triage.uncategorized, "За всё время"),
+          },
+        ];
+        if (triage.connected) {
+          items.push({
+            key: "unsent",
+            icon: CloudUpload,
+            label: "Не отправлено в Дзен-мани",
+            hint: "Правки есть только на этом устройстве",
+            count: triage.unsent.length,
+            onOpen: () =>
+              showDrill("Не отправлено в Дзен-мани", triage.unsent, "Операции с правками"),
+          });
+        }
+        if (zenPlannedAll) {
+          items.push({
+            key: "overdue",
+            icon: CalendarClock,
+            label: "Просроченные платежи",
+            hint: "Запланированы, но не проведены",
+            count: overduePlanned,
+            onOpen: () => smoothNavigate("/recurring"),
+          });
+        }
+        return (
+          <>
+            <BlockTitle
+              title="Разобрать"
+              info={
+                <p>
+                  Что в данных ждёт внимания. Считается по всем операциям, а не по
+                  выбранному месяцу и фильтрам. Клик по строке открывает ровно те
+                  операции, которые в ней посчитаны; их можно править прямо в
+                  открывшемся списке.
+                </p>
+              }
+              to="/transactions"
+              linkLabel="Операции"
+            />
+            <TriageBlock items={items} />
+          </>
+        );
+      }
 
       case "observations":
         return (

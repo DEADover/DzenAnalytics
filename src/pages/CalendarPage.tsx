@@ -374,7 +374,7 @@ function MonthGrid({
   }
 
   return (
-    <div>
+    <div data-calendar-month={month}>
       <div className="flex items-center justify-between mb-2">
         <div className="font-medium text-sm">{MONTHS[month]}</div>
         <div className={`text-xs tabular-nums ${kind === "expense" ? "text-expense" : "text-income"}`}>
@@ -421,7 +421,7 @@ function MonthGrid({
           // anyway — and its date is already readable from the grid.
           if (!c.cell) return cell;
           return (
-            <Tooltip key={i} content={<DayTip date={c.date} value={v} count={c.cell.count} kind={kind} base={base} />}>
+            <Tooltip key={i} data content={<DayTip date={c.date} value={v} count={c.cell.count} kind={kind} base={base} />}>
               {cell}
             </Tooltip>
           );

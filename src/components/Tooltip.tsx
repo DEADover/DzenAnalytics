@@ -21,6 +21,13 @@ interface Props {
   placement?: "top" | "bottom";
   /** Hover delay before showing, ms. Default 120. */
   delay?: number;
+  /**
+   * В пузыре — значение, а не пояснение: сумма дня в календаре, число за
+   * клеткой тепловой карты. Такая подсказка открывается и при выключенных
+   * «Всплывающих подсказках»: настройка убирает пояснения к кнопкам, а узнать
+   * число по-другому здесь нельзя — так же, как у точек на графиках.
+   */
+  data?: boolean;
 }
 
 /**
@@ -63,7 +70,7 @@ function renderContent(content: ReactNode): ReactNode {
   );
 }
 
-export function Tooltip({ content, children, placement = "top", delay = 120 }: Props) {
+export function Tooltip({ content, children, placement = "top", delay = 120, data = false }: Props) {
   const [shown, setShown] = useState(false);
   // The anchor DOM node is kept in STATE (not a ref) — a callback ref into
   // setState avoids the `react-hooks/refs` rule that fires on ref-setters passed
@@ -74,7 +81,8 @@ export function Tooltip({ content, children, placement = "top", delay = 120 }: P
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const id = useId();
   // «Всплывающие подсказки» выключены — пузырь не открывается вовсе.
-  const hintsOn = useDisplayStore((s) => s.hints);
+  // Подсказка со значением (`data`) от настройки не зависит.
+  const hintsOn = useDisplayStore((s) => s.hints) || data;
 
   const open = useCallback(() => {
     if (!hintsOn) return;

@@ -165,6 +165,8 @@ describe("normalizeLayout", () => {
       "freeMoneyCompact",
       "monthOverMonth",
       "observations",
+      "pace",
+      "triage",
     ]);
   });
 
@@ -196,6 +198,8 @@ describe("normalizeLayout", () => {
       "observations",
       "donutExpense",
       "donutIncome",
+      "pace",
+      "triage",
       "month",
       "accounts",
       "upcoming",

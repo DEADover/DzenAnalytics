@@ -17,6 +17,7 @@
  */
 
 import {
+  Activity,
   ArrowLeftRight,
   BarChart3,
   CalendarClock,
@@ -24,6 +25,7 @@ import {
   ChartArea,
   Coins,
   Gauge,
+  Inbox,
   Landmark,
   LayoutGrid,
   Lightbulb,
@@ -52,6 +54,8 @@ export const WIDGET_KINDS = [
   "observations",
   "donutExpense",
   "donutIncome",
+  "pace",
+  "triage",
 ] as const;
 
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
@@ -296,6 +300,34 @@ export const WIDGETS: readonly WidgetMeta[] = [
     icon: TrendingUp,
     title: "Кольцо доходов",
     hint: "Откуда приходят деньги, теми же кольцами",
+    span: 1,
+    offByDefault: true,
+  },
+  {
+    kind: "pace",
+    icon: Activity,
+    title: "Темп трат",
+    hint: "Расходы месяца день за днём рядом с прошлым месяцем",
+    span: 1,
+    offByDefault: true,
+    views: [
+      {
+        id: "categories",
+        title: "Со статьями",
+        hint: "Число, линия и крупнейшие статьи рядом с прошлым месяцем",
+      },
+      {
+        id: "chart",
+        title: "График",
+        hint: "Линия во весь виджет: этот месяц, прошлый и среднее за три",
+      },
+    ],
+  },
+  {
+    kind: "triage",
+    icon: Inbox,
+    title: "Разобрать",
+    hint: "Новые операции, без категории, неотправленные правки и просроченные платежи",
     span: 1,
     offByDefault: true,
   },
