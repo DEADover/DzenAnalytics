@@ -240,8 +240,8 @@ interface DisplayState {
   setContentWidth: (width: number) => Promise<void>;
 }
 
-/** Отметка новых и неотправленных операций в лентах: точка или полоска. */
-export type NewMarkStyle = "dot" | "strip";
+/** Отметка новых и неотправленных операций в лентах: точка, полоска или полоска с подсветкой строки. */
+export type NewMarkStyle = "dot" | "strip" | "fill";
 
 export const useDisplayStore = create<DisplayState>((set, get) => ({
   fractionDigits: 0,
@@ -306,7 +306,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       statementLine: stored?.statementLine === true,
       commentWrap: stored?.commentWrap !== false,
       timeColumn: stored?.timeColumn === true,
-      newMark: stored?.newMark === "strip" ? "strip" : "dot",
+      newMark: stored?.newMark === "strip" || stored?.newMark === "fill" ? stored.newMark : "dot",
       columnResize: stored?.columnResize === true,
       feedHeadSticky: stored?.feedHeadSticky === true,
       homeFilters: stored?.homeFilters === true,

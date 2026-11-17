@@ -42,7 +42,7 @@ export function OperationCategory({
 }) {
   // Полоской отмечает сама строка (`operationMarkClass`) — точки не нужны,
   // а смысл отметки остаётся для экранного диктора.
-  const strip = useDisplayStore((s) => s.newMark) === "strip";
+  const strip = useDisplayStore((s) => s.newMark) !== "dot";
   return (
     <div data-cell="category" className="flex items-center gap-2 min-w-0">
       <span className="relative inline-flex shrink-0">

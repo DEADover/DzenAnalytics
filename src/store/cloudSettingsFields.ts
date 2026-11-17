@@ -195,7 +195,7 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
     isBool(v) ? s.setTimeColumn(v) : undefined
   ),
   field(useDisplayStore, "display.newMark", (s) => s.newMark, (v, s) =>
-    v === "dot" || v === "strip" ? s.setNewMark(v) : undefined
+    v === "dot" || v === "strip" || v === "fill" ? s.setNewMark(v) : undefined
   ),
   field(useDisplayStore, "display.columnResize", (s) => s.columnResize, (v, s) =>
     isBool(v) ? s.setColumnResize(v) : undefined

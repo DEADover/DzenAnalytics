@@ -8,14 +8,15 @@ import { isoToLocalTime } from "./buildEditPatch";
 
 /**
  * Класс полоски «новая» / «не отправлена» для строки — когда в «Оформлении»
- * выбрана полоска (`.row-mark-*` в index.css). При точке — ничего: отметку
+ * выбрана полоска или подсветка (`.row-mark-*` в index.css). При точке — ничего: отметку
  * рисует `OperationCategory`. Черновик важнее: у него пометки «новая» нет.
  */
 export function operationMarkClass(style: NewMarkStyle, tx: Transaction, draft: boolean): string | undefined {
-  if (style !== "strip") return undefined;
-  if (draft) return "row-mark-draft";
-  if (tx.unseen) return "row-mark-new";
-  return undefined;
+  if (style === "dot") return undefined;
+  const mark = draft ? "row-mark-draft" : tx.unseen ? "row-mark-new" : null;
+  if (!mark) return undefined;
+  // «Подсветка» — та же полоска плюс лёгкая заливка всей строки (#139).
+  return style === "fill" ? `${mark} row-mark-fill` : mark;
 }
 
 /**

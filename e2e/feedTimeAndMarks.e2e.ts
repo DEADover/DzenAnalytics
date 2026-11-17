@@ -7,7 +7,7 @@ import { test, expect, connectZen } from "./harness";
 
 type Win = { __store: (n: string) => Promise<Record<string, { getState: () => Record<string, unknown> }>> };
 
-async function display(page: Page, time: boolean, mark: "dot" | "strip") {
+async function display(page: Page, time: boolean, mark: "dot" | "strip" | "fill") {
   await page.evaluate(
     async ([t, m]) => {
       const { useDisplayStore } = await (window as unknown as Win).__store("useDisplayStore");
@@ -66,4 +66,27 @@ test("список сбоку: столбец «Время» и полоска �
   const shadow = await marked.first().locator("td").first().evaluate((el) => getComputedStyle(el).boxShadow);
   expect(shadow).toContain("inset");
   await expect(marked.first()).toContainText(/\b\d{2}:\d{2}\b/);
+});
+
+test("подсветка: полоска и заливка строки — в ленте и в списке сбоку", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await connectZen(page, "/transactions");
+  await display(page, false, "fill");
+  const row = page.locator("main .op-row.row-mark-new.row-mark-fill").first();
+  await expect(row).toBeVisible();
+  expect(await row.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain("gradient");
+  expect(await row.evaluate((el) => getComputedStyle(el).boxShadow)).toContain("inset");
+  // Просмотренная строка не подсвечена.
+  const plain = page.locator("main .op-row:not(.row-mark-new):not(.row-mark-draft)").first();
+  expect(await plain.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe("none");
+
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useDataStore } = await w.__store("useDataStore");
+    const { useDrillStore } = await w.__store("useDrillStore");
+    const txs = useDataStore.getState().transactions as unknown[];
+    (useDrillStore.getState() as { show: (t: string, x: unknown[]) => void }).show("Все операции", txs);
+  });
+  const cell = page.getByRole("complementary").locator("tr.row-mark-fill").first().locator("td").nth(2);
+  expect(await cell.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain("gradient");
 });

@@ -13,6 +13,11 @@ describe("operationMarkClass — полоска новых и неотправл
     expect(operationMarkClass("strip", tx({ unseen: true }), true)).toBe("row-mark-draft");
     expect(operationMarkClass("strip", tx({ unseen: true }), false)).toBe("row-mark-new");
   });
+  it("подсветка — та же полоска плюс заливка строки", () => {
+    expect(operationMarkClass("fill", tx({ unseen: true }), false)).toBe("row-mark-new row-mark-fill");
+    expect(operationMarkClass("fill", tx(), true)).toBe("row-mark-draft row-mark-fill");
+    expect(operationMarkClass("fill", tx(), false)).toBeUndefined();
+  });
   it("просмотренная без полоски", () => {
     expect(operationMarkClass("strip", tx(), false)).toBeUndefined();
   });
