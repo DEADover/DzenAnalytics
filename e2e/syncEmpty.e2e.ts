@@ -3,7 +3,7 @@
  * калибровку: на большом аккаунте это секунды на каждый автозапуск.
  */
 import type { Page } from "@playwright/test";
-import { test, expect, connectZen } from "./harness";
+import { test, expect, connectZen, setPushMode } from "./harness";
 
 type Win = { __store: (n: string) => Promise<Record<string, { getState: () => Record<string, unknown> }>>; __txBefore?: unknown };
 
@@ -50,4 +50,59 @@ test("удаление в облаке — обычным путём: опера
   expect(after.same).toBe(false);
   expect(after.ids).not.toContain(gone);
   expect(after.stamp).toBeGreaterThan(before.stamp ?? 0);
+});
+
+const commentOf = (page: Page, id: string) =>
+  page.evaluate(async (txId) => {
+    const w = window as unknown as Win;
+    const { useDataStore } = await w.__store("useDataStore");
+    const tx = useDataStore.getState().transactions as { id: string; comment?: string }[];
+    return tx.find((t) => t.id === txId)?.comment ?? null;
+  }, id);
+
+test("отправка без правок забрала изменения облака — следующая синхронизация доносит их до ленты", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  const { ids } = await snapshot(page);
+  const id = ids[0]!;
+  await setPushMode(page, "manual");
+  zen.cloudEdits.push({ id, patch: { comment: "Поправлено на телефоне" } });
+  // Отправка сперва забирает свежие изменения облака (проверка конфликтов),
+  // а слать ей нечего.
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useZenmoneyStore } = await w.__store("useZenmoneyStore");
+    await (useZenmoneyStore.getState() as { pushPendingEdits: () => Promise<unknown> }).pushPendingEdits();
+  });
+  await syncNow(page);
+  expect(await commentOf(page, id)).toBe("Поправлено на телефоне");
+});
+
+test("синхронизация оборвалась после записи кэша — следующая всё равно собирает ленту", async ({ page, zen }) => {
+  await connectZen(page, "/transactions");
+  const { ids } = await snapshot(page);
+  const id = ids[0]!;
+  zen.cloudEdits.push({ id, patch: { comment: "Пришло, пока вкладку закрывали" } });
+  // Обрыв между записью кэша и сборкой ленты — как закрытая или
+  // перезагруженная посреди синхронизации вкладка.
+  const failed = await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useDataStore } = await w.__store("useDataStore");
+    const { useZenmoneyStore } = await w.__store("useZenmoneyStore");
+    const data = useDataStore.getState() as { setTransactions: unknown };
+    const real = data.setTransactions;
+    (useDataStore as unknown as { setState: (p: object) => void }).setState({
+      setTransactions: () => Promise.reject(new Error("обрыв")),
+    });
+    try {
+      await (useZenmoneyStore.getState() as { sync: () => Promise<unknown> }).sync();
+      return false;
+    } catch {
+      return true;
+    } finally {
+      (useDataStore as unknown as { setState: (p: object) => void }).setState({ setTransactions: real });
+    }
+  });
+  expect(failed).toBe(true);
+  await syncNow(page);
+  expect(await commentOf(page, id)).toBe("Пришло, пока вкладку закрывали");
 });

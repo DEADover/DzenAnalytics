@@ -67,15 +67,19 @@ export function autoSyncDue(
 /**
  * Можно ли закончить синхронизацию сразу: облако ничего не прислало, а у нас
  * уже всё есть. Нельзя без кэша (первый заход или полная), при дозапросе по
- * новой версии схемы и пока лента пуста — её ещё надо собрать из кэша.
+ * новой версии схемы, пока лента пуста — её ещё надо собрать из кэша, — и
+ * пока лента собрана не из нынешнего кэша: кэш ушёл вперёд (отправка правок
+ * забрала изменения облака, синхронизацию оборвали), и облако их уже не
+ * пришлёт.
  */
 export function canSkipEmptySync(a: {
   hasCache: boolean;
   backfill: number;
   diffEmpty: boolean;
   haveTransactions: boolean;
+  feedCurrent: boolean;
 }): boolean {
-  return a.hasCache && a.backfill === 0 && a.diffEmpty && a.haveTransactions;
+  return a.hasCache && a.backfill === 0 && a.diffEmpty && a.haveTransactions && a.feedCurrent;
 }
 
 /** Строка журнала об удачной синхронизации. */

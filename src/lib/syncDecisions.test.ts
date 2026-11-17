@@ -83,13 +83,15 @@ describe("autoSyncDue — синхронизация по расписанию",
 });
 
 describe("canSkipEmptySync — пустой ответ облака", () => {
-  const ok = { hasCache: true, backfill: 0, diffEmpty: true, haveTransactions: true };
+  const ok = { hasCache: true, backfill: 0, diffEmpty: true, haveTransactions: true, feedCurrent: true };
   it("всё есть и ничего не пришло — заканчиваем сразу", () => {
     expect(canSkipEmptySync(ok)).toBe(true);
   });
   it("иначе — полный путь", () => {
     expect(canSkipEmptySync({ ...ok, hasCache: false })).toBe(false);
     expect(canSkipEmptySync({ ...ok, backfill: 1 })).toBe(false);
+    // Кэш ушёл вперёд ленты — облако этого уже не пришлёт, собираем из кэша.
+    expect(canSkipEmptySync({ ...ok, feedCurrent: false })).toBe(false);
     expect(canSkipEmptySync({ ...ok, diffEmpty: false })).toBe(false);
     // Лента пуста (например, после очистки) — её надо собрать из кэша.
     expect(canSkipEmptySync({ ...ok, haveTransactions: false })).toBe(false);

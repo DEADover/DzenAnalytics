@@ -118,6 +118,15 @@ import type { ImportMeta } from "../types";
 
 const TOKEN_KEY = "zenmoneyToken";
 const TIMESTAMP_KEY = "zenmoneyServerTimestamp";
+/**
+ * Метка кэша, из которого лента (и всё, что строится вслед за ней) собрана
+ * целиком. Кэш может уйти вперёд без ленты: отправка правок забирает свежие
+ * изменения облака в кэш, а ленту не пересобирает; синхронизацию могут
+ * оборвать между записью кэша и сборкой ленты. Тогда облако на следующий
+ * запрос честно отвечает «ничего нового», и без этой метки изменения так и не
+ * доезжали до ленты — до полной синхронизации.
+ */
+const FEED_STAMP_KEY = "zenmoneyFeedStamp";
 
 /** Полный список дат планов от метки времени — для `applyDiffWithPlans`. */
 const fetchPlansFrom = (token: string) => (fromTimestamp: number) =>
@@ -863,11 +872,14 @@ async function finishSync(a: {
   startedAt: number;
   /** Сдвигать ли метку сервера. При пустом ответе — нет: кэш с ней не менялся. */
   advanceStamp: boolean;
+  /** Метка кэша, из которого лента теперь собрана целиком (`FEED_STAMP_KEY`). */
+  feedStamp?: number;
 }): Promise<SyncResult> {
   const { diff, isFull } = a;
   const get = useZenmoneyStore.getState;
   const now = new Date().toISOString();
   if (a.advanceStamp) await db.saveJSON(TIMESTAMP_KEY, diff.serverTimestamp);
+  if (a.feedStamp !== undefined) await db.saveJSON(FEED_STAMP_KEY, a.feedStamp);
   await db.saveJSON(LAST_SYNC_KEY, now);
   // Прошла — серия ошибок закончилась: автоповтор снова по расписанию.
   // Саму запись оставляем — по времени видно, что она уже в прошлом.
@@ -1103,6 +1115,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
     // Без Дзен-мани снова действует свой день начала месяца.
     useReportPeriodStore.getState().adoptZenDay(null);
     await db.saveJSON(TIMESTAMP_KEY, 0);
+    await db.saveJSON(FEED_STAMP_KEY, null);
     await db.saveJSON(LAST_SYNC_KEY, null);
     await clearZenCache();
     await useCategoryMetaStore.getState().clear();
@@ -1184,6 +1197,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
           backfill: backfill.length,
           diffEmpty: isEmptyDiff(diff),
           haveTransactions: useDataStore.getState().transactionsRaw.length > 0,
+          feedCurrent: (await db.loadJSON<number>(FEED_STAMP_KEY)) === prevCache.serverTimestamp,
         })
       ) {
         stage = "cloud";
@@ -1292,6 +1306,7 @@ export const useZenmoneyStore = create<ZenmoneyState>((set, get) => ({
         skipPush: !!opts.skipPush,
         startedAt,
         advanceStamp: true,
+        feedStamp: nextCache.serverTimestamp,
       });
     } catch (e) {
       const prev = get().pullFailure;
