@@ -148,6 +148,22 @@ export const test = base.extend<{ zen: FakeZen }>({
         localStorage.setItem("dzenanalytics:tour", JSON.stringify({ done: [], welcomed: true }));
       }
     });
+    // Прокрутка страницы в тестах — мгновенная. В приложении она плавная
+    // (`scroll-behavior: smooth`), и Playwright, прокручивая элемент в видимую
+    // область перед кликом, запускал такую же: клик приходился на ещё едущую
+    // страницу. Меню, привязанное к кнопке, от этого открывалось и тут же
+    // закрывалось — его кнопка сдвинулась. Локально этого не видно, в CI тест
+    // «окна разделения и создания» падал через раз: там кнопку сначала
+    // перекрывала шапка, и Playwright прокручивал страницу несколько раз подряд.
+    await context.addInitScript(() => {
+      const instant = () => {
+        const style = document.createElement("style");
+        style.textContent = "html{scroll-behavior:auto!important}";
+        document.head.appendChild(style);
+      };
+      if (document.head) instant();
+      else document.addEventListener("DOMContentLoaded", instant, { once: true });
+    });
     // Порядок важен: Playwright проверяет маршруты с последнего добавленного.
     await context.route(/^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/])/, (route) => route.abort());
     await context.route("https://www.cbr-xml-daily.ru/**", (route) =>

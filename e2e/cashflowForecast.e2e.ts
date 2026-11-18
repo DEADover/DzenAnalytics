@@ -94,22 +94,28 @@ test("шеврон сворачивает сводку плавно — граф
   expect(Math.abs(t.x + t.width / 2 - p.x)).toBeLessThan(2);
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-  // Плавно: сводка уезжает вправо сдвигом через промежуточные положения, а не
-  // пропадает скачком; ширина у неё при этом прежняя — ничего не перестраивается.
-  const [before, lefts] = await page.evaluate(async () => {
+  // Плавно: сводка уезжает вправо переходом, а не скачком; ширина у неё при
+  // этом прежняя — ничего не перестраивается. Что переход был, спрашиваем у
+  // самого браузера (`transitionend` со временем хода), а не ловим
+  // промежуточные положения по таймеру: на загруженной машине страница на время
+  // перерисовки графика замирает дольше, чем длится переход, и все замеры
+  // приходились уже на конечное положение.
+  const [before, end, ran] = await page.evaluate(async () => {
     const sec = document.getElementById("cashflow-side")!;
     const x0 = sec.getBoundingClientRect().left;
+    const moved = new Promise<number>((resolve) => {
+      sec.addEventListener("transitionend", (e) => {
+        if (e.target === sec && (e.propertyName === "transform" || e.propertyName === "translate"))
+          resolve(e.elapsedTime);
+      });
+      setTimeout(() => resolve(0), 5000);
+    });
     (document.querySelector("[data-cashflow-toggle]") as HTMLElement).click();
-    const seen: number[] = [];
-    for (let i = 0; i < 20; i++) {
-      await new Promise((r) => setTimeout(r, 25));
-      seen.push(sec.getBoundingClientRect().left);
-    }
-    return [x0, seen] as const;
+    const elapsed = await moved;
+    return [x0, sec.getBoundingClientRect().left, elapsed] as const;
   });
-  const end = lefts[lefts.length - 1];
   expect(end).toBeGreaterThan(before + 300);
-  expect(lefts.some((x) => x > before + 5 && x < end - 5)).toBe(true);
+  expect(ran).toBeGreaterThan(0.1);
   await expect.poll(async () => (await chart.boundingBox())!.width).toBeGreaterThan(narrow + 300);
   await expect(side(page)).toHaveCount(0);
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
