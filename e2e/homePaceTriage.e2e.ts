@@ -125,7 +125,10 @@ test("«Цели»: пустое состояние и цель с прогре�
   });
   const row = goals.locator('[data-goal="Отпуск"]');
   await expect(row).toContainText("25%");
-  await expect(row).toContainText(/Прогноз: /);
+  // Под целью — прогноз, срок и взнос в месяц.
+  await expect(row.locator("[data-goal-stats]")).toContainText("Прогноз");
+  await expect(row.locator("[data-goal-stats]")).toContainText("Без срока");
+  await expect(row.locator("[data-goal-stats]")).toContainText(/Отчисления\s*.?30\s000/);
   // Свод над списком: накоплено и сколько осталось.
   await expect(goals).toContainText("Накоплено");
   await expect(goals).toContainText(/Осталось\s*.?150\s000/);
