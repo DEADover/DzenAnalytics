@@ -17,7 +17,7 @@ import { useGoalsMoney } from "../../hooks/useGoalsMoney";
 import { useSmoothNavigate } from "../../hooks/useSmoothNavigate";
 import { useGoalsStore } from "../../store/useGoalsStore";
 import { goalMetrics, monthYear } from "../../lib/goalMetrics";
-import { formatMoney, formatPct } from "../../lib/format";
+import { formatMoney, formatNum, formatPct } from "../../lib/format";
 
 export function GoalsWidget({ base }: { base: string }) {
   // Темп сбережений — без оборотов и внебалансовых счетов, как на «Целях».
@@ -39,6 +39,22 @@ export function GoalsWidget({ base }: { base: string }) {
         .sort((a, b) => Number(a.m.done) - Number(b.m.done) || b.m.ratio - a.m.ratio),
     [goals, money, avgSavings]
   );
+
+  const summary = useMemo(() => {
+    let saved = 0;
+    let target = 0;
+    let remaining = 0;
+    let done = 0;
+    for (const { g, m } of rows) {
+      // Накопленное сверх цели в свод не идёт: лишнее на одной цели не
+      // закрывает недостающее на другой.
+      saved += Math.min(m.current, g.target);
+      target += g.target;
+      remaining += m.remaining;
+      if (m.done) done += 1;
+    }
+    return { saved, target, remaining, done };
+  }, [rows]);
 
   return (
     <>
@@ -67,44 +83,122 @@ export function GoalsWidget({ base }: { base: string }) {
           {loaded ? "Целей пока нет" : "Загружаем цели…"}
         </SectionEmpty>
       ) : (
-        <div className="scroll-soft flex flex-col gap-2 flex-1 min-h-0 -mx-2 px-2" data-testid="goals-widget">
-          {rows.map(({ g, m }) => {
-            const late = !m.done && g.deadline !== null && !m.onTrack;
-            let forecast: string;
-            if (m.done) forecast = "Достигнута";
-            else if (m.effective.months === null || !m.effective.finish) forecast = "При таком темпе не накопить";
-            else forecast = `Прогноз: ${monthYear(m.effective.finish)}`;
-            return (
-              <button
-                key={g.id}
-                type="button"
-                data-goal={g.name}
-                onClick={() => smoothNavigate("/goals")}
-                className="w-full shrink-0 text-left group py-2 px-2 rounded-lg transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-              >
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-[15px] font-medium flex-1 group-hover:text-accent">
-                    {g.name}
+        <div className="flex-1 min-h-0 flex flex-col gap-3" data-testid="goals-widget">
+          {/* Свод по всем целям: без него виджет — просто список полосок, и
+              не видно главного — сколько уже отложено из задуманного. */}
+          <div className="rounded-[14px] bg-panel2 px-4 py-3">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-[11px] uppercase tracking-[0.08em] text-muted">Накоплено</span>
+              <span className="text-[11px] text-muted tabular-nums">
+                Достигнуто {formatNum(summary.done)} из {formatNum(rows.length)}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-[28px] font-bold tracking-[-0.03em] tabular-nums leading-[1.1] whitespace-nowrap">
+                {formatMoney(summary.saved, base)}
+              </span>
+              <span className="text-[13px] text-muted tabular-nums whitespace-nowrap">
+                {summary.remaining > 0
+                  ? `Осталось ${formatMoney(summary.remaining, base)}`
+                  : "Все цели достигнуты"}
+              </span>
+            </div>
+            <ProgressBar
+              value={summary.target > 0 ? summary.saved / summary.target : 0}
+              tone={summary.done === rows.length ? "income" : "accent"}
+              className="mt-2.5 bg-panel"
+            />
+          </div>
+
+          <div className="scroll-soft flex flex-col gap-2.5 flex-1 min-h-0 -mx-2 px-2">
+            {rows.map(({ g, m }) => {
+              const late = !m.done && g.deadline !== null && !m.onTrack;
+              const inTime = !m.done && g.deadline !== null && m.onTrack;
+              const tone = m.done ? "income" : late ? "warn" : "accent";
+              let forecast: string;
+              if (m.done) forecast = "Цель достигнута";
+              else if (m.effective.months === null || !m.effective.finish) forecast = "При таком темпе не накопить";
+              else forecast = `Прогноз: ${monthYear(m.effective.finish)}`;
+              // Сколько откладывать, чтобы успеть: срок ещё впереди, а темпа не хватает.
+              const needed =
+                late && m.deadlineMonths !== null && m.deadlineMonths > 0
+                  ? m.remaining / m.deadlineMonths
+                  : null;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  data-goal={g.name}
+                  onClick={() => smoothNavigate("/goals")}
+                  className="w-full shrink-0 text-left group flex items-center gap-3.5 rounded-[14px] border border-border px-3.5 py-3 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  <GoalRing ratio={m.ratio} tone={tone} />
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-[15px] font-medium flex-1 group-hover:text-accent">
+                        {g.name}
+                      </span>
+                      {(m.done || late || inTime) && (
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-medium ${
+                            late ? "bg-warn/10 text-warn" : "bg-income/10 text-income"
+                          }`}
+                        >
+                          {m.done ? "Достигнута" : late ? "Позже срока" : "В срок"}
+                        </span>
+                      )}
+                    </span>
+                    <span className="block mt-0.5 text-[13px] tabular-nums truncate">
+                      {formatMoney(m.current, base)}{" "}
+                      <span className="text-muted">из {formatMoney(g.target, base)}</span>
+                    </span>
+                    <span className="block mt-1 text-[12px] text-muted tabular-nums truncate">
+                      {forecast}
+                      {!m.done && g.deadline && ` · Срок: ${monthYear(g.deadline)}`}
+                    </span>
+                    {needed !== null && (
+                      <span className="block mt-0.5 text-[12px] text-warn tabular-nums truncate">
+                        Чтобы успеть — {formatMoney(needed, base)} в месяц
+                      </span>
+                    )}
                   </span>
-                  <span className="shrink-0 text-[15px] font-semibold tabular-nums">
-                    {formatPct(m.ratio, 0)}
-                  </span>
-                </div>
-                <ProgressBar value={m.ratio} tone={m.done ? "income" : "accent"} className="mt-1.5" />
-                <div className="mt-1.5 flex items-baseline gap-2 text-[12px] text-muted tabular-nums">
-                  <span className="truncate flex-1">
-                    {formatMoney(m.current, base)} из {formatMoney(g.target, base)}
-                  </span>
-                  <span className={`shrink-0 ${m.done ? "text-income" : late ? "text-warn" : ""}`}>
-                    {forecast}
-                    {late && " · Позже срока"}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </>
+  );
+}
+
+const RING_TONE = {
+  accent: "rgb(var(--c-accent))",
+  income: "rgb(var(--c-income))",
+  warn: "rgb(var(--c-warn))",
+} as const;
+
+/** Кольцо прогресса цели с процентом внутри. */
+function GoalRing({ ratio, tone }: { ratio: number; tone: keyof typeof RING_TONE }) {
+  const r = 22;
+  const len = 2 * Math.PI * r;
+  const part = Math.max(0, Math.min(1, ratio));
+  return (
+    <span className="relative shrink-0 w-[56px] h-[56px] grid place-items-center">
+      <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90" aria-hidden="true">
+        <circle cx="28" cy="28" r={r} fill="none" strokeWidth="5" stroke="rgb(var(--c-panel2))" />
+        <circle
+          cx="28"
+          cy="28"
+          r={r}
+          fill="none"
+          strokeWidth="5"
+          strokeLinecap="round"
+          stroke={RING_TONE[tone]}
+          strokeDasharray={`${part * len} ${len}`}
+        />
+      </svg>
+      <span className="relative text-[13px] font-semibold tabular-nums">{formatPct(part, 0)}</span>
+    </span>
   );
 }
