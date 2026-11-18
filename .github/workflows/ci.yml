@@ -86,10 +86,15 @@ jobs:
       # не видят файлов, зацикленных друг на друга (так вышел v1.29.0).
       - name: Production build starts
         run: npm run build && npm run test:prod
-      - name: Traces of failed tests
-        if: failure()
+      # Сохраняем всегда, а не только при красном итоге: тест, упавший в первый
+      # раз и прошедший с повтора, оставляет прогон зелёным, но его трассировка
+      # — единственный способ разобрать, почему он нестабилен. Трассировки
+      # прошедших тестов Playwright не хранит, так что обычно папка пуста.
+      - name: Traces of failed attempts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+          if-no-files-found: ignore
