@@ -176,7 +176,7 @@ test("список виджетов из полосы внизу страниц�
   const header = (await page.locator("header").first().boundingBox())!;
   expect((await dialog.boundingBox())!.y).toBeGreaterThanOrEqual(header.y + header.height);
   // Последний пункт достаётся прокруткой внутри списка, а не страницы.
-  const last = dialog.getByRole("button", { name: /Новый тег под наблюдением/ });
+  const last = dialog.getByRole("button", { name: /Тег под наблюдением/ });
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport({ ratio: 1 });
   await last.click();

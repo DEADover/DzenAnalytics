@@ -628,7 +628,9 @@ function WidgetPicker({
             tile(
               `new:${w.kind}`,
               w.icon,
-              w.addLabel ?? `Новая ${w.title.toLowerCase()}`,
+              // Просто название: то, что пункт заводит ещё один такой виджет,
+              // видно по самому списку — снятых с тем же именем в нём нет.
+              w.title,
               w.hint,
               () => place(() => add(w.kind, beforeKey), w.kind)
             )
