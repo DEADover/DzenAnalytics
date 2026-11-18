@@ -580,19 +580,34 @@ export function layoutFromStored(raw: unknown): WidgetPlacement[] {
 
 /* ─────────────────────────────  порядок  ───────────────────────────── */
 
-/** Перенести виджет на место другого — то же, что перетащить его туда мышью. */
-export function moveWidget(
+/**
+ * Поменять два виджета местами — так работает бросок одного на другой.
+ *
+ * Именно обмен, а не вставка. Раньше брошенный виджет вставал на место цели и
+ * сдвигал всех, кто стоял между ними: перенос из последнего ряда в первый
+ * перекраивал каждую строку по дороге, выталкивал крайние виджеты на новые ряды
+ * и оставлял дыры. Человек же показывает на два виджета — их и надо поменять,
+ * не трогая остальных.
+ *
+ * Отступ остаётся за МЕСТОМ, а не уезжает с виджетом: пустая клетка слева —
+ * часть ряда, и тот, кто встал в этот ряд, наследует её (насколько позволяет
+ * его ширина).
+ */
+export function swapWidgets(
   layout: readonly WidgetPlacement[],
-  dragKey: string,
-  overKey: string
+  aKey: string,
+  bKey: string
 ): WidgetPlacement[] {
-  if (dragKey === overKey) return layout.slice();
-  const from = layout.findIndex((p) => p.key === dragKey);
-  const to = layout.findIndex((p) => p.key === overKey);
-  if (from === -1 || to === -1) return layout.slice();
+  if (aKey === bKey) return layout.slice();
+  const a = layout.findIndex((p) => p.key === aKey);
+  const b = layout.findIndex((p) => p.key === bKey);
+  if (a === -1 || b === -1) return layout.slice();
   const next = layout.slice();
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item);
+  const offsetAt = (i: number) => clampOffset(layout[i].offset, widgetMeta(layout[i].kind));
+  const into = (who: number, where: number) =>
+    withOffset(layout[who], clampOffset(offsetAt(where), widgetMeta(layout[who].kind)));
+  next[a] = into(b, a);
+  next[b] = into(a, b);
   return next;
 }
 
@@ -755,17 +770,44 @@ function clampOffset(
   return Math.max(0, Math.min(Math.round(value), maxOffset(meta, columns)));
 }
 
+/** Ячейка разложенной сетки вместе с рядом, в котором она стоит. */
+interface GridCell {
+  cell: LayoutCell;
+  row: number;
+}
+
+/** Разложить видимые виджеты и назвать ряд каждой ячейки. */
+function gridOf(layout: readonly WidgetPlacement[], columns = 3): GridCell[] {
+  const out: GridCell[] = [];
+  let col = 0;
+  let row = 0;
+  for (const cell of packLayout(layout.filter((p) => !p.hidden), columns)) {
+    out.push({ cell, row });
+    const span =
+      cell.type === "gap" ? cell.span : Math.min(widgetMeta(cell.placement.kind).span, columns);
+    col += span;
+    if (col >= columns) {
+      col = 0;
+      row += 1;
+    }
+  }
+  return out;
+}
+
 /**
  * Сдвинуть виджет на шаг вперёд или назад — это делают стрелки.
  *
- * ШАГ — ЭТО КЛЕТКА, А НЕ СОСЕД. Сначала виджет двигается внутри ряда: вправо —
- * набирая пустую клетку слева, влево — отдавая её обратно. Только когда клеток
- * больше нет (виджет во всю ширину или уже у края), шаг становится обменом с
- * соседом. Так «поставить справа, слева пусто» получается теми же стрелками, а
- * не требует отдельной распорки в раскладке.
+ * ШАГ — ЭТО СОСЕДНЕЕ МЕСТО В ПОРЯДКЕ ЧТЕНИЯ. Если рядом в том же ряду пустая
+ * клетка — виджет встаёт в неё. Если рядом другой виджет — они меняются
+ * местами. Больше ничего не двигается.
  *
- * При обмене отступ сбрасывается: он про место В РЯДУ, а ряд у виджета теперь
- * другой, и тащить за собой прежнюю пустоту незачем.
+ * Раньше стрелка «вперёд» сначала набирала виджету отступ до упора, даже когда
+ * справа стоял сосед: слева появлялась дыра, сосед вылетал на новый ряд, и
+ * только с третьего нажатия виджеты наконец менялись местами. Отступ теперь
+ * берётся лишь там, где пустое место действительно есть.
+ *
+ * Сосед при шаге в пустую клетку остаётся на месте: клетка, в которую встали,
+ * вычитается из его отступа, а освободившаяся — прибавляется к нему.
  *
  * Убранные виджеты пропускаем: их на экране нет, и шаг «через невидимое»
  * выглядел бы как нажатие вхолостую.
@@ -775,30 +817,66 @@ export function shiftWidget(
   key: string,
   dir: -1 | 1
 ): WidgetPlacement[] {
-  const visible: number[] = [];
-  layout.forEach((p, i) => {
-    if (!p.hidden) visible.push(i);
-  });
-  const at = visible.findIndex((i) => layout[i].key === key);
+  const grid = gridOf(layout);
+  const at = grid.findIndex((g) => g.cell.type === "widget" && g.cell.placement.key === key);
   if (at === -1) return layout.slice();
-
-  const idx = visible[at];
+  const me = grid[at];
+  const idx = layout.findIndex((p) => p.key === key);
   const meta = widgetMeta(layout[idx].kind);
   const offset = clampOffset(layout[idx].offset, meta);
-  const room = maxOffset(meta);
-  if (dir === 1 ? offset < room : offset > 0) {
-    const next = layout.slice();
-    next[idx] = withOffset(layout[idx], offset + dir);
-    return next;
+
+  /** Ближайший виджет в эту сторону — с его рядом. */
+  const neighbour = (step: -1 | 1): { key: string; row: number } | null => {
+    for (let i = at + step; i >= 0 && i < grid.length; i += step) {
+      const c = grid[i].cell;
+      if (c.type === "widget") return { key: c.placement.key, row: grid[i].row };
+    }
+    return null;
+  };
+  /** Изменить отступ виджета по ключу на `delta`, не выходя за его пределы. */
+  const nudge = (list: WidgetPlacement[], k: string, delta: number) => {
+    const i = list.findIndex((p) => p.key === k);
+    if (i === -1) return;
+    const m = widgetMeta(list[i].kind);
+    list[i] = withOffset(list[i], clampOffset(clampOffset(list[i].offset, m) + delta, m));
+  };
+
+  if (dir === 1) {
+    const after = grid[at + 1];
+    // Справа в том же ряду пусто — встаём в эту клетку.
+    if (after && after.cell.type === "gap" && after.row === me.row) {
+      const next = layout.slice();
+      next[idx] = withOffset(layout[idx], offset + 1);
+      // Пустота была отступом соседа по ряду — он остаётся где стоял.
+      const nb = neighbour(1);
+      if (nb && nb.row === me.row) nudge(next, nb.key, -1);
+      return next;
+    }
+    const nb = neighbour(1);
+    return nb ? swapWidgets(layout, key, nb.key) : layout.slice();
   }
 
-  const to = at + dir;
-  if (to < 0 || to >= visible.length) return layout.slice();
-  const next = layout.slice();
-  const a = visible[at];
-  const b = visible[to];
-  [next[a], next[b]] = [withOffset(next[b], 0), withOffset(next[a], 0)];
-  return next;
+  // Слева своя пустая клетка — отдаём её.
+  if (offset > 0) {
+    const next = layout.slice();
+    next[idx] = withOffset(layout[idx], offset - 1);
+    // Сосед справа по ряду остаётся где стоял: освободившаяся клетка — его.
+    const nb = neighbour(1);
+    if (nb && nb.row === me.row) nudge(next, nb.key, 1);
+    return next;
+  }
+  const nb = neighbour(-1);
+  return nb ? swapWidgets(layout, key, nb.key) : layout.slice();
+}
+
+/** Есть ли куда шагнуть: на краю раскладки стрелка гаснет. */
+export function canShiftWidget(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  dir: -1 | 1
+): boolean {
+  const next = shiftWidget(layout, key, dir);
+  return next.some((p, i) => p !== layout[i]);
 }
 
 /** Тот же виджет с другим отступом; ноль поле убирает. */

@@ -345,6 +345,7 @@ export function WidgetGap({
   const [picking, setPicking] = useState(false);
   return (
     <div
+      data-widget-gap
       // Пока не влезает — дырка не принимает бросок вовсе, и курсор честно
       // показывает «сюда нельзя».
       onDragEnter={open ? onEnter : undefined}

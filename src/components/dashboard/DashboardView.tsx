@@ -55,8 +55,8 @@ import {
 } from "./WidgetLayout";
 import { useWidgetDrag } from "../../hooks/useWidgetDrag";
 import {
+  canShiftWidget,
   isBareWidget,
-  maxOffset,
   packLayout,
   type LayoutCell,
   widgetMeta,
@@ -949,7 +949,6 @@ export function DashboardView() {
               );
             }
             const p = cell.placement;
-            const i = visible.indexOf(p);
             return (
             <WidgetShell
               key={p.key}
@@ -968,13 +967,9 @@ export function DashboardView() {
               onDragEnd={drag.end}
               onDrop={(sourceKey) => drag.drop(sourceKey, p.key)}
               onShift={(dir) => void shift(p.key, dir)}
-              // Шаг — это клетка, а не сосед: у крайнего виджета он ещё есть,
-              // пока в ряду остаётся пустое место.
-              canBack={i > 0 || (p.offset ?? 0) > 0}
-              canForward={
-                i < visible.length - 1 ||
-                (p.offset ?? 0) < maxOffset(widgetMeta(p.kind))
-              }
+              // Шаг есть, пока рядом сосед или пустая клетка своего ряда.
+              canBack={canShiftWidget(layout, p.key, -1)}
+              canForward={canShiftWidget(layout, p.key, 1)}
             >
               {widgetBody(p)}
             </WidgetShell>

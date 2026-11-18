@@ -18,7 +18,7 @@ import {
   type WidgetKind,
   defaultLayout,
   layoutFromStored,
-  moveWidget,
+  swapWidgets,
   dropIntoGap,
   moveWidgetBefore,
   removeWidget,
@@ -84,7 +84,7 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
 
     setEditing: (on) => set({ editing: on }),
 
-    move: (dragKey, overKey) => apply(moveWidget(get().layout, dragKey, overKey)),
+    move: (dragKey, overKey) => apply(swapWidgets(get().layout, dragKey, overKey)),
     moveBefore: (dragKey, beforeKey) =>
       apply(moveWidgetBefore(get().layout, dragKey, beforeKey)),
     dropInGap: (dragKey, beforeKey, gapCol) =>

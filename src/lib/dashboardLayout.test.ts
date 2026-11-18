@@ -9,7 +9,8 @@ import {
   setWidgetCategory,
   isDefaultLayout,
   layoutFromStored,
-  moveWidget,
+  swapWidgets,
+  canShiftWidget,
   moveWidgetBefore,
   normalizeLayout,
   dropIntoGap,
@@ -30,9 +31,6 @@ const keys = (layout: readonly WidgetPlacement[]) => layout.map((p) => p.key);
 const kinds = (layout: readonly WidgetPlacement[]) => layout.map((p) => p.kind);
 const row = (layout: readonly WidgetPlacement[], key: string) =>
   layout.find((p) => p.key === key)!;
-/** Раскладка, где стандартно снятый виджет стоит на своём месте видимым. */
-const shown = (layout: readonly WidgetPlacement[], key: string) =>
-  layout.map((p) => (p.key === key ? { key: p.key, kind: p.kind } : p));
 
 describe("layoutFromStored", () => {
   it("когда ничего не сохранено — стандартная раскладка целиком", () => {
@@ -221,27 +219,64 @@ describe("normalizeLayout", () => {
   });
 });
 
-describe("moveWidget", () => {
-  it("переносит вперёд", () => {
-    const out = moveWidget(DEFAULT_LAYOUT, "month", "upcoming");
-    expect(keys(out).slice(0, 3)).toEqual(["accounts", "upcoming", "month"]);
+/** Ряды главной как их видит человек: «month | accounts | ·1». */
+function rows(layout: readonly WidgetPlacement[]): string[] {
+  const out: string[] = [];
+  let row: string[] = [];
+  let col = 0;
+  for (const c of packLayout(layout.filter((p) => !p.hidden))) {
+    const span = c.type === "gap" ? c.span : widgetMeta(c.placement.kind).span;
+    row.push(c.type === "gap" ? `·${span}` : c.placement.key);
+    col += span;
+    if (col >= 3) {
+      out.push(row.join(" | "));
+      row = [];
+      col = 0;
+    }
+  }
+  if (row.length) out.push(row.join(" | "));
+  return out;
+}
+
+describe("swapWidgets", () => {
+  it("меняет два виджета местами, остальные стоят где стояли", () => {
+    // Из последнего ряда в первый: раньше это перекраивало каждую строку.
+    expect(rows(swapWidgets(DEFAULT_LAYOUT, "observations", "month"))).toEqual([
+      "observations | accounts | upcoming",
+      "links",
+      "cashflow | categories",
+      "activity | month",
+    ]);
   });
 
-  it("переносит назад", () => {
-    const out = moveWidget(DEFAULT_LAYOUT, "observations", "month");
-    expect(keys(out)[0]).toBe("observations");
-    expect(out).toHaveLength(DEFAULT_LAYOUT.length);
+  it("не зависит от того, кого на кого бросили", () => {
+    expect(swapWidgets(DEFAULT_LAYOUT, "month", "observations")).toEqual(
+      swapWidgets(DEFAULT_LAYOUT, "observations", "month")
+    );
+  });
+
+  it("пустая клетка слева остаётся за местом, а не уезжает с виджетом", () => {
+    // «Балансы» сдвинуты вправо: month | · | accounts.
+    let layout = setWidgetHidden(DEFAULT_LAYOUT, "upcoming", true);
+    layout = shiftWidget(layout, "accounts", 1);
+    expect(rows(layout)[0]).toBe("month | ·1 | accounts");
+    expect(rows(swapWidgets(layout, "accounts", "categories"))).toEqual([
+      "month | ·1 | categories",
+      "links",
+      "cashflow | accounts",
+      "activity | observations",
+    ]);
   });
 
   it("различает две полоски по ключу", () => {
     const two = addLinksRow(DEFAULT_LAYOUT);
-    const out = moveWidget(two, "links-2", "links");
+    const out = swapWidgets(two, "links-2", "links");
     expect(keys(out).filter((k) => k.startsWith("links"))).toEqual(["links-2", "links"]);
   });
 
   it("на своё же место и по чужому ключу — ничего не меняет", () => {
-    expect(keys(moveWidget(DEFAULT_LAYOUT, "month", "month"))).toEqual(keys(DEFAULT_LAYOUT));
-    expect(keys(moveWidget(DEFAULT_LAYOUT, "https://example.com", "month"))).toEqual(
+    expect(keys(swapWidgets(DEFAULT_LAYOUT, "month", "month"))).toEqual(keys(DEFAULT_LAYOUT));
+    expect(keys(swapWidgets(DEFAULT_LAYOUT, "https://example.com", "month"))).toEqual(
       keys(DEFAULT_LAYOUT)
     );
   });
@@ -311,60 +346,65 @@ describe("packLayout", () => {
 });
 
 describe("shiftWidget", () => {
-  const offsetOf = (l: readonly WidgetPlacement[], key: string) =>
-    l.find((p) => p.key === key)?.offset ?? 0;
-
-  it("шаг вправо оставляет пустую клетку слева, а не меняет соседей", () => {
-    // Ради этого всё и затевалось: «поставить справа, слева пусто».
-    const out = shiftWidget(shown(DEFAULT_LAYOUT, "freeMoney"), "freeMoney", 1);
-    expect(offsetOf(out, "freeMoney")).toBe(1);
-    expect(keys(out)).toEqual(keys(DEFAULT_LAYOUT));
-  });
-
-  it("шаг влево возвращает клетку обратно", () => {
-    const right = shiftWidget(shown(DEFAULT_LAYOUT, "freeMoney"), "freeMoney", 1);
-    const back = shiftWidget(right, "freeMoney", -1);
-    expect(offsetOf(back, "freeMoney")).toBe(0);
-    expect(keys(back)).toEqual(keys(DEFAULT_LAYOUT));
-  });
-
-  it("виджет в две трети дальше одной клетки не уезжает — меняется с соседом", () => {
-    const right = shiftWidget(shown(DEFAULT_LAYOUT, "freeMoney"), "freeMoney", 1);
-    const out = shiftWidget(right, "freeMoney", 1);
-    // По видимому порядку: снятые виджеты стоят в раскладке, но шаг их
-    // пропускает, и сравнивать с ними место бессмысленно.
-    expect(keys(out.filter((p) => !p.hidden)).slice(3, 5)).toEqual([
+  it("рядом сосед — меняются местами с первого нажатия, дыр не появляется", () => {
+    // Раньше первое нажатие оставляло слева дыру и выталкивало «Запланированные»
+    // на новый ряд; местами виджеты менялись только с третьего.
+    const out = shiftWidget(DEFAULT_LAYOUT, "month", 1);
+    expect(rows(out)).toEqual([
+      "accounts | month | upcoming",
       "links",
-      "freeMoney",
+      "cashflow | categories",
+      "activity | observations",
+    ]);
+    expect(rows(shiftWidget(out, "month", -1))).toEqual(rows(DEFAULT_LAYOUT));
+  });
+
+  it("рядом пустая клетка — виджет встаёт в неё, соседи на месте", () => {
+    let layout = setWidgetHidden(DEFAULT_LAYOUT, "upcoming", true);
+    expect(rows(layout)[0]).toBe("month | accounts | ·1");
+    layout = shiftWidget(layout, "accounts", 1);
+    expect(rows(layout)[0]).toBe("month | ·1 | accounts");
+    // «Итоги» шагают в освободившуюся клетку — «Балансы» остаются справа.
+    const both = shiftWidget(layout, "month", 1);
+    expect(rows(both)[0]).toBe("·1 | month | accounts");
+    // И обратно: клетка возвращается, «Балансы» по-прежнему справа.
+    expect(rows(shiftWidget(both, "month", -1))[0]).toBe("month | ·1 | accounts");
+    expect(rows(shiftWidget(layout, "accounts", -1))[0]).toBe("month | accounts | ·1");
+  });
+
+  it("виджет в две трети шагает в свободную треть ряда", () => {
+    let layout = setWidgetHidden(DEFAULT_LAYOUT, "categories", true);
+    expect(rows(layout)[2]).toBe("cashflow | ·1");
+    layout = shiftWidget(layout, "cashflow", 1);
+    expect(rows(layout)[2]).toBe("·1 | cashflow");
+    expect(rows(shiftWidget(layout, "cashflow", -1))[2]).toBe("cashflow | ·1");
+  });
+
+  it("через ряд — обмен с ближайшим виджетом в порядке чтения", () => {
+    const out = shiftWidget(DEFAULT_LAYOUT, "cashflow", 1);
+    expect(rows(out)[2]).toBe("categories | cashflow");
+    expect(rows(shiftWidget(DEFAULT_LAYOUT, "links", -1)).slice(0, 3)).toEqual([
+      "month | accounts | ·1",
+      "links",
+      "upcoming | cashflow",
     ]);
   });
 
-  it("при обмене отступ сбрасывается: ряд у виджета теперь другой", () => {
-    const right = shiftWidget(DEFAULT_LAYOUT, "freeMoney", 1);
-    const out = shiftWidget(right, "freeMoney", 1);
-    expect(offsetOf(out, "freeMoney")).toBe(0);
-  });
-
-  it("виджет во всю ширину клеток не набирает — сразу обмен", () => {
-    // У полоски `span: 3`, пустой клетке рядом с ней взяться неоткуда.
-    const out = shiftWidget(DEFAULT_LAYOUT, "links", -1);
-    expect(offsetOf(out, "links")).toBe(0);
-    expect(keys(out)).not.toEqual(keys(DEFAULT_LAYOUT));
-  });
-
-  it("на краю стоит на месте", () => {
-    expect(keys(shiftWidget(DEFAULT_LAYOUT, "month", -1))).toEqual(keys(DEFAULT_LAYOUT));
+  it("на краю стоит на месте, и стрелка это знает", () => {
+    expect(shiftWidget(DEFAULT_LAYOUT, "month", -1)).toEqual(DEFAULT_LAYOUT.slice());
+    expect(canShiftWidget(DEFAULT_LAYOUT, "month", -1)).toBe(false);
+    expect(canShiftWidget(DEFAULT_LAYOUT, "month", 1)).toBe(true);
+    const last = DEFAULT_LAYOUT.filter((p) => !p.hidden).at(-1)!.key;
+    expect(canShiftWidget(DEFAULT_LAYOUT, last, 1)).toBe(false);
+    expect(canShiftWidget(DEFAULT_LAYOUT, last, -1)).toBe(true);
   });
 
   it("перешагивает убранные: шаг не должен уходить в пустоту", () => {
-    // Клетки у «Итогов месяца» кончились — дальше шаг становится обменом, и
-    // перешагнуть он должен через снятый виджет, а не встать на его место.
-    let layout = setWidgetHidden(DEFAULT_LAYOUT, "accounts", true);
-    layout = shiftWidget(layout, "month", 1);
-    layout = shiftWidget(layout, "month", 1);
-    expect(offsetOf(layout, "month")).toBe(2);
+    const layout = setWidgetHidden(DEFAULT_LAYOUT, "accounts", true);
+    // Справа от «Итогов» теперь «Запланированные» — с ними и меняются.
     const out = shiftWidget(layout, "month", 1);
-    expect(keys(out).slice(0, 3)).toEqual(["upcoming", "accounts", "month"]);
+    expect(rows(out)[0]).toBe("upcoming | month | ·1");
+    expect(out.find((p) => p.key === "accounts")?.hidden).toBe(true);
   });
 });
 
@@ -676,7 +716,7 @@ describe("isDefaultLayout", () => {
 
   it("видит любое отличие", () => {
     expect(isDefaultLayout(setWidgetHidden(DEFAULT_LAYOUT, "categories", true))).toBe(false);
-    expect(isDefaultLayout(moveWidget(DEFAULT_LAYOUT, "month", "accounts"))).toBe(false);
+    expect(isDefaultLayout(swapWidgets(DEFAULT_LAYOUT, "month", "accounts"))).toBe(false);
     expect(isDefaultLayout(addLinksRow(DEFAULT_LAYOUT))).toBe(false);
     expect(isDefaultLayout(setWidgetView(DEFAULT_LAYOUT, "month", "split"))).toBe(false);
     expect(isDefaultLayout(setRowLinks(DEFAULT_LAYOUT, "links", ["/goals"]))).toBe(false);
