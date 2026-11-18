@@ -675,6 +675,7 @@ export function TransactionsPage() {
               scope={searchScope}
               onScopeChange={setSearchScope}
               counts={{ filter: inFilter.length, all: everywhere.length }}
+              countsPending={deferredSearch !== pageSearch}
               placeholder="Быстрый поиск по таблице…"
               title={"Быстрый поиск по этой таблице\nИщет по получателю, комментарию, категории и счёту — в общем фильтре или везде: выбор всплывает под полем. Не сохраняется и на другие страницы не влияет."}
               className="flex-1 min-w-[220px]"

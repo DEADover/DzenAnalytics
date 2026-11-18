@@ -24,6 +24,9 @@ for (const width of [1440, 768]) {
 
     const count = async (v: string) =>
       Number(await list.locator(`[data-search-scope='${v}'] [data-count]`).innerText().then((t) => t.replace(/\D/g, "")));
+    // Лента догоняет набор отложенно: пока она считает, в подсказке стоит
+    // многоточие, а не числа от прежнего запроса. Ждём сами числа.
+    await expect(list.locator("[data-count-pending]")).toHaveCount(0);
     const nFilter = await count("filter");
     const nAll = await count("all");
     expect(nAll).toBeGreaterThan(nFilter);

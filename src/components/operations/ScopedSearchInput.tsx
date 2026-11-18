@@ -34,6 +34,7 @@ export function ScopedSearchInput({
   scope,
   onScopeChange,
   counts,
+  countsPending = false,
   placeholder,
   title,
   className,
@@ -44,6 +45,13 @@ export function ScopedSearchInput({
   onScopeChange: (next: SearchScope) => void;
   /** Сколько найдётся в каждом варианте — числа в подсказке. */
   counts: Record<SearchScope, number>;
+  /**
+   * Числа ещё считаются: лента догоняет набор отложенно, и `counts` пока от
+   * прежнего запроса. Показывать их нельзя — на первой букве это «весь фильтр»
+   * и «ноль везде», то есть два неверных числа, которые через мгновение
+   * сменятся. Вместо них — многоточие в том же месте.
+   */
+  countsPending?: boolean;
   placeholder?: string;
   title?: string;
   className?: string;
@@ -145,8 +153,12 @@ export function ScopedSearchInput({
                 <span className="flex-1 min-w-0 whitespace-nowrap">{o.label}</span>
                 {/* Место под число отведено заранее и с запасом: окошко одной
                     ширины, найдено ли 1 или 100 000. */}
-                <span className="w-[4.5rem] shrink-0 text-right tabular-nums text-muted" data-count>
-                  {formatNum(counts[o.value])}
+                <span
+                  className="w-[4.5rem] shrink-0 text-right tabular-nums text-muted"
+                  data-count
+                  data-count-pending={countsPending ? "" : undefined}
+                >
+                  {countsPending ? "…" : formatNum(counts[o.value])}
                 </span>
                 <Check
                   className={clsx("w-4 h-4 shrink-0 text-accent", !selected && "invisible")}
