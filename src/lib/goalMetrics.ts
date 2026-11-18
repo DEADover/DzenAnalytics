@@ -9,6 +9,7 @@
 import type { Goal } from "../store/useGoalsStore";
 import type { CurrencyRates } from "../types";
 import { goalProgress, type GoalAccount, type RubRates } from "./goals";
+import { MONTHS } from "./months";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -34,6 +35,15 @@ export function monthYear(iso: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+/**
+ * «Июль 2043» — месяц полностью и с заглавной буквы. Из полей «год-месяц»
+ * напрямую, без пересчёта часовых поясов.
+ */
+export function monthYearFull(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  return `${MONTHS[(m || 1) - 1] ?? ""} ${y}`;
 }
 
 /** «N мес · мес. yyyy», or a short reason when there's no finite finish. */

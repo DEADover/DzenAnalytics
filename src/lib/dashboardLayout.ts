@@ -603,11 +603,18 @@ export function swapWidgets(
   const b = layout.findIndex((p) => p.key === bKey);
   if (a === -1 || b === -1) return layout.slice();
   const next = layout.slice();
-  const offsetAt = (i: number) => clampOffset(layout[i].offset, widgetMeta(layout[i].kind));
-  const into = (who: number, where: number) =>
-    withOffset(layout[who], clampOffset(offsetAt(where), widgetMeta(layout[who].kind)));
-  next[a] = into(b, a);
-  next[b] = into(a, b);
+  const metaA = widgetMeta(layout[a].kind);
+  const metaB = widgetMeta(layout[b].kind);
+  const atA = clampOffset(layout[a].offset, metaA);
+  const atB = clampOffset(layout[b].offset, metaB);
+  // Сколько отступа места каждый способен унаследовать. Виджету во всю ширину
+  // пустая клетка слева не положена — то, что он взять не смог, уходит со
+  // вторым виджетом, иначе обмен с полоской молча стирал бы отступ, и шаг
+  // «туда и обратно» не возвращал раскладку на место.
+  const takenByB = clampOffset(atA, metaB);
+  const takenByA = clampOffset(atB, metaA);
+  next[a] = withOffset(layout[b], clampOffset(takenByB + (atB - takenByA), metaB));
+  next[b] = withOffset(layout[a], clampOffset(takenByA + (atA - takenByB), metaA));
   return next;
 }
 
@@ -715,12 +722,100 @@ export function dropIntoGap(
       const bMeta = widgetMeta(next[bi].kind);
       const bOffset = clampOffset(next[bi].offset, bMeta, columns);
       if (bOffset > 0) {
+        // Сосед должен остаться в СВОЕЙ КОЛОНКЕ. Простое «минус ширина
+        // брошенного» этого не даёт, когда брошенный занял весь ряд: сосед
+        // уезжает рядом ниже, и отступ ему нужен прежний, а не урезанный.
+        const was = before.find(
+          (g) => g.cell.type === "widget" && g.cell.placement.key === beforeKey
+        );
+        let kept: number | null = null;
+        for (let o = 0; o <= maxOffset(bMeta, columns) && was; o++) {
+          const trial = next.slice();
+          trial[bi] = withOffset(next[bi], o);
+          const pos = gridOf(trial, columns).find(
+            (g) => g.cell.type === "widget" && g.cell.placement.key === beforeKey
+          );
+          if (pos && pos.col === was.col) {
+            kept = o;
+            break;
+          }
+        }
         const span = Math.min(meta.span, columns);
-        next[bi] = withOffset(next[bi], Math.max(0, bOffset - span));
+        next[bi] = withOffset(next[bi], kept ?? Math.max(0, bOffset - span));
+      }
+    }
+  }
+
+  // Перенос ВНУТРИ СВОЕГО РЯДА: соседи по ряду остаются в своих колонках, а
+  // пустая клетка переезжает туда, откуда виджет ушёл. Без этого сосед
+  // съезжал на освободившееся место, и «переставить в третью клетку»
+  // сдвигало весь ряд. Так же ведёт себя шаг стрелкой. Виджет, унесённый из
+  // другого ряда, такого следа не оставляет: его ряд смыкается, как при снятии.
+  const home = before.find((g) => g.cell.type === "widget" && g.cell.placement.key === dragKey);
+  if (gap && home && gap.row === home.row) {
+    const mates = before.filter(
+      (g) => g.row === home.row && g.cell.type === "widget" && g.cell.placement.key !== dragKey
+    );
+    // Слева направо по НОВОМУ порядку: отступ левого соседа сдвигает правого.
+    const order = (g: GridCell) =>
+      g.cell.type === "widget" ? next.findIndex((p) => p.key === (g.cell as { placement: WidgetPlacement }).placement.key) : -1;
+    for (const mate of [...mates].sort((x, y) => order(x) - order(y))) {
+      if (mate.cell.type !== "widget") continue;
+      const mk = mate.cell.placement.key;
+      const mi = next.findIndex((p) => p.key === mk);
+      const mMeta = widgetMeta(next[mi].kind);
+      const di = next.findIndex((p) => p.key === dragKey);
+      // Отступ соседа и самого виджета подбираются вместе: сосед, вставший на
+      // прежнюю колонку, сдвигает виджет, если тот стоит правее него.
+      search: for (let o = 0; o <= maxOffset(mMeta, columns); o++) {
+        for (let w = 0; w <= maxOffset(meta, columns); w++) {
+          const trial = next.slice();
+          trial[mi] = withOffset(next[mi], o);
+          trial[di] = withOffset(next[di], w);
+          const grid = gridOf(trial, columns);
+          const pos = grid.find((g) => g.cell.type === "widget" && g.cell.placement.key === mk);
+          const self = grid.find(
+            (g) => g.cell.type === "widget" && g.cell.placement.key === dragKey
+          );
+          // Сосед на прежней колонке, виджет — в клетке дырки, оба в одном ряду.
+          if (pos && self && pos.col === mate.col && self.col === gapCol && pos.row === self.row) {
+            next[mi] = trial[mi];
+            next[di] = trial[di];
+            break search;
+          }
+        }
       }
     }
   }
   return next;
+}
+
+/**
+ * Имеет ли смысл бросок в эту пустую клетку: виджет в неё действительно
+ * встанет, и раскладка от этого изменится.
+ *
+ * Клетка, которая зовёт «Перенести сюда», а потом либо ничего не делает, либо
+ * отправляет виджет в другое место, хуже клетки, которая не зовёт. Так бывает:
+ * дырка слева от виджета во втором ряду недостижима, пока в первом ряду есть
+ * свободное место, — раскладка подтянет виджет наверх.
+ */
+export function canDropIntoGap(
+  layout: readonly WidgetPlacement[],
+  dragKey: string,
+  beforeKey: string | null,
+  gapCol: number,
+  columns = 3
+): boolean {
+  const p = layout.find((x) => x.key === dragKey);
+  if (!p || p.hidden) return false;
+  if (gapCol + Math.min(widgetMeta(p.kind).span, columns) > columns) return false;
+  const next = dropIntoGap(layout, dragKey, beforeKey, gapCol, columns);
+  const where = (list: readonly WidgetPlacement[]) =>
+    gridOf(list, columns)
+      .map((g) => (g.cell.type === "widget" ? `${g.cell.placement.key}@${g.row}:${g.col}` : ""))
+      .join("|");
+  if (where(next) === where(layout)) return false;
+  return columnOf(next, dragKey, columns) === gapCol;
 }
 
 /** В какой колонке своего ряда стоит виджет. `null` — его на экране нет. */

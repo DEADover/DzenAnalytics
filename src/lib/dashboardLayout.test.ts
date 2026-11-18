@@ -11,6 +11,7 @@ import {
   layoutFromStored,
   swapWidgets,
   canShiftWidget,
+  canDropIntoGap,
   moveWidgetBefore,
   normalizeLayout,
   dropIntoGap,
@@ -423,8 +424,10 @@ describe("dropIntoGap", () => {
   it("виджет из СВОЕГО ряда встаёт на место дырки", () => {
     // Раньше он просто менялся местами с соседом, а дырка оставалась там же —
     // со стороны это выглядело как «перетаскивание не работает».
+    // Сосед по ряду остаётся в своей колонке: пустая клетка переезжает туда,
+    // откуда виджет ушёл, а не оказывается посреди ряда.
     const out = dropIntoGap(row, "upcoming", "freeMoney", 2);
-    expect(cols(out)).toEqual(["accounts", "gap1", "upcoming", "freeMoney", "gap1"]);
+    expect(cols(out)).toEqual(["gap1", "accounts", "upcoming", "freeMoney", "gap1"]);
   });
 
   it("сосед по ряду тоже встаёт на место дырки, а первый остаётся слева", () => {
@@ -492,6 +495,71 @@ describe("dropIntoGap: виджет под дыркой", () => {
     // «Наблюдения» встают в дырку первого ряда; «Категории» остаются под ней.
     const out = dropIntoGap(layout, "observations", "categories", 2);
     expect(rows(out)).toEqual(["month | accounts | observations", "·2 | categories"]);
+  });
+});
+
+describe("перемещение: края и странные случаи", () => {
+  it("шаг через полоску во всю ширину не теряет пустую клетку", () => {
+    const layout: WidgetPlacement[] = [
+      { key: "categories", kind: "categories", offset: 2 },
+      { key: "links", kind: "links", links: [null, null, null, null, null, null] },
+    ];
+    expect(rows(layout)).toEqual(["·2 | categories", "links"]);
+    // Полоске отступ не положен — он остаётся у «Категорий», а не стирается.
+    expect(rows(shiftWidget(layout, "categories", 1))).toEqual(["links", "·2 | categories"]);
+    expect(rows(swapWidgets(swapWidgets(layout, "categories", "links"), "links", "categories"))).toEqual(
+      rows(layout)
+    );
+  });
+
+  it("широкий виджет, брошенный в чужую пустую клетку, не сдвигает соседа в другую колонку", () => {
+    const layout: WidgetPlacement[] = [
+      { key: "categories", kind: "categories", offset: 1 },
+      { key: "links", kind: "links", links: [null, null, null, null, null, null] },
+    ];
+    expect(rows(layout)).toEqual(["·1 | categories | ·1", "links"]);
+    expect(rows(dropIntoGap(layout, "links", "categories", 0))).toEqual([
+      "links",
+      "·1 | categories | ·1",
+    ]);
+  });
+
+  it("перенос в свой же ряд: остальные стоят, пустая клетка переезжает", () => {
+    const layout: WidgetPlacement[] = [
+      { key: "month", kind: "month" },
+      { key: "accounts", kind: "accounts" },
+    ];
+    expect(rows(dropIntoGap(layout, "month", null, 2))).toEqual(["·1 | accounts | month"]);
+    const shifted: WidgetPlacement[] = [
+      { key: "month", kind: "month", offset: 1 },
+      { key: "accounts", kind: "accounts" },
+    ];
+    expect(rows(shifted)).toEqual(["·1 | month | accounts"]);
+    expect(rows(dropIntoGap(shifted, "month", "month", 0))).toEqual(["month | ·1 | accounts"]);
+  });
+
+  it("клетка не зовёт, если бросок ничего не изменит или виджет в неё не встанет", () => {
+    // Полоска уже стоит прямо перед этой клеткой — переносить её некуда.
+    const strip: WidgetPlacement[] = [
+      { key: "links", kind: "links", links: [null, null, null, null, null, null] },
+      { key: "categories", kind: "categories", offset: 2 },
+    ];
+    expect(canDropIntoGap(strip, "links", "categories", 0)).toBe(false);
+
+    // Клетка слева от виджета во втором ряду недостижима, пока в первом есть
+    // место: раскладка подтянула бы его наверх.
+    const under: WidgetPlacement[] = [
+      { key: "month", kind: "month" },
+      { key: "accounts", kind: "accounts" },
+      { key: "categories", kind: "categories", offset: 2 },
+    ];
+    expect(canDropIntoGap(under, "categories", "categories", 0)).toBe(false);
+    // А клетка над ним — зовёт.
+    expect(canDropIntoGap(under, "categories", "categories", 2)).toBe(true);
+    // Виджет в две трети в последнюю треть ряда не помещается.
+    expect(canDropIntoGap([...under, { key: "cashflow", kind: "cashflow" }], "cashflow", "categories", 2)).toBe(false);
+    // Чужой ключ и снятый виджет — не наши плитки.
+    expect(canDropIntoGap(under, "https://example.com", "categories", 2)).toBe(false);
   });
 });
 

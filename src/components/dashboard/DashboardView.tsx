@@ -55,6 +55,7 @@ import {
 } from "./WidgetLayout";
 import { useWidgetDrag } from "../../hooks/useWidgetDrag";
 import {
+  canDropIntoGap,
   canShiftWidget,
   isBareWidget,
   packLayout,
@@ -916,11 +917,14 @@ export function DashboardView() {
               // до конца РЯДА, а не по ширине самой дырки: виджет, который
               // бросают в собственный отступ, занимает и то место, где стоял.
               const gapCol = colOf.get(cell) ?? 0;
-              const accepts = drag.dragKey !== null && gapCol + dragSpan <= 3;
+              const fits = drag.dragKey !== null && gapCol + dragSpan <= 3;
+              // Клетка зовёт, только если бросок что-то изменит и виджет
+              // встанет именно в неё (см. `canDropIntoGap`).
+              const accepts =
+                drag.dragKey !== null &&
+                canDropIntoGap(layout, drag.dragKey, cell.before, gapCol);
               const refusal =
-                drag.dragKey !== null && !accepts
-                  ? "Не поместится — двигайте стрелками"
-                  : null;
+                drag.dragKey !== null && !fits ? "Не поместится — двигайте стрелками" : null;
               // Вне настройки дырка — просто пустое место: ни рамки, ни
               // приглашения, ни обработчиков.
               if (!editing) {
