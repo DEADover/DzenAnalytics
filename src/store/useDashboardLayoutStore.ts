@@ -13,6 +13,9 @@ import { create } from "zustand";
 import * as db from "../lib/db";
 import {
   addLinksRow,
+  addWidget,
+  setWidgetCategory,
+  type WidgetKind,
   defaultLayout,
   layoutFromStored,
   moveWidget,
@@ -45,6 +48,10 @@ interface State {
   setHidden: (key: string, hidden: boolean, beforeKey?: string | null) => Promise<void>;
   /** Завести новую дорожку кнопок. */
   addLinks: (beforeKey?: string | null) => Promise<void>;
+  /** Завести ещё один виджет вида, которого может быть несколько. */
+  add: (kind: WidgetKind, beforeKey?: string | null) => Promise<void>;
+  /** Статья для «Категории под наблюдением». */
+  setCategory: (key: string, category: string, subcategory?: string) => Promise<void>;
   /** Убрать из раскладки насовсем — только то, что человек сам завёл. */
   remove: (key: string) => Promise<void>;
   /** Выбрать вариант оформления виджета. */
@@ -86,6 +93,9 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
     setHidden: (key, hidden, beforeKey = null) =>
       apply(setWidgetHidden(get().layout, key, hidden, beforeKey)),
     addLinks: (beforeKey = null) => apply(addLinksRow(get().layout, beforeKey)),
+    add: (kind, beforeKey = null) => apply(addWidget(get().layout, kind, beforeKey)),
+    setCategory: (key, category, subcategory = "") =>
+      apply(setWidgetCategory(get().layout, key, category, subcategory)),
     remove: (key) => apply(removeWidget(get().layout, key)),
     setView: (key, view) => apply(setWidgetView(get().layout, key, view)),
     setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),

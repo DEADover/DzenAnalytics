@@ -37,6 +37,9 @@ import { AccountsBlock, CategoriesList, ObservationsList, UpcomingList, ZenPlann
 import { ActivityHeat } from "./blocks/activity";
 import { MonthOverMonthBlock } from "./blocks/monthOverMonth";
 import { PaceBlock } from "./blocks/pace";
+import { BudgetWidget } from "./BudgetWidget";
+import { GoalsWidget } from "./GoalsWidget";
+import { WatchWidget } from "./WatchWidget";
 import { TriageBlock, type TriageItem } from "./blocks/triage";
 import { buildSpendingPace, paceCategories } from "../../lib/spendingPace";
 import { useTriage } from "../../hooks/useTriage";
@@ -201,6 +204,7 @@ export function DashboardView() {
   const setLinks = useDashboardLayoutStore((s) => s.setLinks);
   const setOffBalance = useDashboardLayoutStore((s) => s.setOffBalance);
   const dropInGap = useDashboardLayoutStore((s) => s.dropInGap);
+  const setCategory = useDashboardLayoutStore((s) => s.setCategory);
 
   // Планы Дзен-мани — второй вид «Запланированных платежей». Отрезок тот же,
   // что у своих регулярных: от сегодня до конца отчётного месяца.
@@ -691,6 +695,34 @@ export function DashboardView() {
               onCategory={(name) => drillCategory("expense", name)}
             />
           </>
+        );
+
+      case "budget":
+        return (
+          <BudgetWidget
+            ym={m.ym}
+            base={m.base}
+            progress={m.month.running ? m.month.progress : null}
+            onOpen={showDrill}
+          />
+        );
+
+      case "goals":
+        return <GoalsWidget base={m.base} />;
+
+      case "watch":
+        return (
+          <WatchWidget
+            category={p.category}
+            subcategory={p.subcategory}
+            transactions={transactions}
+            ym={m.ym}
+            monthStartDay={monthStartDay}
+            today={paceToday}
+            base={m.base}
+            onPick={(category, subcategory) => void setCategory(p.key, category, subcategory)}
+            onOpen={showDrill}
+          />
         );
 
       case "triage": {

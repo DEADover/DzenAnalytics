@@ -1,5 +1,4 @@
 import { listToSet, setToList } from "../lib/selectionSet";
-import { localToday } from "../lib/period";
 import { FormField } from "../components/FormField";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -19,11 +18,8 @@ import {
 import { useDataStore } from "../store/useDataStore";
 import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useGoalsStore, type Goal } from "../store/useGoalsStore";
-import { useReportPeriodStore } from "../store/useReportPeriodStore";
-import { getLiveAccountsFromCache } from "../store/useZenmoneyStore";
 import { toast } from "../store/useToastStore";
 import { reinsert } from "../lib/storeSnapshot";
-import { groupByMonth } from "../lib/aggregations";
 import { formatMoney, formatDate, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
@@ -31,114 +27,15 @@ import { PageHeader } from "../components/PageHeader";
 import { StatCell, StatRow } from "../components/SectionCard";
 import { MultiSelect } from "../components/MultiSelect";
 import { AccountLogo } from "../components/AccountLogo";
-import { getHistoricalRubRate } from "../lib/historicalRates";
-import {
-  currenciesToQuote,
-  goalProgress,
-  goalSources,
-  type GoalAccount,
-  type RubRates,
-} from "../lib/goals";
-import type { CurrencyRates } from "../types";
+import { goalProgress, goalSources } from "../lib/goals";
+import { addMonthsIso, forecastLabel, goalMetrics, monthYear, type Money } from "../lib/goalMetrics";
 import { Tooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
 import { CardHeader } from "../components/CardHeader";
 import { SectionEmpty } from "../components/SectionEmpty";
 import { ProgressBar } from "../components/ProgressBar";
-import { accountKeyOf } from "../lib/accountKey";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
-
-function monthsBetween(fromIso: string, toIso: string): number {
-  const a = new Date(fromIso);
-  const b = new Date(toIso);
-  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
-}
-
-/** date `months` from the start of the current month, ISO yyyy-mm-dd. Built from
- *  LOCAL fields (not `toISOString`, which shifts to UTC and can roll the 1st back
- *  into the previous month for east-of-UTC zones). */
-function addMonthsIso(months: number): string {
-  const d = new Date();
-  const t = new Date(d.getFullYear(), d.getMonth() + months, 1);
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
-}
-
-/** Compact «мес. yyyy» — a forecast is month-level, so the day would be false
- *  precision, and this keeps the chip short enough never to truncate. Parses the
- *  y-m fields directly so no timezone conversion can shift the month. */
-function monthYear(iso: string): string {
-  const [y, m] = iso.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, 1).toLocaleDateString("ru-RU", {
-    month: "short",
-    year: "numeric",
-  });
-}
-
-/** «N мес · мес. yyyy», or a short reason when there's no finite finish. */
-function forecastLabel(f: Forecast, done: boolean): string {
-  if (done) return "цель достигнута";
-  if (f.months === null || !f.finish) return "темп отрицательный";
-  return `${f.months} мес · ${monthYear(f.finish)}`;
-}
-
-/** Всё, чем цель пересчитывает счета в базовую валюту. */
-interface Money {
-  accounts: GoalAccount[];
-  rates: CurrencyRates;
-  cbr: RubRates;
-}
-
-/** One forecast: months left at a given monthly pace, and the finish date. */
-interface Forecast {
-  months: number | null; // null = never (pace ≤ 0) ; 0 = already done
-  finish: string | null;
-}
-
-/** All derived numbers for one goal. Single source of truth for the summary
- *  tiles, the cards and the projection chart, so they can't drift apart. */
-function goalMetrics(g: Goal, money: Money, avgSavings: number) {
-  // Привязана к счетам → прогресс = сумма их балансов по курсу ЦБ на сегодня;
-  // иначе введённое вручную (#45, #103). Пропавший счёт не обнуляет цель.
-  const progress = goalProgress(g, money.accounts, money.rates, money.cbr);
-  const current = progress.current;
-  const ratio = g.target > 0 ? Math.min(current / g.target, 1) : 0;
-  const done = ratio >= 1;
-  const remaining = Math.max(g.target - current, 0);
-  const contribution =
-    g.monthlyContribution && g.monthlyContribution > 0 ? g.monthlyContribution : null;
-
-  const project = (pace: number): Forecast => {
-    if (done) return { months: 0, finish: null };
-    if (!(pace > 0)) return { months: null, finish: null };
-    const months = Math.ceil(remaining / pace);
-    return { months, finish: addMonthsIso(months) };
-  };
-  const byPace = project(avgSavings);
-  const byContribution = contribution ? project(contribution) : null;
-
-  // The forecast the deadline verdict is judged against: the user's own planned
-  // contribution when set (that's their commitment), else the household pace.
-  const effective = byContribution ?? byPace;
-  const deadlineMonths = g.deadline
-    ? monthsBetween(new Date().toISOString(), g.deadline)
-    : null;
-  const onTrack =
-    effective.months !== null && deadlineMonths !== null && effective.months <= deadlineMonths;
-
-  return {
-    current,
-    ratio,
-    done,
-    remaining,
-    contribution,
-    byPace,
-    byContribution,
-    effective,
-    deadlineMonths,
-    onTrack,
-    progress,
-  };
-}
+import { useGoalsMoney } from "../hooks/useGoalsMoney";
 
 export function GoalsPage() {
   // Savings-pace projection must ignore turnover / off-balance flows (#14).
@@ -170,22 +67,6 @@ export function GoalsPage() {
     if (!loaded) hydrate();
   }, [loaded, hydrate]);
 
-  // Household savings pace drives the default (fallback) forecast. Месяц здесь
-  // отчётный: прогноз «когда накопится» опирается на тот же месяц, что и
-  // остальная аналитика.
-  const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
-  const months = useMemo(
-    () => groupByMonth(transactions, { monthStartDay }),
-    [transactions, monthStartDay]
-  );
-  const recent = months.slice(-6);
-  const avgIncome = recent.length
-    ? recent.reduce((s, m) => s + m.income, 0) / recent.length
-    : 0;
-  const avgExpense = recent.length
-    ? recent.reduce((s, m) => s + m.expense, 0) / recent.length
-    : 0;
-  const avgSavings = avgIncome - avgExpense;
 
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -195,62 +76,7 @@ export function GoalsPage() {
   const [sources, setSources] = useState<string[]>([]);
   const [monthly, setMonthly] = useState("");
 
-  // Живые счета — цель может копиться на них вместо ручной суммы (#45, #103).
-  // Накопительные первыми: цель обычно ставят на них.
-  const [accounts, setAccounts] = useState<GoalAccount[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    getLiveAccountsFromCache().then((live) => {
-      if (cancelled || !live) return;
-      setAccounts(
-        live
-          .filter((a) => !a.archive)
-          .map((a) => ({
-            key: accountKeyOf(a),
-            title: a.title,
-            balance: a.balance,
-            currency: a.currency,
-            savings: a.savings,
-          }))
-          .sort(
-            (a, b) => Number(b.savings) - Number(a.savings) || a.title.localeCompare(b.title)
-          )
-      );
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [transactions]);
-
-  // Курсы ЦБ на сегодня для валют счетов: цель — про то, сколько денег есть
-  // сейчас, поэтому доллары на вкладе считаются по сегодняшнему курсу. Пока
-  // курсы не пришли (или нет сети), пересчёт идёт по курсам из настроек.
-  const quoteKey = currenciesToQuote(accounts, rates.base).join(",");
-  const [cbr, setCbr] = useState<RubRates>({});
-  useEffect(() => {
-    if (!quoteKey) return;
-    let cancelled = false;
-    const date = localToday();
-    Promise.all(
-      quoteKey.split(",").map(async (c) => [c, (await getHistoricalRubRate(date, c))?.rate] as const)
-    ).then((pairs) => {
-      if (cancelled) return;
-      const next: RubRates = {};
-      for (const [c, r] of pairs) if (r != null) next[c] = r;
-      setCbr(next);
-    }, () => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [quoteKey]);
-
-  // Подписи — из справочника: у тёзок с уточнением.
-  const dir = useAccountDirectory();
-  const labeled = useMemo(
-    () => accounts.map((a) => ({ ...a, label: dir.label(a.key ?? a.title) })),
-    [accounts, dir]
-  );
-  const money = useMemo<Money>(() => ({ accounts: labeled, rates, cbr }), [labeled, rates, cbr]);
+  const { accounts, labeled, cbr, money, avgSavings } = useGoalsMoney(transactions);
   /** Ключи счетов — варианты источников цели. */
   const accountTitles = useMemo(() => accounts.map((a) => a.key ?? a.title), [accounts]);
   /** Сколько сейчас на выбранных счетах в базовой валюте; `null` — ни одного. */

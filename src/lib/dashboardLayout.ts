@@ -24,6 +24,8 @@ import {
   CalendarDays,
   ChartArea,
   Coins,
+  Crosshair,
+  Flag,
   Gauge,
   Inbox,
   Landmark,
@@ -33,6 +35,7 @@ import {
   Scale,
   TrendingDown,
   TrendingUp,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { navSection } from "./navSections";
@@ -56,6 +59,9 @@ export const WIDGET_KINDS = [
   "donutIncome",
   "pace",
   "triage",
+  "budget",
+  "goals",
+  "watch",
 ] as const;
 
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
@@ -110,6 +116,12 @@ export interface WidgetMeta {
   autoHeight?: boolean;
   /** Таких виджетов на главной может стоять несколько. */
   multi?: boolean;
+  /**
+   * В стандартной раскладке виджета нет вовсе — его заводят сами, из списка
+   * «поставить сюда». Нужно виджетам, которым без настройки показать нечего:
+   * «Категория под наблюдением» не знает, за какой категорией следить.
+   */
+  byHand?: boolean;
   /**
    * В режиме настройки виджет остаётся живым: он настраивается сам, изнутри, а
    * не только ручками обоймы. Содержимое не приглушается и ловит нажатия.
@@ -331,6 +343,33 @@ export const WIDGETS: readonly WidgetMeta[] = [
     span: 1,
     offByDefault: true,
   },
+  {
+    kind: "budget",
+    icon: Wallet,
+    title: "Бюджет месяца",
+    hint: "Статьи с планом: сколько потрачено и где перерасход",
+    span: 1,
+    offByDefault: true,
+  },
+  {
+    kind: "goals",
+    icon: Flag,
+    title: "Цели",
+    hint: "Сколько накоплено и когда цель будет достигнута",
+    span: 1,
+    offByDefault: true,
+  },
+  {
+    kind: "watch",
+    icon: Crosshair,
+    title: "Категория под наблюдением",
+    hint: "Одна статья расходов: этот месяц, обычный уровень и прошлые месяцы",
+    span: 1,
+    multi: true,
+    byHand: true,
+    // Статью выбирают прямо в виджете — в том числе в режиме настройки.
+    live: true,
+  },
 ];
 
 const BY_KIND = new Map<string, WidgetMeta>(WIDGETS.map((w) => [w.kind, w]));
@@ -372,6 +411,12 @@ export interface WidgetPlacement {
    */
   offBalance?: boolean;
   /**
+   * Только у «Категории под наблюдением»: за какой статьёй следить. Пусто —
+   * статья ещё не выбрана. Подкатегория без категории не хранится.
+   */
+  category?: string;
+  subcategory?: string;
+  /**
    * Сколько пустых клеток оставить слева от виджета в его ряду.
    *
    * Без этого виджет всегда прижат к левому краю своего ряда: раскладка —
@@ -385,7 +430,7 @@ export interface WidgetPlacement {
   offset?: number;
 }
 
-export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.map((w) => {
+export const DEFAULT_LAYOUT: readonly WidgetPlacement[] = WIDGETS.filter((w) => !w.byHand).map((w) => {
   const placement: WidgetPlacement = { key: w.kind, kind: w.kind };
   if (w.kind === "links") placement.links = DEFAULT_LINKS.slice();
   if (w.offByDefault) placement.hidden = true;
@@ -448,6 +493,8 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       links?: unknown;
       offset?: unknown;
       offBalance?: unknown;
+      category?: unknown;
+      subcategory?: unknown;
     };
     const kind = typeof rec.kind === "string" ? BY_KIND.get(rec.kind) : undefined;
     if (!kind) continue;
@@ -470,6 +517,12 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
     if (rec.hidden === true) placement.hidden = true;
     if (kind.kind === "accounts" && typeof rec.offBalance === "boolean") {
       placement.offBalance = rec.offBalance;
+    }
+    if (kind.kind === "watch" && typeof rec.category === "string" && rec.category) {
+      placement.category = rec.category;
+      if (typeof rec.subcategory === "string" && rec.subcategory) {
+        placement.subcategory = rec.subcategory;
+      }
     }
     const offset = clampOffset(rec.offset, kind);
     if (offset > 0) placement.offset = offset;
@@ -784,6 +837,8 @@ export function setWidgetHidden(
   const next: WidgetPlacement = { key: p.key, kind: p.kind };
   if (p.view) next.view = p.view;
   if (p.links) next.links = p.links;
+  if (p.category) next.category = p.category;
+  if (p.subcategory) next.subcategory = p.subcategory;
   if (hidden) next.hidden = true;
 
   const rest = layout.filter((x) => x.key !== key);
@@ -827,14 +882,47 @@ export function removeWidget(
   return layout.filter((x) => x.key !== key);
 }
 
-/** Ключ для новой полоски: `links`, `links-2`, `links-3`… */
-function nextLinksKey(layout: readonly WidgetPlacement[]): string {
+/** Ключ для нового экземпляра: `links`, `links-2`, `links-3`… */
+function nextKey(layout: readonly WidgetPlacement[], kind: WidgetKind): string {
   const taken = new Set(layout.map((p) => p.key));
-  if (!taken.has("links")) return "links";
+  if (!taken.has(kind)) return kind;
   for (let n = 2; ; n++) {
-    const key = `links-${n}`;
+    const key = `${kind}-${n}`;
     if (!taken.has(key)) return key;
   }
+}
+
+/**
+ * Завести ещё один виджет вида, которого на главной может быть несколько.
+ * Одиночный так не добавить: он уже есть в раскладке и ждёт в списке снятых.
+ */
+export function addWidget(
+  layout: readonly WidgetPlacement[],
+  kind: WidgetKind,
+  /** Перед каким соседом встать; `null` — в конец. */
+  beforeKey: string | null = null
+): WidgetPlacement[] {
+  if (kind === "links") return addLinksRow(layout, beforeKey);
+  if (!widgetMeta(kind).multi) return layout.slice();
+  return insertBefore(layout, { key: nextKey(layout, kind), kind }, beforeKey);
+}
+
+/**
+ * Выбрать статью для «Категории под наблюдением». Пустая категория снимает
+ * выбор: виджет снова просит назвать статью.
+ */
+export function setWidgetCategory(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  category: string,
+  subcategory = ""
+): WidgetPlacement[] {
+  return layout.map((p) => {
+    if (p.key !== key || p.kind !== "watch") return p;
+    const { category: _c, subcategory: _s, ...rest } = p;
+    if (!category) return rest;
+    return subcategory ? { ...rest, category, subcategory } : { ...rest, category };
+  });
 }
 
 /** Завести новую полоску с кнопками — она встаёт в конец раскладки. */
@@ -846,7 +934,7 @@ export function addLinksRow(
   return insertBefore(
     layout,
     {
-      key: nextLinksKey(layout),
+      key: nextKey(layout, "links"),
       kind: "links",
       // Пустой: подбирать кнопку за человека не наше дело, а «первый неиспользо-
       // ванный раздел» всё равно попадал мимо — его тут же меняли на нужный.

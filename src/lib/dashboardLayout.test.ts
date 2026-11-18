@@ -5,6 +5,8 @@ import {
   LINK_SLOTS,
   WIDGETS,
   addLinksRow,
+  addWidget,
+  setWidgetCategory,
   isDefaultLayout,
   layoutFromStored,
   moveWidget,
@@ -150,7 +152,8 @@ describe("normalizeLayout", () => {
     const saved = DEFAULT_LAYOUT.filter((p) => p.kind !== "links");
     const out = normalizeLayout(saved);
     expect(kinds(out)).not.toContain("links");
-    expect(out).toHaveLength(WIDGETS.length - 1);
+    // Без полоски и без видов, которые заводят только руками.
+    expect(out).toHaveLength(WIDGETS.filter((w) => !w.multi).length);
   });
 
   it("помнит убранные виджеты", () => {
@@ -158,11 +161,13 @@ describe("normalizeLayout", () => {
     expect(row(out, "observations").hidden).toBe(true);
     // Кроме него сняты только те, что и в стандартной раскладке лежат на полке.
     expect([...out.filter((p) => p.hidden).map((p) => p.kind)].sort()).toEqual([
+      "budget",
       "capital",
       "donutExpense",
       "donutIncome",
       "freeMoney",
       "freeMoneyCompact",
+      "goals",
       "monthOverMonth",
       "observations",
       "pace",
@@ -200,6 +205,8 @@ describe("normalizeLayout", () => {
       "donutIncome",
       "pace",
       "triage",
+      "budget",
+      "goals",
       "month",
       "accounts",
       "upcoming",
@@ -733,5 +740,44 @@ describe("«Балансы счетов»: счета вне баланса — 
     const junk = normalizeLayout([{ key: "accounts", kind: "accounts", offBalance: "да" }, { key: "month", kind: "month", offBalance: true }]);
     expect(acc(junk)).not.toHaveProperty("offBalance");
     expect(junk.find((p) => p.kind === "month")).not.toHaveProperty("offBalance");
+  });
+});
+
+describe("виджеты, которых может быть несколько", () => {
+  it("«Категории под наблюдением» в стандартной раскладке нет, и сама она не появляется", () => {
+    expect(DEFAULT_LAYOUT.some((p) => p.kind === "watch")).toBe(false);
+    expect(normalizeLayout([{ key: "month", kind: "month" }]).some((p) => p.kind === "watch")).toBe(false);
+  });
+
+  it("заводится сколько угодно, у каждой свой ключ и своя статья", () => {
+    let layout = addWidget(DEFAULT_LAYOUT, "watch");
+    layout = addWidget(layout, "watch", "month");
+    const keys = layout.filter((p) => p.kind === "watch").map((p) => p.key);
+    expect(keys).toEqual(["watch-2", "watch"]);
+    expect(layout[0].key).toBe("watch-2");
+
+    layout = setWidgetCategory(layout, "watch", "Еда", "Кафе");
+    layout = setWidgetCategory(layout, "watch-2", "Дом");
+    expect(layout.find((p) => p.key === "watch")).toMatchObject({ category: "Еда", subcategory: "Кафе" });
+    expect(layout.find((p) => p.key === "watch-2")).toEqual({ key: "watch-2", kind: "watch", category: "Дом" });
+
+    // Статья переживает сохранение и чтение.
+    const back = normalizeLayout(JSON.parse(JSON.stringify(layout)));
+    expect(back.find((p) => p.key === "watch")).toMatchObject({ category: "Еда", subcategory: "Кафе" });
+
+    // Удаляется насовсем, как полоска.
+    expect(removeWidget(back, "watch").some((p) => p.key === "watch")).toBe(false);
+  });
+
+  it("одиночный виджет вторым не заводится, статья чужому виду не ставится", () => {
+    expect(addWidget(DEFAULT_LAYOUT, "month")).toEqual(DEFAULT_LAYOUT);
+    const layout = setWidgetCategory(DEFAULT_LAYOUT, "month", "Еда");
+    expect(layout.find((p) => p.key === "month")).not.toHaveProperty("category");
+  });
+
+  it("пустая категория снимает выбор", () => {
+    let layout = setWidgetCategory(addWidget(DEFAULT_LAYOUT, "watch"), "watch", "Еда", "Кафе");
+    layout = setWidgetCategory(layout, "watch", "");
+    expect(layout.find((p) => p.key === "watch")).toEqual({ key: "watch", kind: "watch" });
   });
 });

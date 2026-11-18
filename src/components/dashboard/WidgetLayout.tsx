@@ -253,6 +253,8 @@ export function WidgetShell({
       {...drag}
       // Метка для обучения: шаг может показать конкретный виджет.
       data-tour={`widget-${placement.kind}`}
+      // Ключ места: у видов, которых может быть несколько, вид не различает их.
+      data-widget-key={placement.key}
       className={clsx(
         "min-w-0 relative",
         meta.span === 2 && "lg:col-span-2",
@@ -434,7 +436,7 @@ function WidgetPicker({
   onAdded: (key: string) => void;
 }) {
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
-  const addLinks = useDashboardLayoutStore((s) => s.addLinks);
+  const add = useDashboardLayoutStore((s) => s.add);
   const { hidden, fresh, total } = available(layout);
 
   // Escape закрывает список — по всему сервису он закрывает любой слой поверх.
@@ -586,7 +588,7 @@ function WidgetPicker({
               w.icon,
               `Новая ${w.title.toLowerCase()}`,
               w.hint,
-              () => place(() => addLinks(beforeKey), w.kind)
+              () => place(() => add(w.kind, beforeKey), w.kind)
             )
           )}
         </div>

@@ -90,3 +90,76 @@ test("«Календарь»: сумма дня показывается и пр
   await expect(tip).toContainText(/Расходы:.*35/);
   await expect(tip).toContainText(/операци/);
 });
+
+test("«Бюджет месяца»: статьи с планом и операции статьи", async ({ page }) => {
+  await connectZen(page, "/");
+  await place(page, "budget");
+  const budget = tile(page, "budget");
+  await expect(budget).toBeVisible();
+  // В поддельном аккаунте план один: «Продукты», 25 000 ₽ на октябрь.
+  const row = budget.locator('[data-budget-row="Продукты|"]');
+  await expect(row).toContainText(/из\s*.?25\s000/);
+  await expect(row).toContainText("Осталось");
+  // Самая потраченная статья — первой.
+  await expect(budget.locator("[data-budget-row]").first()).toContainText("Перерасход");
+  await expect(budget).toContainText("План превышен у");
+  await row.click();
+  await expect(page.locator("[data-exit-panel]")).toContainText("Продукты · Октябрь");
+});
+
+test("«Цели»: пустое состояние и цель с прогрессом", async ({ page }) => {
+  await connectZen(page, "/");
+  await place(page, "goals");
+  const goals = tile(page, "goals");
+  await expect(goals).toContainText("Целей пока нет");
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useGoalsStore } = await w.__store("useGoalsStore");
+    await useGoalsStore.getState().add({
+      name: "Отпуск",
+      target: 200_000,
+      current: 50_000,
+      deadline: null,
+      monthlyContribution: 30_000,
+    });
+  });
+  const row = goals.locator('[data-goal="Отпуск"]');
+  await expect(row).toContainText("25%");
+  await expect(row).toContainText(/Прогноз: /);
+  await row.click();
+  await expect(page).toHaveURL(/\/goals$/);
+});
+
+test("«Категория под наблюдением»: заводится из списка, статья выбирается в виджете", async ({ page }) => {
+  await connectZen(page, "/");
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
+    const s = useDashboardLayoutStore.getState() as unknown as {
+      add: (kind: string) => Promise<void>;
+    };
+    await s.add("watch");
+    await s.add("watch");
+  });
+  const first = page.locator('[data-widget-key="watch"]');
+  const second = page.locator('[data-widget-key="watch-2"]');
+  await expect(first).toContainText("Выберите статью расходов");
+  await expect(second).toBeVisible();
+
+  await first.getByTestId("watch-picker").getByRole("button").first().click();
+  await page.getByRole("option", { name: "Дом", exact: true }).click();
+  await expect(first.getByTestId("watch-total")).toContainText(/35\s000/);
+  await expect(first).toContainText("Потрачено к 15 октября");
+  await expect(first).toContainText("Обычно к этому дню");
+  await expect(first.getByTestId("watch-bars").getByRole("button")).toHaveCount(6);
+  // Второй виджет своей статьи пока не знает.
+  await expect(second).toContainText("Выберите статью расходов");
+
+  // Выбор пережил перезагрузку.
+  await page.reload();
+  await expect(first.getByTestId("watch-total")).toContainText(/35\s000/);
+
+  // Столбик открывает операции статьи за свой месяц.
+  await first.getByTestId("watch-bars").getByRole("button").first().click();
+  await expect(page.locator("[data-exit-panel]")).toContainText("Дом · Май");
+});
