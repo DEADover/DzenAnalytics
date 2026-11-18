@@ -7,6 +7,7 @@ import {
   addLinksRow,
   addWidget,
   setWidgetCategory,
+  setWidgetTag,
   isDefaultLayout,
   layoutFromStored,
   swapWidgets,
@@ -910,6 +911,43 @@ describe("виджеты, которых может быть несколько"
     expect(addWidget(DEFAULT_LAYOUT, "month")).toEqual(DEFAULT_LAYOUT);
     const layout = setWidgetCategory(DEFAULT_LAYOUT, "month", "Еда");
     expect(layout.find((p) => p.key === "month")).not.toHaveProperty("category");
+  });
+
+  it("доходная категория помнит, что она доходная", () => {
+    let layout = setWidgetCategory(addWidget(DEFAULT_LAYOUT, "watch"), "watch", "Зарплата", "", true);
+    expect(layout.find((p) => p.key === "watch")).toEqual({
+      key: "watch",
+      kind: "watch",
+      category: "Зарплата",
+      income: true,
+    });
+    expect(normalizeLayout(JSON.parse(JSON.stringify(layout))).find((p) => p.key === "watch")).toMatchObject({
+      income: true,
+    });
+    // Сменили на расходную — признак снимается.
+    layout = setWidgetCategory(layout, "watch", "Еда");
+    expect(layout.find((p) => p.key === "watch")).not.toHaveProperty("income");
+  });
+
+  it("«Тег под наблюдением»: тег хранится вместе с режимом", () => {
+    expect(DEFAULT_LAYOUT.some((p) => p.kind === "watchTag")).toBe(false);
+    let layout = addWidget(addWidget(DEFAULT_LAYOUT, "watchTag"), "watchTag");
+    layout = setWidgetTag(layout, "watchTag", "отпуск");
+    layout = setWidgetTag(layout, "watchTag-2", "Отпуск", "categories");
+    const back = normalizeLayout(JSON.parse(JSON.stringify(layout)));
+    expect(back.find((p) => p.key === "watchTag")).toEqual({
+      key: "watchTag",
+      kind: "watchTag",
+      tag: "отпуск",
+      tagMode: "hashtags",
+    });
+    expect(back.find((p) => p.key === "watchTag-2")).toMatchObject({ tag: "Отпуск", tagMode: "categories" });
+    // Тег чужому виду не ставится, пустой — снимает выбор.
+    expect(setWidgetTag(layout, "month", "x").find((p) => p.key === "month")).not.toHaveProperty("tag");
+    expect(setWidgetTag(layout, "watchTag", "").find((p) => p.key === "watchTag")).toEqual({
+      key: "watchTag",
+      kind: "watchTag",
+    });
   });
 
   it("пустая категория снимает выбор", () => {

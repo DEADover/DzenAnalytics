@@ -36,6 +36,13 @@ interface Props {
   /** Крестик «Очистить» у выбранной категории — где пустое поле что-то значит
    *  («Категория без изменений» в массовом изменении). */
   clearable?: boolean;
+  /**
+   * Как назвать пункт «сама категория» в правой колонке. По умолчанию —
+   * «Без подкатегории»: так и есть там, где выбирают категорию для ОДНОЙ
+   * операции. Там, где выбор означает всю ветку вместе с подкатегориями
+   * (наблюдение за категорией), эта подпись обманывает — и её заменяют.
+   */
+  parentLabel?: string;
 }
 
 /**
@@ -57,6 +64,7 @@ export function CategoryCascadePicker({
   hideParentOption,
   portal = false,
   clearable = false,
+  parentLabel = "Без подкатегории",
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -540,7 +548,7 @@ export function CategoryCascadePicker({
                       ) : (
                         <CategoryDot category={s} parent={active.name} size="w-4 h-4" />
                       )}
-                      <span className="truncate">{isParent ? "Без подкатегории" : s}</span>
+                      <span className="truncate">{isParent ? parentLabel : s}</span>
                     </button>
                   );
                 })

@@ -15,6 +15,7 @@ import {
   addLinksRow,
   addWidget,
   setWidgetCategory,
+  setWidgetTag,
   type WidgetKind,
   defaultLayout,
   layoutFromStored,
@@ -51,7 +52,9 @@ interface State {
   /** Завести ещё один виджет вида, которого может быть несколько. */
   add: (kind: WidgetKind, beforeKey?: string | null) => Promise<void>;
   /** Статья для «Категории под наблюдением». */
-  setCategory: (key: string, category: string, subcategory?: string) => Promise<void>;
+  setCategory: (key: string, category: string, subcategory?: string, income?: boolean) => Promise<void>;
+  /** Тег для «Тега под наблюдением». */
+  setTag: (key: string, tag: string, tagMode?: "hashtags" | "categories") => Promise<void>;
   /** Убрать из раскладки насовсем — только то, что человек сам завёл. */
   remove: (key: string) => Promise<void>;
   /** Выбрать вариант оформления виджета. */
@@ -94,8 +97,9 @@ export const useDashboardLayoutStore = create<State>((set, get) => {
       apply(setWidgetHidden(get().layout, key, hidden, beforeKey)),
     addLinks: (beforeKey = null) => apply(addLinksRow(get().layout, beforeKey)),
     add: (kind, beforeKey = null) => apply(addWidget(get().layout, kind, beforeKey)),
-    setCategory: (key, category, subcategory = "") =>
-      apply(setWidgetCategory(get().layout, key, category, subcategory)),
+    setCategory: (key, category, subcategory = "", income = false) =>
+      apply(setWidgetCategory(get().layout, key, category, subcategory, income)),
+    setTag: (key, tag, tagMode = "hashtags") => apply(setWidgetTag(get().layout, key, tag, tagMode)),
     remove: (key) => apply(removeWidget(get().layout, key)),
     setView: (key, view) => apply(setWidgetView(get().layout, key, view)),
     setLinks: (key, links) => apply(setRowLinks(get().layout, key, links)),

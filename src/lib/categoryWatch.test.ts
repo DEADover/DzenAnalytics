@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "../types";
-import { buildCategoryWatch, inWatched } from "./categoryWatch";
+import { buildCategoryWatch, buildTagWatch, inWatched } from "./categoryWatch";
 
 const tx = (
   date: string,
@@ -71,5 +71,43 @@ describe("buildCategoryWatch", () => {
     expect(inWatched(tx("2026-10-01", "Еда", 1, "Кафе"), "Еда", "Кафе")).toBe(true);
     expect(inWatched(tx("2026-10-01", "Еда", 1), "Еда", "Кафе")).toBe(false);
     expect(inWatched(tx("2026-10-01", "Дом", 1), "Еда", null)).toBe(false);
+  });
+
+  it("доходная категория считается по доходам, расходы и возвраты в неё не идут", () => {
+    const w = buildCategoryWatch(txs, "Еда", null, "2026-10", 1, "2026-10-05", "income");
+    expect(w.nowAt).toBe(9000);
+    expect(w.count).toBe(1);
+    expect(w.avgAt).toBe(0);
+  });
+});
+
+describe("buildTagWatch", () => {
+  const tagged = (date: string, kind: Transaction["kind"], amountBase: number, comment: string, extra: string[] = []) =>
+    ({ date, kind, amountBase, comment, category: "Разное", extraCategories: extra }) as Transaction;
+  const txs = [
+    tagged("2026-08-03", "expense", 1, "начало истории"),
+    tagged("2026-09-02", "expense", 400, "Билеты #отпуск"),
+    tagged("2026-09-03", "income", 100, "Вернули за бронь #отпуск"),
+    tagged("2026-10-01", "expense", 700, "Отель #отпуск"),
+    tagged("2026-10-02", "refund", 50, "Возврат #отпуск"),
+    tagged("2026-10-03", "income", 300, "Скинулись #отпуск"),
+    tagged("2026-10-04", "expense", 999, "Без тега"),
+    tagged("2026-10-04", "expense", 80, "", ["Отпуск"]),
+  ];
+
+  it("хэштег: расходы и доходы считаются врозь", () => {
+    const w = buildTagWatch(txs, "отпуск", "hashtags", "2026-10", 1, "2026-10-05");
+    expect(w.expense.nowAt).toBe(650);
+    expect(w.income.nowAt).toBe(300);
+    expect(w.expense.avgAt).toBe(400);
+    expect(w.income.avgAt).toBe(100);
+    expect(w.expense.bars.map((b) => b.total)).toEqual([0, 400, 650]);
+    expect(w.income.bars.map((b) => b.total)).toEqual([0, 100, 300]);
+  });
+
+  it("вторая категория как тег — свой режим", () => {
+    const w = buildTagWatch(txs, "Отпуск", "categories", "2026-10", 1, "2026-10-05");
+    expect(w.expense.nowAt).toBe(80);
+    expect(w.income.nowAt).toBe(0);
   });
 });

@@ -1,33 +1,29 @@
 /**
- * «Категория под наблюдением» — одна статья расходов крупным планом: сколько
- * ушло в этом месяце, сколько обычно уходит к этому дню и как было раньше.
+ * «Категория под наблюдением» — одна категория крупным планом: сколько
+ * набралось в этом месяце, сколько обычно набирается к этому дню и как было
+ * раньше. Категория — расходная или доходная, целиком или одна подкатегория.
  *
- * Таких виджетов на главной может стоять несколько — по одному на статью.
- * Какая статья, хранит место в раскладке; выбирают её прямо в виджете.
+ * Таких виджетов на главной может стоять несколько — по одному на категорию.
+ * Какая категория, хранит место в раскладке; выбирают её прямо в виджете.
  */
 
 import { useMemo, useState } from "react";
 import { Pencil } from "lucide-react";
 import { BlockTitle } from "./blocks/shared";
+import { WatchBars, WatchHead } from "./blocks/watch";
 import { CategoryCascadePicker } from "../CategoryCascadePicker";
 import { CategoryDot } from "../CategoryDot";
-import { DeviationPill } from "../DeviationPill";
-import { Tooltip } from "../Tooltip";
+import { KindSwitcher } from "../KindSwitcher";
 import { useCategoryNodes } from "../../hooks/useCategoryNodes";
-import { buildCategoryWatch, inWatched } from "../../lib/categoryWatch";
-import { dayAndMonth } from "../../lib/dayLabel";
-import { formatMoney, formatNum, monthTitle } from "../../lib/format";
-import { MONTHS, MONTHS_SHORT } from "../../lib/months";
+import { buildCategoryWatch, inWatched, watchAmount, type WatchKind } from "../../lib/categoryWatch";
+import { monthTitle } from "../../lib/format";
 import { periodKey } from "../../lib/period";
-import { pluralRu } from "../../lib/plural";
 import type { Transaction } from "../../types";
-
-const monthName = (ym: string) => MONTHS[Number(ym.slice(5, 7)) - 1] ?? "";
-const monthShort = (ym: string) => MONTHS_SHORT[Number(ym.slice(5, 7)) - 1] ?? "";
 
 export function WatchWidget({
   category,
   subcategory,
+  income,
   transactions,
   ym,
   monthStartDay,
@@ -36,25 +32,32 @@ export function WatchWidget({
   onPick,
   onOpen,
 }: {
-  /** Пусто — статья ещё не выбрана. */
+  /** Пусто — категория ещё не выбрана. */
   category: string | undefined;
   subcategory: string | undefined;
+  /** Категория доходная: считаем доходы. */
+  income: boolean;
   transactions: Transaction[];
   ym: string;
   monthStartDay: number;
   today: string;
   base: string;
-  onPick: (category: string, subcategory: string) => void;
+  onPick: (category: string, subcategory: string, income: boolean) => void;
   onOpen: (title: string, txs: Transaction[], subtitle: string) => void;
 }) {
   const [picking, setPicking] = useState(false);
+  // Какие категории предлагает поле выбора, пока оно открыто.
+  const [pickKind, setPickKind] = useState<WatchKind>(income ? "income" : "expense");
+  const kind: WatchKind = income ? "income" : "expense";
   const sub = subcategory || null;
   const name = sub ?? category ?? "";
 
   const watch = useMemo(
     () =>
-      category ? buildCategoryWatch(transactions, category, sub, ym, monthStartDay, today) : null,
-    [transactions, category, sub, ym, monthStartDay, today]
+      category
+        ? buildCategoryWatch(transactions, category, sub, ym, monthStartDay, today, kind)
+        : null,
+    [transactions, category, sub, ym, monthStartDay, today, kind]
   );
 
   const openMonth = (month: string) => {
@@ -63,17 +66,15 @@ export function WatchWidget({
       `${name} · ${monthTitle(month)}`,
       transactions.filter(
         (t) =>
-          (t.kind === "expense" || t.kind === "refund") &&
+          watchAmount(t, kind) !== 0 &&
           inWatched(t, category, sub) &&
           periodKey(t.date, monthStartDay) === month
       ),
-      "Расходы по категории"
+      kind === "income" ? "Доходы по категории" : "Расходы по категории"
     );
   };
 
   const showPicker = !category || picking;
-  const top = watch ? Math.max(1, ...watch.bars.map((b) => b.total)) : 1;
-  const sameDay = watch?.running ? " к этому дню" : " за месяц";
 
   return (
     <>
@@ -90,10 +91,12 @@ export function WatchWidget({
         }
         info={
           <p>
-            Расходы одной статьи: сколько ушло с начала месяца и сколько обычно
-            уходит к этому дню — в среднем за последние полные месяцы, не больше
-            трёх. Ниже — те же расходы по месяцам. Возвраты уменьшают расход.
-            Клик по числу или столбику открывает операции статьи за месяц.
+            Одна категория расходов или доходов: сколько набралось с начала
+            месяца и сколько обычно набирается к этому дню — в среднем за
+            последние полные месяцы, не больше трёх. Ниже — то же по месяцам.
+            Категорию с подкатегориями можно выбрать целиком («Вся категория»)
+            или одну её подкатегорию. Возвраты уменьшают расход. Клик по числу
+            или столбику открывает операции за месяц.
           </p>
         }
         right={
@@ -104,7 +107,10 @@ export function WatchWidget({
               title="Сменить категорию"
               aria-label="Сменить категорию"
               aria-pressed={picking}
-              onClick={() => setPicking((v) => !v)}
+              onClick={() => {
+                setPickKind(kind);
+                setPicking((v) => !v);
+              }}
             >
               <Pencil className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -112,101 +118,38 @@ export function WatchWidget({
         }
       />
       {showPicker && (
-        <div className="mb-3" data-testid="watch-picker">
-          {!category && (
-            <div className="text-[13px] text-muted mb-2">
-              Выберите статью расходов — виджет будет следить за ней
-            </div>
-          )}
+        <div className="mb-3 flex flex-col gap-2" data-testid="watch-picker">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[13px] text-muted min-w-0">
+              {category ? "Другая категория" : "За какой категорией следить"}
+            </span>
+            <KindSwitcher kind={pickKind} onChange={setPickKind} />
+          </div>
           <WatchPicker
-            category={category ?? ""}
-            subcategory={subcategory ?? ""}
+            kind={pickKind}
+            // Выбранное показываем только в «своём» списке: расходной категории
+            // среди доходных нет, и поле не должно делать вид, что есть.
+            category={pickKind === kind ? (category ?? "") : ""}
+            subcategory={pickKind === kind ? (subcategory ?? "") : ""}
             onChange={(c, s) => {
               if (!c) return;
-              onPick(c, s);
+              onPick(c, s, pickKind === "income");
               setPicking(false);
             }}
           />
         </div>
       )}
       {watch && category && (
-        <div className="flex-1 min-h-0 flex flex-col gap-3" data-testid="watch-widget">
-          <button
-            type="button"
-            onClick={() => openMonth(ym)}
-            className="text-left rounded-lg -mx-2 px-2 py-1 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            <div className="text-[11px] uppercase tracking-[0.08em] text-muted">
-              {watch.running ? `Потрачено к ${dayAndMonth(today)}` : `Потрачено за ${monthName(ym).toLowerCase()}`}
-            </div>
-            <div className="mt-1 flex items-center gap-2.5 flex-wrap">
-              <span
-                className="text-[28px] font-bold tracking-[-0.03em] tabular-nums leading-[1.1] whitespace-nowrap"
-                data-testid="watch-total"
-              >
-                {formatMoney(watch.nowAt, base)}
-              </span>
-              {watch.avgAt !== null && (
-                <span className="text-[13px]">
-                  <DeviationPill
-                    current={watch.nowAt}
-                    baseline={watch.avgAt}
-                    base={base}
-                    mode="both"
-                    kind="expense"
-                    upTitle={`Больше, чем обычно${sameDay}`}
-                    downTitle={`Меньше, чем обычно${sameDay}`}
-                  />
-                </span>
-              )}
-            </div>
-            <div className="mt-1.5 text-[12px] text-muted tabular-nums">
-              {watch.avgAt !== null
-                ? `Обычно${sameDay} — ${formatMoney(watch.avgAt, base)}`
-                : "Сравнить пока не с чем"}
-              {" · "}
-              {watch.count === 0
-                ? "Операций нет"
-                : `${formatNum(watch.count)} ${pluralRu(watch.count, ["операция", "операции", "операций"])}`}
-            </div>
-          </button>
-
-          <div className="flex-1 min-h-[96px] flex items-end gap-2" data-testid="watch-bars">
-            {watch.bars.map((b) => {
-              const h = Math.max(0, b.total) / top;
-              return (
-                <Tooltip
-                  key={b.ym}
-                  data
-                  content={
-                    <div className="space-y-0.5">
-                      <div className="font-medium">{monthTitle(b.ym)}</div>
-                      <div className="tabular-nums">{formatMoney(b.total, base)}</div>
-                    </div>
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => openMonth(b.ym)}
-                    aria-label={`${monthTitle(b.ym)}: ${formatMoney(b.total, base)}`}
-                    className="group flex-1 min-w-0 h-full flex flex-col justify-end items-stretch gap-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                  >
-                    <span className="flex-1 min-h-0 flex items-end">
-                      <span
-                        className={`block w-full rounded-md transition-opacity duration-200 group-hover:opacity-100 ${
-                          b.current ? "bg-expense" : "bg-muted/30 opacity-90"
-                        }`}
-                        style={{ height: `max(3px, ${h * 100}%)` }}
-                      />
-                    </span>
-                    <span className={`text-[11px] text-center ${b.current ? "text-text font-medium" : "text-muted"}`}>
-                      {monthShort(b.ym)}
-                    </span>
-                  </button>
-                </Tooltip>
-              );
-            })}
-          </div>
+        <div className="flex-1 min-h-0 flex flex-col gap-3" data-testid="watch-widget" data-watch-kind={kind}>
+          <WatchHead
+            watch={watch}
+            kind={kind}
+            ym={ym}
+            today={today}
+            base={base}
+            onOpen={() => openMonth(ym)}
+          />
+          <WatchBars series={[{ kind, watch }]} base={base} onOpen={openMonth} />
         </div>
       )}
     </>
@@ -214,19 +157,21 @@ export function WatchWidget({
 }
 
 /**
- * Поле выбора статьи. Отдельным компонентом, чтобы дерево категорий (оно
+ * Поле выбора категории. Отдельным компонентом, чтобы дерево категорий (оно
  * читает кэш Дзен-мани) собиралось только пока поле открыто.
  */
 function WatchPicker({
+  kind,
   category,
   subcategory,
   onChange,
 }: {
+  kind: WatchKind;
   category: string;
   subcategory: string;
   onChange: (category: string, subcategory: string) => void;
 }) {
-  const nodes = useCategoryNodes("expense");
+  const nodes = useCategoryNodes(kind);
   return (
     <CategoryCascadePicker
       category={category}
@@ -234,6 +179,9 @@ function WatchPicker({
       categories={nodes}
       onChange={onChange}
       placeholder="Выберите категорию"
+      // Сама категория здесь — вся ветка вместе с подкатегориями, а не «операции
+      // без подкатегории».
+      parentLabel="Вся категория"
       portal
     />
   );

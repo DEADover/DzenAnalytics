@@ -1,14 +1,16 @@
 /**
- * «Категория под наблюдением» — одна статья расходов: сколько ушло в этом
- * месяце, сколько обычно уходит к этому дню и как было в прошлые месяцы.
+ * «Категория под наблюдением» и «Тег под наблюдением» — одна статья или один
+ * тег: сколько набралось в этом месяце, сколько обычно набирается к этому дню
+ * и как было в прошлые месяцы.
  *
  * Правила те же, что у «Темпа трат»: возврат уменьшает расход, идущий месяц
  * сравнивается с такими же началами прошлых, в среднее идут только полные
- * месяцы истории.
+ * месяцы истории. Считать можно расходы или доходы — у тега обе стороны сразу.
  */
 
 import type { Transaction } from "../types";
 import { endAfterDays, periodKey, periodRange, shiftPeriod, spanDays } from "./period";
+import { tagsOf, type TagMode } from "./operationTags";
 
 export interface WatchBar {
   ym: string;
@@ -43,8 +45,19 @@ export function inWatched(t: Transaction, category: string, subcategory: string 
   return subcategory === null || t.subcategory === subcategory;
 }
 
-const amountOf = (t: Transaction) =>
-  t.kind === "expense" ? t.amountBase : t.kind === "refund" ? -t.amountBase : 0;
+/** Что считаем: расходы (возврат их уменьшает) или доходы. */
+export type WatchKind = "expense" | "income";
+
+/** Сколько операция добавляет к наблюдаемой стороне. */
+export function watchAmount(t: Transaction, kind: WatchKind): number {
+  if (kind === "income") return t.kind === "income" ? t.amountBase : 0;
+  return t.kind === "expense" ? t.amountBase : t.kind === "refund" ? -t.amountBase : 0;
+}
+
+/** Помечена ли операция тегом — хэштегом или второй категорией, по режиму. */
+export function inTag(t: Transaction, tag: string, mode: TagMode): boolean {
+  return tagsOf(t, mode).includes(tag);
+}
 
 export function buildCategoryWatch(
   txs: Transaction[],
@@ -52,8 +65,38 @@ export function buildCategoryWatch(
   subcategory: string | null,
   ym: string,
   startDay: number,
+  today: string,
+  kind: WatchKind = "expense"
+): CategoryWatch {
+  return buildWatch(txs, (t) => inWatched(t, category, subcategory), kind, ym, startDay, today);
+}
+
+/** Тег с обеих сторон: один и тот же тег бывает и на расходах, и на доходах. */
+export function buildTagWatch(
+  txs: Transaction[],
+  tag: string,
+  mode: TagMode,
+  ym: string,
+  startDay: number,
+  today: string
+): { expense: CategoryWatch; income: CategoryWatch } {
+  const match = (t: Transaction) => inTag(t, tag, mode);
+  return {
+    expense: buildWatch(txs, match, "expense", ym, startDay, today),
+    income: buildWatch(txs, match, "income", ym, startDay, today),
+  };
+}
+
+/** Общий расчёт: операции, прошедшие `match`, с выбранной стороны. */
+export function buildWatch(
+  txs: Transaction[],
+  match: (t: Transaction) => boolean,
+  kind: WatchKind,
+  ym: string,
+  startDay: number,
   today: string
 ): CategoryWatch {
+  const amountOf = (t: Transaction) => watchAmount(t, kind);
   const full = periodRange(ym, startDay);
   const started = today >= full.from;
   const to = today < full.to ? today : full.to;
@@ -62,7 +105,7 @@ export function buildCategoryWatch(
   const first = txs.reduce((mn, t) => (mn === "" || t.date < mn ? t.date : mn), "");
   const firstYm = first ? periodKey(first, startDay) : "";
 
-  const own = txs.filter((t) => inWatched(t, category, subcategory) && amountOf(t) !== 0);
+  const own = txs.filter((t) => match(t) && amountOf(t) !== 0);
   const sum = (from: string, until: string) => {
     let total = 0;
     let count = 0;

@@ -150,17 +150,17 @@ test("«Категория под наблюдением»: заводится �
   });
   const first = page.locator('[data-widget-key="watch"]');
   const second = page.locator('[data-widget-key="watch-2"]');
-  await expect(first).toContainText("Выберите статью расходов");
+  await expect(first).toContainText("За какой категорией следить");
   await expect(second).toBeVisible();
 
-  await first.getByTestId("watch-picker").getByRole("button").first().click();
+  await first.getByTestId("watch-picker").getByText("Выберите категорию").click();
   await page.getByRole("option", { name: "Дом", exact: true }).click();
   await expect(first.getByTestId("watch-total")).toContainText(/35\s000/);
   await expect(first).toContainText("Потрачено к 15 октября");
   await expect(first).toContainText("Обычно к этому дню");
   await expect(first.getByTestId("watch-bars").getByRole("button")).toHaveCount(6);
   // Второй виджет своей статьи пока не знает.
-  await expect(second).toContainText("Выберите статью расходов");
+  await expect(second).toContainText("За какой категорией следить");
 
   // Выбор пережил перезагрузку.
   await page.reload();
@@ -209,4 +209,88 @@ test("«Цели»: видны ровно две цели, третья — то
   await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
   await expect.poll(() => where("Третья")).toBe("inside");
   expect(await where("Первая")).toBe("outside");
+});
+
+/** Завести виджет вида, которого на главной может быть несколько. */
+async function add(page: Page, kind: string) {
+  await page.evaluate(async (k) => {
+    const w = window as unknown as Win;
+    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
+    await (useDashboardLayoutStore.getState() as unknown as { add: (kind: string) => Promise<void> }).add(k);
+  }, kind);
+}
+
+test("«Категория под наблюдением»: доходная категория и категория целиком", async ({ page }) => {
+  await connectZen(page, "/");
+  await add(page, "watch");
+  await add(page, "watch");
+  const income = page.locator('[data-widget-key="watch"]');
+  const group = page.locator('[data-widget-key="watch-2"]');
+
+  // Доходная: переключатель над полем меняет список категорий.
+  await income.getByTestId("watch-picker").getByRole("button", { name: "Доходы" }).click();
+  await income.getByTestId("watch-picker").getByText("Выберите категорию").click();
+  await page.getByRole("option", { name: "Зарплата", exact: true }).click();
+  await expect(income.getByTestId("watch-widget")).toHaveAttribute("data-watch-kind", "income");
+  await expect(income).toContainText("Получено к 15 октября");
+  await expect(income.getByTestId("watch-total")).toContainText(/150\s000/);
+  await income.getByTestId("watch-total").click();
+  await expect(page.locator("[data-exit-panel]")).toContainText("Доходы по категории");
+  await page.keyboard.press("Escape");
+
+  // Категория с подкатегорией — целиком: пункт называется «Вся категория», и
+  // в число входят траты подкатегории «Такси».
+  await group.getByTestId("watch-picker").getByText("Выберите категорию").click();
+  await page.getByRole("option", { name: "Транспорт", exact: true }).click();
+  await page.getByRole("option", { name: "Вся категория", exact: true }).click();
+  await expect(group).toContainText("Транспорт");
+  await expect(group.getByTestId("watch-total")).toContainText(/455/);
+
+  // Выбор пережил перезагрузку — вместе с тем, что категория доходная.
+  await page.reload();
+  await expect(income.getByTestId("watch-widget")).toHaveAttribute("data-watch-kind", "income");
+  await expect(group.getByTestId("watch-total")).toContainText(/455/);
+});
+
+test("«Тег под наблюдением»: расходы и доходы одного тега", async ({ page }) => {
+  await connectZen(page, "/");
+  // Один хэштег на расходе и на доходе октября.
+  await page.evaluate(async () => {
+    type Tx = { id: string; date: string; kind: string };
+    const w = window as unknown as {
+      __store: (n: string) => Promise<Record<string, { getState: () => Record<string, unknown> }>>;
+    };
+    const { useDataStore } = await w.__store("useDataStore");
+    const data = useDataStore.getState() as { transactions: Tx[]; refresh: () => Promise<void> };
+    const rent = data.transactions.find((t) => t.date === "2026-10-10" && t.kind === "expense")!;
+    const salary = data.transactions.find((t) => t.date === "2026-10-05" && t.kind === "income")!;
+    const { useEditsStore } = await w.__store("useEditsStore");
+    const edits = useEditsStore.getState() as {
+      setEdit: (id: string, patch: { comment: string }) => Promise<void>;
+    };
+    await edits.setEdit(rent.id, { comment: "Аренда #квартира" });
+    await edits.setEdit(salary.id, { comment: "Зарплата #квартира" });
+    await data.refresh();
+  });
+  await add(page, "watchTag");
+  const widget = page.locator('[data-widget-key="watchTag"]');
+  await expect(widget).toContainText("Тег под наблюдением");
+
+  await widget.getByTestId("tag-picker").getByRole("combobox").click();
+  await page.getByRole("option", { name: /квартира/ }).click();
+
+  const body = widget.getByTestId("tag-watch-widget");
+  await expect(body.locator('[data-watch-head="expense"]')).toContainText(/35\s000/);
+  await expect(body.locator('[data-watch-head="income"]')).toContainText(/150\s000/);
+  await expect(widget).toContainText("квартира");
+
+  // Клик по стороне открывает её операции за месяц.
+  await body.locator('[data-watch-head="income"]').click();
+  const drawer = page.locator("[data-exit-panel]");
+  await expect(drawer).toContainText("#квартира · Октябрь");
+  await expect(drawer).toContainText("Доходы по тегу");
+  await page.keyboard.press("Escape");
+
+  await page.reload();
+  await expect(widget.getByTestId("tag-watch-widget").locator('[data-watch-head="expense"]')).toContainText(/35\s000/);
 });

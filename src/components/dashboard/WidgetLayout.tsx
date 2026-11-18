@@ -587,7 +587,7 @@ function WidgetPicker({
             tile(
               `new:${w.kind}`,
               w.icon,
-              `Новая ${w.title.toLowerCase()}`,
+              w.addLabel ?? `Новая ${w.title.toLowerCase()}`,
               w.hint,
               () => place(() => add(w.kind, beforeKey), w.kind)
             )

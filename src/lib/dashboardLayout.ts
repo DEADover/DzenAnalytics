@@ -27,6 +27,7 @@ import {
   Crosshair,
   Flag,
   Gauge,
+  Hash,
   Inbox,
   Landmark,
   LayoutGrid,
@@ -62,6 +63,7 @@ export const WIDGET_KINDS = [
   "budget",
   "goals",
   "watch",
+  "watchTag",
 ] as const;
 
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
@@ -122,6 +124,8 @@ export interface WidgetMeta {
    * «Категория под наблюдением» не знает, за какой категорией следить.
    */
   byHand?: boolean;
+  /** Как назвать «завести ещё один» в списке: «Новая полоска», «Новый тег…». */
+  addLabel?: string;
   /**
    * В режиме настройки виджет остаётся живым: он настраивается сам, изнутри, а
    * не только ручками обоймы. Содержимое не приглушается и ловит нажатия.
@@ -363,11 +367,22 @@ export const WIDGETS: readonly WidgetMeta[] = [
     kind: "watch",
     icon: Crosshair,
     title: "Категория под наблюдением",
-    hint: "Одна статья расходов: этот месяц, обычный уровень и прошлые месяцы",
+    hint: "Одна категория расходов или доходов: этот месяц, обычный уровень и прошлые месяцы",
     span: 1,
     multi: true,
     byHand: true,
     // Статью выбирают прямо в виджете — в том числе в режиме настройки.
+    live: true,
+  },
+  {
+    kind: "watchTag",
+    icon: Hash,
+    title: "Тег под наблюдением",
+    addLabel: "Новый тег под наблюдением",
+    hint: "Один тег: его расходы и доходы за месяц рядом с обычным уровнем",
+    span: 1,
+    multi: true,
+    byHand: true,
     live: true,
   },
 ];
@@ -416,6 +431,16 @@ export interface WidgetPlacement {
    */
   category?: string;
   subcategory?: string;
+  /** У «Категории под наблюдением»: категория доходная, считаем доходы. */
+  income?: boolean;
+  /**
+   * Только у «Тега под наблюдением»: какой тег и что им считается — хэштег в
+   * комментарии или вторая категория операции. Режим хранится вместе с тегом:
+   * «отпуск» как хэштег и «Отпуск» как вторая категория — разные вещи, и
+   * виджет не должен опустеть оттого, что в разделе «Теги» переключили режим.
+   */
+  tag?: string;
+  tagMode?: "hashtags" | "categories";
   /**
    * Сколько пустых клеток оставить слева от виджета в его ряду.
    *
@@ -495,6 +520,9 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       offBalance?: unknown;
       category?: unknown;
       subcategory?: unknown;
+      income?: unknown;
+      tag?: unknown;
+      tagMode?: unknown;
     };
     const kind = typeof rec.kind === "string" ? BY_KIND.get(rec.kind) : undefined;
     if (!kind) continue;
@@ -523,6 +551,11 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       if (typeof rec.subcategory === "string" && rec.subcategory) {
         placement.subcategory = rec.subcategory;
       }
+      if (rec.income === true) placement.income = true;
+    }
+    if (kind.kind === "watchTag" && typeof rec.tag === "string" && rec.tag) {
+      placement.tag = rec.tag;
+      placement.tagMode = rec.tagMode === "categories" ? "categories" : "hashtags";
     }
     const offset = clampOffset(rec.offset, kind);
     if (offset > 0) placement.offset = offset;
@@ -1048,6 +1081,11 @@ export function setWidgetHidden(
   if (p.links) next.links = p.links;
   if (p.category) next.category = p.category;
   if (p.subcategory) next.subcategory = p.subcategory;
+  if (p.income) next.income = true;
+  if (p.tag) {
+    next.tag = p.tag;
+    next.tagMode = p.tagMode;
+  }
   if (hidden) next.hidden = true;
 
   const rest = layout.filter((x) => x.key !== key);
@@ -1124,13 +1162,31 @@ export function setWidgetCategory(
   layout: readonly WidgetPlacement[],
   key: string,
   category: string,
-  subcategory = ""
+  subcategory = "",
+  /** Категория доходная — виджет считает доходы. */
+  income = false
 ): WidgetPlacement[] {
   return layout.map((p) => {
     if (p.key !== key || p.kind !== "watch") return p;
-    const { category: _c, subcategory: _s, ...rest } = p;
+    const { category: _c, subcategory: _s, income: _i, ...rest } = p;
     if (!category) return rest;
-    return subcategory ? { ...rest, category, subcategory } : { ...rest, category };
+    const next: WidgetPlacement = subcategory ? { ...rest, category, subcategory } : { ...rest, category };
+    if (income) next.income = true;
+    return next;
+  });
+}
+
+/** Выбрать тег для «Тега под наблюдением». Пустой тег снимает выбор. */
+export function setWidgetTag(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  tag: string,
+  tagMode: "hashtags" | "categories" = "hashtags"
+): WidgetPlacement[] {
+  return layout.map((p) => {
+    if (p.key !== key || p.kind !== "watchTag") return p;
+    const { tag: _t, tagMode: _m, ...rest } = p;
+    return tag ? { ...rest, tag, tagMode } : rest;
   });
 }
 
