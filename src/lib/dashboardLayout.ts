@@ -661,6 +661,17 @@ export function dropIntoGap(
   gapCol: number,
   columns = 3
 ): WidgetPlacement[] {
+  // Где дырка стояла ДО переноса: её ряд и чья она.
+  const before = gridOf(layout, columns);
+  const gap = before.find(
+    (g) => g.cell.type === "gap" && g.cell.before === beforeKey && g.col === gapCol
+  );
+  const neighbourRow =
+    beforeKey === null
+      ? null
+      : (before.find((g) => g.cell.type === "widget" && g.cell.placement.key === beforeKey)?.row ??
+        null);
+
   const moved = moveWidgetBefore(layout, dragKey, beforeKey);
   const at = moved.findIndex((p) => p.key === dragKey);
   if (at === -1) return moved;
@@ -669,13 +680,36 @@ export function dropIntoGap(
   const actual = columnOf(moved, dragKey, columns);
   if (actual === null) return moved;
 
-  const offset = clampOffset(moved[at].offset, meta, columns);
+  // Отступ подбираем по тому, КУДА виджет при нём встанет, а не арифметикой от
+  // текущей колонки. Арифметика знает только колонку и не знает ряда: виджет,
+  // который стоял под дыркой в той же колонке (его туда отнёс собственный
+  // отступ), при броске в неё получал «сдвиг на ноль клеток» и оставался где
+  // был. Перебираем все отступы и берём тот, что ставит виджет в колонку дырки
+  // — а из таких тот, что ближе к её ряду.
   const next = moved.slice();
-  next[at] = withOffset(next[at], clampOffset(offset + gapCol - actual, meta, columns));
+  const offset = clampOffset(moved[at].offset, meta, columns);
+  let best: { offset: number; distance: number } | null = null;
+  for (let o = 0; o <= maxOffset(meta, columns); o++) {
+    const trial = moved.slice();
+    trial[at] = withOffset(moved[at], o);
+    const pos = gridOf(trial, columns).find(
+      (g) => g.cell.type === "widget" && g.cell.placement.key === dragKey
+    );
+    if (!pos || pos.col !== gapCol) continue;
+    const distance = gap ? Math.abs(pos.row - gap.row) : 0;
+    if (!best || distance < best.distance) best = { offset: o, distance };
+  }
+  next[at] = withOffset(
+    next[at],
+    best ? best.offset : clampOffset(offset + gapCol - actual, meta, columns)
+  );
 
   // Если дырка была ОТСТУПОМ соседа, часть её теперь занята — отдаём соседу
   // ровно то, что осталось. Иначе он уехал бы ещё правее, а дырка выросла.
-  if (beforeKey !== null && beforeKey !== dragKey) {
+  // Только отступом: дырка в конце ПРЕДЫДУЩЕГО ряда соседу не принадлежит, и
+  // его собственный отступ в своём ряду трогать незачем.
+  const ownGap = gap !== undefined && neighbourRow !== null && gap.row === neighbourRow;
+  if (ownGap && beforeKey !== null && beforeKey !== dragKey) {
     const bi = next.findIndex((p) => p.key === beforeKey);
     if (bi !== -1) {
       const bMeta = widgetMeta(next[bi].kind);
@@ -774,6 +808,8 @@ function clampOffset(
 interface GridCell {
   cell: LayoutCell;
   row: number;
+  /** С какой колонки ряда ячейка начинается. */
+  col: number;
 }
 
 /** Разложить видимые виджеты и назвать ряд каждой ячейки. */
@@ -782,7 +818,7 @@ function gridOf(layout: readonly WidgetPlacement[], columns = 3): GridCell[] {
   let col = 0;
   let row = 0;
   for (const cell of packLayout(layout.filter((p) => !p.hidden), columns)) {
-    out.push({ cell, row });
+    out.push({ cell, row, col });
     const span =
       cell.type === "gap" ? cell.span : Math.min(widgetMeta(cell.placement.kind).span, columns);
     col += span;

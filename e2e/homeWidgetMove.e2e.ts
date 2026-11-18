@@ -129,3 +129,32 @@ test("бросок в пустую клетку ставит виджет ров
     "activity",
   ]);
 });
+
+test("виджет под пустой клеткой поднимается в неё броском", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 2400 });
+  await connectZen(page, "/");
+  // «Категории» стоят в третьей клетке второго ряда — под пустой третьей первого.
+  await page.evaluate(async () => {
+    type Store = { getState: () => { replaceLayout: (raw: unknown) => Promise<void> } };
+    const w = window as unknown as { __store: (n: string) => Promise<Record<string, Store>> };
+    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
+    await useDashboardLayoutStore.getState().replaceLayout([
+      { key: "month", kind: "month" },
+      { key: "accounts", kind: "accounts" },
+      { key: "categories", kind: "categories", offset: 2 },
+      ...["upcoming", "links", "cashflow", "activity", "observations"].map((k) => ({
+        key: k,
+        kind: k,
+        hidden: true,
+      })),
+    ]);
+  });
+  await edit(page);
+  expect(await rows(page)).toEqual(["month | accounts", "categories"]);
+  const colOf = async (key: string) => Math.round((await tile(page, key).boundingBox())!.x);
+  const col3 = await colOf("categories");
+
+  await tile(page, "categories").dragTo(page.locator("[data-widget-gap]").first());
+  await expect.poll(() => rows(page)).toEqual(["month | accounts | categories"]);
+  expect(await colOf("categories")).toBe(col3);
+});

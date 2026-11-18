@@ -466,6 +466,35 @@ describe("dropIntoGap", () => {
   });
 });
 
+describe("dropIntoGap: виджет под дыркой", () => {
+  // Третья клетка первого ряда пуста, а виджет стоит под ней — в третьей клетке
+  // второго ряда, куда его отнёс собственный отступ.
+  const under: WidgetPlacement[] = [
+    { key: "month", kind: "month" },
+    { key: "accounts", kind: "accounts" },
+    { key: "categories", kind: "categories", offset: 2 },
+  ];
+
+  it("исходная раскладка: дырка над виджетом", () => {
+    expect(rows(under)).toEqual(["month | accounts | ·1", "·2 | categories"]);
+  });
+
+  it("бросок в дырку рядом выше поднимает виджет в неё", () => {
+    // Колонка та же, ряд другой: раньше это считалось «сдвигом на ноль клеток»,
+    // и виджет оставался где был.
+    const out = dropIntoGap(under, "categories", "categories", 2);
+    expect(rows(out)).toEqual(["month | accounts | categories"]);
+  });
+
+  it("чужой отступ в своём ряду не трогает, когда занимают дырку рядом выше", () => {
+    const layout: WidgetPlacement[] = [...under, { key: "observations", kind: "observations" }];
+    expect(rows(layout)).toEqual(["month | accounts | ·1", "·2 | categories", "observations | ·2"]);
+    // «Наблюдения» встают в дырку первого ряда; «Категории» остаются под ней.
+    const out = dropIntoGap(layout, "observations", "categories", 2);
+    expect(rows(out)).toEqual(["month | accounts | observations", "·2 | categories"]);
+  });
+});
+
 describe("packLayout и отступ", () => {
   it("ставит пустую клетку слева от виджета", () => {
     const out = packLayout([
