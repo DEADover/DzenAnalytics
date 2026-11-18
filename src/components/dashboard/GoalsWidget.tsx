@@ -16,7 +16,7 @@ import { useAnalyticsTransactions } from "../../hooks/useAnalyticsTransactions";
 import { useGoalsMoney } from "../../hooks/useGoalsMoney";
 import { useSmoothNavigate } from "../../hooks/useSmoothNavigate";
 import { useGoalsStore } from "../../store/useGoalsStore";
-import { goalMetrics, monthYearFull } from "../../lib/goalMetrics";
+import { goalMetrics, monthYear } from "../../lib/goalMetrics";
 import { formatMoney, formatNum, formatPct } from "../../lib/format";
 
 export function GoalsWidget({ base }: { base: string }) {
@@ -118,7 +118,7 @@ export function GoalsWidget({ base }: { base: string }) {
               let forecast: string;
               if (m.done) forecast = "Цель достигнута";
               else if (m.effective.months === null || !m.effective.finish) forecast = "Не накопить";
-              else forecast = monthYearFull(m.effective.finish);
+              else forecast = monthYear(m.effective.finish);
               // Сколько откладывать, чтобы успеть: срок ещё впереди, а темпа не хватает.
               const needed =
                 late && m.deadlineMonths !== null && m.deadlineMonths > 0
@@ -175,7 +175,7 @@ export function GoalsWidget({ base }: { base: string }) {
                       <GoalStat label="Прогноз" value={forecast} />
                       <GoalStat
                         label="Срок"
-                        value={g.deadline ? monthYearFull(g.deadline) : "Без срока"}
+                        value={g.deadline ? monthYear(g.deadline) : "Без срока"}
                         warn={late}
                       />
                       <GoalStat

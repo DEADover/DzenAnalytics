@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Hash, Pencil, Cloud } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -111,6 +112,26 @@ export function TagsPage() {
   const showDrill = useDrillStore((s) => s.show);
 
   const mode = useTagModeStore((s) => s.mode);
+  const setMode = useTagModeStore((s) => s.setMode);
+  // С главной сюда приходят за конкретным тегом (виджет «Тег под наблюдением»):
+  // `?tag=…&mode=…`. Режим раздела подстраивается под тег — хэштег и вторая
+  // категория с тем же именем разные вещи, — а строка тега раскрыта и на виду.
+  const [searchParams] = useSearchParams();
+  const focusTag = searchParams.get("tag") || null;
+  const focusMode = searchParams.get("mode");
+  useEffect(() => {
+    if ((focusMode === "hashtags" || focusMode === "categories") && focusMode !== mode) {
+      void setMode(focusMode);
+    }
+    // Только при входе по ссылке: дальше режим меняет сам человек.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusMode]);
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(focusTag ? [focusTag] : [])
+  );
+  // Довозим страницу до строки тега — один раз, когда она появилась в
+  // таблице (режим мог только что переключиться, и теги пересчитались).
+  const scrolled = useRef(false);
   // Откуда брать теги (#69): хэштеги из комментария или вторые категории.
   const getTags = useCallback((t: Transaction) => tagsOf(t, mode), [mode]);
   const label = (tag: string) => tagLabel(tag, mode);
@@ -122,6 +143,15 @@ export function TagsPage() {
   const tags = useMemo(() => groupByHashtag(filtered, getTags), [filtered, getTags]);
   // Per-tag expense breakdown by category → subcategory.
   const catTrees = useMemo(() => hashtagCategoryTrees(filtered, getTags), [filtered, getTags]);
+
+  useEffect(() => {
+    if (!focusTag || scrolled.current) return;
+    if (!tags.some((t) => t.tag === focusTag)) return;
+    const row = document.querySelector("tr.tag-focus");
+    if (!row) return;
+    scrolled.current = true;
+    row.scrollIntoView({ block: "center" });
+  }, [focusTag, tags, mode]);
 
   // Tagged-only expense sum — shown as «всего» in the header.
   const totalExpense = tags.reduce((s, t) => s + t.expense, 0);
@@ -453,6 +483,9 @@ export function TagsPage() {
         data={tagRows}
         rowKey={(r) => r.key}
         subRows={(r) => r.children}
+        expanded={expanded}
+        onExpandedChange={setExpanded}
+        rowClassName={(r) => (r.level === 0 && r.tag === focusTag ? "tag-focus bg-accent/5" : undefined)}
         defaultSortKey="total"
         exportName={mode === "hashtags" ? "hashtags" : "tags"}
         columns={tagColumns}

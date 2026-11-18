@@ -288,7 +288,11 @@ test("«Тег под наблюдением»: расходы и доходы �
   await expect(body.locator('[data-watch-head="income"]')).toContainText(/150\s000/);
   await expect(widget).toContainText("квартира");
 
-  await expect(widget.getByRole("link", { name: "Теги" })).toHaveAttribute("href", "/tags");
+  // Кнопка в шапке ведёт в «Теги» — на этот тег и в его режиме.
+  await expect(widget.getByRole("link", { name: "Теги" })).toHaveAttribute(
+    "href",
+    `/tags?mode=hashtags&tag=${encodeURIComponent("квартира")}`
+  );
 
   // Клик по стороне открывает её операции за месяц.
   await body.locator('[data-watch-head="income"]').click();
@@ -299,4 +303,28 @@ test("«Тег под наблюдением»: расходы и доходы �
 
   await page.reload();
   await expect(widget.getByTestId("tag-watch-widget").locator('[data-watch-head="expense"]')).toContainText(/35\s000/);
+
+  // Переход: раздел на этом теге, его строка раскрыта разбивкой по категориям.
+  await widget.getByRole("link", { name: "Теги" }).click();
+  await expect(page).toHaveURL(/\/tags\?mode=hashtags&tag=/);
+  const row = page.locator("tr.tag-focus");
+  await expect(row).toContainText("квартира");
+  await expect(row).toBeInViewport();
+  await expect(page.locator("table").filter({ has: row }).locator("tbody tr").nth(1)).toContainText("Дом");
+});
+
+test("«Теги»: ссылка со второй категорией переключает режим раздела", async ({ page }) => {
+  await connectZen(page, "/tags?mode=categories&tag=" + encodeURIComponent("Отпуск"));
+  // Режим раздела подстроился под ссылку — и запомнился, как выбранный руками.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const w = window as unknown as {
+          __store: (n: string) => Promise<Record<string, { getState: () => { mode: string } }>>;
+        };
+        const { useTagModeStore } = await w.__store("useTagModeStore");
+        return useTagModeStore.getState().mode;
+      })
+    )
+    .toBe("categories");
 });

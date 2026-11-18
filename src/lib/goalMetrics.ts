@@ -9,7 +9,7 @@
 import type { Goal } from "../store/useGoalsStore";
 import type { CurrencyRates } from "../types";
 import { goalProgress, type GoalAccount, type RubRates } from "./goals";
-import { MONTHS } from "./months";
+import { MONTHS, MONTHS_GEN } from "./months";
 
 function monthsBetween(fromIso: string, toIso: string): number {
   const a = new Date(fromIso);
@@ -26,27 +26,23 @@ export function addMonthsIso(months: number): string {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
-/** Compact «мес. yyyy» — a forecast is month-level, so the day would be false
- *  precision, and this keeps the chip short enough never to truncate. Parses the
- *  y-m fields directly so no timezone conversion can shift the month. */
-export function monthYear(iso: string): string {
-  const [y, m] = iso.split("-").map(Number);
-  return new Date(y, (m || 1) - 1, 1).toLocaleDateString("ru-RU", {
-    month: "short",
-    year: "numeric",
-  });
-}
-
 /**
- * «Июль 2043» — месяц полностью и с заглавной буквы. Из полей «год-месяц»
- * напрямую, без пересчёта часовых поясов.
+ * «Июль 2043» — месяц полностью и с заглавной буквы: прогноз считается по
+ * месяцам, и день был бы ложной точностью. Из полей «год-месяц» напрямую,
+ * без пересчёта часовых поясов.
  */
-export function monthYearFull(iso: string): string {
+export function monthYear(iso: string): string {
   const [y, m] = iso.split("-").map(Number);
   return `${MONTHS[(m || 1) - 1] ?? ""} ${y}`;
 }
 
-/** «N мес · мес. yyyy», or a short reason when there's no finite finish. */
+/** «1 сентября 2027» — срок цели: день и месяц полностью, без «г.». */
+export function fullDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return `${d || 1} ${MONTHS_GEN[(m || 1) - 1] ?? ""} ${y}`;
+}
+
+/** «N мес · Июль 2043», or a short reason when there's no finite finish. */
 export function forecastLabel(f: Forecast, done: boolean): string {
   if (done) return "цель достигнута";
   if (f.months === null || !f.finish) return "темп отрицательный";

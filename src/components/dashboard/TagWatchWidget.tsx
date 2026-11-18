@@ -120,7 +120,9 @@ export function TagWatchWidget({
           ) : undefined
         }
         rightSmall
-        to="/tags"
+        // Раздел открывается на этом теге и в его режиме: «Отпуск»-хэштег и
+        // «Отпуск» — вторая категория живут в разных списках.
+        to={tag ? `/tags?mode=${mode}&tag=${encodeURIComponent(tag)}` : "/tags"}
         linkLabel="Теги"
       />
       {showPicker && (

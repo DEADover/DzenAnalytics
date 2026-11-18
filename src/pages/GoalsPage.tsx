@@ -20,7 +20,7 @@ import { useAnalyticsTransactions } from "../hooks/useAnalyticsTransactions";
 import { useGoalsStore, type Goal } from "../store/useGoalsStore";
 import { toast } from "../store/useToastStore";
 import { reinsert } from "../lib/storeSnapshot";
-import { formatMoney, formatDate, formatNum } from "../lib/format";
+import { formatMoney, formatNum } from "../lib/format";
 import { pluralRu } from "../lib/plural";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -28,7 +28,7 @@ import { StatCell, StatRow } from "../components/SectionCard";
 import { MultiSelect } from "../components/MultiSelect";
 import { AccountLogo } from "../components/AccountLogo";
 import { goalProgress, goalSources } from "../lib/goals";
-import { addMonthsIso, forecastLabel, goalMetrics, monthYear, type Money } from "../lib/goalMetrics";
+import { addMonthsIso, forecastLabel, fullDate, goalMetrics, monthYear, type Money } from "../lib/goalMetrics";
 import { Tooltip } from "../components/Tooltip";
 import { DateField } from "../components/DateField";
 import { CardHeader } from "../components/CardHeader";
@@ -615,7 +615,7 @@ function GoalCard({
                 icon={CalendarClock}
                 tone={m.done ? "muted" : m.onTrack ? "income" : "expense"}
               >
-                Срок: {formatDate(g.deadline)}
+                Срок: {fullDate(g.deadline)}
                 {!m.done && ` (${m.onTrack ? "успеваете" : "не успеваете"})`}
               </Chip>
             ) : (
