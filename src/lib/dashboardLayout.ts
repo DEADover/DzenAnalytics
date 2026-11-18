@@ -32,7 +32,6 @@ import {
   Landmark,
   LayoutGrid,
   Lightbulb,
-  LineChart,
   PieChart,
   Scale,
   TrendingDown,
@@ -65,7 +64,6 @@ export const WIDGET_KINDS = [
   "goals",
   "watch",
   "watchTag",
-  "outlook",
 ] as const;
 
 export type WidgetKind = (typeof WIDGET_KINDS)[number];
@@ -360,14 +358,6 @@ export const WIDGETS: readonly WidgetMeta[] = [
     icon: Flag,
     title: "Цели",
     hint: "Сколько накоплено и когда цель будет достигнута",
-    span: 1,
-    offByDefault: true,
-  },
-  {
-    kind: "outlook",
-    icon: LineChart,
-    title: "Прогноз остатка",
-    hint: "Сколько останется к концу месяца с учётом запланированных операций",
     span: 1,
     offByDefault: true,
   },

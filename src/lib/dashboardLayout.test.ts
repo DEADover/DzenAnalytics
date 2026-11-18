@@ -170,7 +170,6 @@ describe("normalizeLayout", () => {
       "goals",
       "monthOverMonth",
       "observations",
-      "outlook",
       "pace",
       "triage",
     ]);
@@ -208,7 +207,6 @@ describe("normalizeLayout", () => {
       "triage",
       "budget",
       "goals",
-      "outlook",
       "month",
       "accounts",
       "upcoming",

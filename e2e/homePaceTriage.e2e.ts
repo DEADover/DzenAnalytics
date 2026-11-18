@@ -329,22 +329,6 @@ test("«Теги»: ссылка со второй категорией пере
     .toBe("categories");
 });
 
-test("«Прогноз остатка»: остаток к концу месяца, график и три числа", async ({ page }) => {
-  await connectZen(page, "/");
-  await place(page, "outlook");
-  const outlook = tile(page, "outlook");
-  await expect(outlook).toBeVisible();
-  await expect(outlook).toContainText("Останется к 31 октября");
-  await expect(outlook.getByTestId("outlook-end")).toContainText("₽");
-  // Сплошная линия факта и пунктир прогноза.
-  await expect(outlook.locator(".recharts-line")).toHaveCount(2);
-  const stats = outlook.getByTestId("outlook-stats");
-  await expect(stats).toContainText("Минимум");
-  await expect(stats).toContainText("Спишется");
-  await expect(stats).toContainText("Придёт");
-  await expect(outlook.getByRole("link", { name: "Cash-flow" })).toHaveAttribute("href", "/cashflow");
-});
-
 test("«Активность»: подсказка дня с суммой — и при выключенных подсказках", async ({ page }) => {
   await connectZen(page, "/");
   await page.evaluate(async () => {

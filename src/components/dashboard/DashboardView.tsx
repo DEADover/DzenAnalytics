@@ -41,7 +41,6 @@ import { BudgetWidget } from "./BudgetWidget";
 import { GoalsWidget } from "./GoalsWidget";
 import { WatchWidget } from "./WatchWidget";
 import { TagWatchWidget } from "./TagWatchWidget";
-import { OutlookWidget } from "./OutlookWidget";
 import { TriageBlock, type TriageItem } from "./blocks/triage";
 import { buildSpendingPace, paceCategories } from "../../lib/spendingPace";
 import { useTriage } from "../../hooks/useTriage";
@@ -239,12 +238,6 @@ export function DashboardView() {
         (p) => p.date < todayIso && plannedDeletions[p.id] === undefined
       ).length,
     [zenPlannedAll, plannedDeletions, todayIso]
-  );
-  // Для «Прогноза остатка»: все планы до конца месяца, с переводами — перевод
-  // на вклад уменьшает повседневные деньги. Снятые вручную не считаются.
-  const outlookPlanned = useMemo(
-    () => zenPlannedAll?.filter((p) => plannedDeletions[p.id] === undefined) ?? null,
-    [zenPlannedAll, plannedDeletions]
   );
   const zenPlannedOut = useMemo(
     () =>
@@ -735,17 +728,6 @@ export function DashboardView() {
               void setCategory(p.key, category, subcategory, income)
             }
             onOpen={showDrill}
-          />
-        );
-
-      case "outlook":
-        return (
-          <OutlookWidget
-            planned={outlookPlanned}
-            nowYm={m.nowYm}
-            monthStartDay={m.monthStartDay}
-            today={todayIso}
-            base={m.base}
           />
         );
 
