@@ -41,6 +41,7 @@ import { BudgetWidget } from "./BudgetWidget";
 import { GoalsWidget } from "./GoalsWidget";
 import { WatchWidget } from "./WatchWidget";
 import { TagWatchWidget } from "./TagWatchWidget";
+import { OutlookWidget } from "./OutlookWidget";
 import { TriageBlock, type TriageItem } from "./blocks/triage";
 import { buildSpendingPace, paceCategories } from "../../lib/spendingPace";
 import { useTriage } from "../../hooks/useTriage";
@@ -238,6 +239,12 @@ export function DashboardView() {
         (p) => p.date < todayIso && plannedDeletions[p.id] === undefined
       ).length,
     [zenPlannedAll, plannedDeletions, todayIso]
+  );
+  // Для «Прогноза остатка»: все планы до конца месяца, с переводами — перевод
+  // на вклад уменьшает повседневные деньги. Снятые вручную не считаются.
+  const outlookPlanned = useMemo(
+    () => zenPlannedAll?.filter((p) => plannedDeletions[p.id] === undefined) ?? null,
+    [zenPlannedAll, plannedDeletions]
   );
   const zenPlannedOut = useMemo(
     () =>
@@ -731,6 +738,17 @@ export function DashboardView() {
           />
         );
 
+      case "outlook":
+        return (
+          <OutlookWidget
+            planned={outlookPlanned}
+            nowYm={m.nowYm}
+            monthStartDay={m.monthStartDay}
+            today={todayIso}
+            base={m.base}
+          />
+        );
+
       case "watchTag":
         return (
           <TagWatchWidget
@@ -992,6 +1010,7 @@ export function DashboardView() {
               onDrop={(sourceKey) => drag.drop(sourceKey, p.key)}
               onShift={(dir) => void shift(p.key, dir)}
               // Шаг есть, пока рядом сосед или пустая клетка своего ряда.
+              firstColumn={(colOf.get(cell) ?? 0) === 0}
               canBack={canShiftWidget(layout, p.key, -1)}
               canForward={canShiftWidget(layout, p.key, 1)}
             >

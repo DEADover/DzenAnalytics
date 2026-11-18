@@ -7,6 +7,7 @@ import { heatStep, robustCeiling, monthEnd } from "../../../lib/dashboardModel";
 import { periodRange, spanDays, localToday } from "../../../lib/period";
 import type { DashboardModel } from "../../../hooks/useDashboardModel";
 import { SectionEmpty } from "../../SectionEmpty";
+import { Tooltip } from "../../Tooltip";
 
 
 /**
@@ -140,20 +141,38 @@ export function ActivityHeat({
           // Первый день периода внутри сетки отмечен кантом: видно, откуда
           // месяц считается, когда он начинается не 1-го числа.
           const startsHere = iso === period.from;
-          return (
+          const ops = m.dayMap.get(iso)?.count ?? 0;
+          // Подсказка — у дней с тратами: только они нажимаются, а выключенная
+          // кнопка событий мыши не шлёт. В ней значение, а не пояснение, поэтому
+          // она открывается и при выключенных «Всплывающих подсказках».
+          const tip =
+            !outside && !future && value > 0 ? (
+              <div className="space-y-0.5">
+                <div className="font-medium">{dayTitle(iso)}</div>
+                <div className="text-expense tabular-nums">Расходы: {formatMoney(value, m.base)}</div>
+                <div className="text-muted">
+                  {ops} {pluralRu(ops, ["операция", "операции", "операций"])}
+                </div>
+                {startsHere && <div className="text-muted">Начало отчётного периода</div>}
+              </div>
+            ) : null;
+          const cell = (
             <button
               key={c.key}
               type="button"
               disabled={outside || future || value <= 0}
               onClick={() => onDay?.(iso)}
+              data-activity-day={iso}
               title={
-                outside
-                  ? m.monthStartDay === 1
-                    ? undefined
-                    : "Другой отчётный период"
-                  : startsHere
-                    ? "Начало отчётного периода"
-                    : undefined
+                tip
+                  ? undefined
+                  : outside
+                    ? m.monthStartDay === 1
+                      ? undefined
+                      : "Другой отчётный период"
+                    : startsHere
+                      ? "Начало отчётного периода"
+                      : undefined
               }
               className={`aspect-square rounded-md flex items-center justify-center text-[13px] tabular-nums
                           transition-shadow duration-150
@@ -176,6 +195,13 @@ export function ActivityHeat({
             >
               {c.day}
             </button>
+          );
+          return tip ? (
+            <Tooltip key={c.key} data content={tip}>
+              {cell}
+            </Tooltip>
+          ) : (
+            cell
           );
         })}
       </div>

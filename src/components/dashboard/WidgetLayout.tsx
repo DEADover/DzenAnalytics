@@ -49,7 +49,22 @@ import { useDisplayStore } from "../../store/useDisplayStore";
 /**
  * Поддон виджета — то, во что вставлено его содержимое.
  */
-export function WidgetPlate({ sunken, children }: { sunken?: boolean; children: ReactNode }) {
+export function WidgetPlate({
+  sunken,
+  bleed = false,
+  children,
+}: {
+  sunken?: boolean;
+  /**
+   * Утопленная коробка выходит влево за сетку на своё поле, и её содержимое
+   * встаёт ровно по сетке страницы — под логотипом и над первой плиткой
+   * следующего ряда. Край коробки едва заметен, и её внутреннее поле читалось
+   * как случайный сдвиг заголовка месяца и кнопок вправо. Только в первой
+   * колонке: левее неё — поле страницы, а не соседний виджет.
+   */
+  bleed?: boolean;
+  children: ReactNode;
+}) {
   if (sunken) {
     // Одна коробка вместо поддона: кант тут нечем нарисовать, обойма
     // залита тем же серым, что и подложка.
@@ -58,7 +73,16 @@ export function WidgetPlate({ sunken, children }: { sunken?: boolean; children: 
     // содержимое таких виджетов заканчивается таблицей итогов, у последней
     // строки нет нижней черты, и текст обрывается прямо у канта. Ровные
     // поля тут читаются как прижатый низ; неровные — как ровные.
-    return <div className="card-sunken h-full flex flex-col px-5 pt-5 pb-9">{children}</div>;
+    return (
+      <div
+        className={clsx(
+          "card-sunken h-full flex flex-col px-5 pt-5 pb-9",
+          bleed && "lg:-ml-5 lg:w-[calc(100%+1.25rem)]"
+        )}
+      >
+        {children}
+      </div>
+    );
   }
   return (
     <div className="tray h-full flex flex-col">
@@ -83,6 +107,7 @@ export function WidgetShell({
   onShift,
   canBack,
   canForward,
+  firstColumn = false,
   children,
 }: {
   placement: WidgetPlacement;
@@ -107,6 +132,8 @@ export function WidgetShell({
   /** Есть ли куда шагнуть: на краю раскладки стрелки гаснут. */
   canBack: boolean;
   canForward: boolean;
+  /** Виджет стоит в первой колонке ряда — левее него поле страницы. */
+  firstColumn?: boolean;
   children: ReactNode;
 }) {
   const setHidden = useDashboardLayoutStore((s) => s.setHidden);
@@ -288,7 +315,7 @@ export function WidgetShell({
           editing && !live && "opacity-50 pointer-events-none select-none"
         )}
       >
-        {bare ? children : <WidgetPlate sunken={sunken}>{children}</WidgetPlate>}
+        {bare ? children : <WidgetPlate sunken={sunken} bleed={firstColumn}>{children}</WidgetPlate>}
       </div>
 
       {editing && !inlineBar && (

@@ -328,3 +328,68 @@ test("«Теги»: ссылка со второй категорией пере
     )
     .toBe("categories");
 });
+
+test("«Прогноз остатка»: остаток к концу месяца, график и три числа", async ({ page }) => {
+  await connectZen(page, "/");
+  await place(page, "outlook");
+  const outlook = tile(page, "outlook");
+  await expect(outlook).toBeVisible();
+  await expect(outlook).toContainText("Останется к 31 октября");
+  await expect(outlook.getByTestId("outlook-end")).toContainText("₽");
+  // Сплошная линия факта и пунктир прогноза.
+  await expect(outlook.locator(".recharts-line")).toHaveCount(2);
+  const stats = outlook.getByTestId("outlook-stats");
+  await expect(stats).toContainText("Минимум");
+  await expect(stats).toContainText("Спишется");
+  await expect(stats).toContainText("Придёт");
+  await expect(outlook.getByRole("link", { name: "Cash-flow" })).toHaveAttribute("href", "/cashflow");
+});
+
+test("«Активность»: подсказка дня с суммой — и при выключенных подсказках", async ({ page }) => {
+  await connectZen(page, "/");
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useDisplayStore } = await w.__store("useDisplayStore");
+    await useDisplayStore.getState().setHints(false);
+  });
+  // 10 октября — аренда 35 000 ₽.
+  const day = tile(page, "activity").locator('[data-activity-day="2026-10-10"]');
+  await day.scrollIntoViewIfNeeded();
+  await day.hover();
+  const tip = page.getByRole("tooltip");
+  await expect(tip).toContainText(/Расходы:.*35/);
+  await expect(tip).toContainText(/операци/);
+});
+
+test("«Итоги месяца» в рамке: заголовок и кнопки стоят по сетке страницы", async ({ page }) => {
+  await connectZen(page, "/");
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
+    await useDashboardLayoutStore.getState().setView("month", "framed");
+  });
+  const left = async (selector: string) =>
+    Math.round((await page.locator(selector).first().boundingBox())!.x);
+  // Сетка страницы — левый край первой плитки следующего ряда.
+  const grid = await left('[data-tour="widget-links"]');
+  const hero = '[data-tour="widget-month"]';
+  await expect.poll(() => left(`${hero} h1, ${hero} h2`)).toBe(grid);
+  expect(await left(`${hero} a[href^="/transactions"]`)).toBe(grid);
+  expect(await left(`${hero} p`)).toBe(grid);
+  // Рамка выходит влево за сетку, но не за край окна.
+  const frame = await left(`${hero} .card-sunken`);
+  expect(frame).toBeLessThan(grid);
+  expect(frame).toBeGreaterThanOrEqual(0);
+
+  // Во второй колонке рамка за сетку не выходит: левее неё — соседний виджет.
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
+    await (useDashboardLayoutStore.getState() as unknown as {
+      shift: (key: string, dir: number) => Promise<void>;
+    }).shift("month", 1);
+  });
+  await expect
+    .poll(async () => (await left(`${hero} .card-sunken`)) - (await left(hero)))
+    .toBe(0);
+});
