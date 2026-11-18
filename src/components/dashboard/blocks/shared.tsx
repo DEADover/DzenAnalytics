@@ -59,6 +59,7 @@ export function BlockTitle({
   to,
   linkLabel = "Все",
   right,
+  rightSmall = false,
 }: {
   title: ReactNode;
   /**
@@ -70,6 +71,12 @@ export function BlockTitle({
   to?: string;
   linkLabel?: string;
   right?: ReactNode;
+  /**
+   * Справа стоит одна кнопка-значок, а не переключатель: места ей почти не
+   * нужно, и прятать из-за неё подпись ссылки или уводить её второй строкой
+   * незачем.
+   */
+  rightSmall?: boolean;
 }) {
   // Узкая шапка — на телефоне или в колонке в треть ширины — не вмещала
   // заголовок, подпись ссылки и переключатели: «К…» вместо «Капитал»,
@@ -87,7 +94,13 @@ export function BlockTitle({
         {info && <InfoPopover label="Что это за график">{info}</InfoPopover>}
       </div>
       {right && (
-        <div className="block-title-right max-sm:order-last max-sm:basis-full max-sm:min-w-0 sm:contents">
+        <div
+          className={
+            rightSmall
+              ? "block-title-right block-title-right-small contents"
+              : "block-title-right max-sm:order-last max-sm:basis-full max-sm:min-w-0 sm:contents"
+          }
+        >
           {right}
         </div>
       )}

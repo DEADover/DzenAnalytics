@@ -116,6 +116,11 @@ export function WatchWidget({
             </button>
           ) : undefined
         }
+        rightSmall
+        // Раздел открывается той же стороной, что считает виджет: у доходной
+        // категории — доходы.
+        to={`/categories?kind=${kind}`}
+        linkLabel="Категории"
       />
       {showPicker && (
         <div className="mb-3 flex flex-col gap-2" data-testid="watch-picker">

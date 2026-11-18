@@ -2215,9 +2215,11 @@ tr.row-mark-fill > td {
    нужно место, поэтому подпись ссылки прячется раньше, а когда не влезает и
    так — переключатель уходит второй строкой, как на телефоне. Иначе резался
    заголовок: «Балансы счет…» на 1280 px. Пороги — по замеру шапки: заголовок
-   160 + переключатель 129 + ссылка 83 (32 без подписи) + промежутки. */
+   160 + переключатель 129 + ссылка 83 (32 без подписи) + промежутки.
+   Одной кнопке-значку (`-small`: карандаш у виджетов наблюдения) столько места
+   не нужно — рядом с ней подпись ссылки остаётся, как у шапки без контрола. */
 @container (max-width: 25.5rem) {
-  .block-title .block-title-right ~ .pill-link .block-title-link-label {
+  .block-title .block-title-right:not(.block-title-right-small) ~ .pill-link .block-title-link-label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -2225,12 +2227,12 @@ tr.row-mark-fill > td {
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .block-title .block-title-right ~ .pill-link {
+  .block-title .block-title-right:not(.block-title-right-small) ~ .pill-link {
     padding-inline: 0.5rem;
   }
 }
 @container (max-width: 22.5rem) {
-  .block-title .block-title-right {
+  .block-title .block-title-right:not(.block-title-right-small) {
     display: block;
     order: 9;
     flex-basis: 100%;

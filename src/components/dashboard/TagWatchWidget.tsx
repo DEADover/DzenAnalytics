@@ -119,6 +119,9 @@ export function TagWatchWidget({
             </button>
           ) : undefined
         }
+        rightSmall
+        to="/tags"
+        linkLabel="Теги"
       />
       {showPicker && (
         <TagPicker

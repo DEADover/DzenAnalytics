@@ -246,6 +246,10 @@ test("«Категория под наблюдением»: доходная к�
   await expect(group).toContainText("Транспорт");
   await expect(group.getByTestId("watch-total")).toContainText(/455/);
 
+  // Кнопка в шапке ведёт в «Категории» той же стороной, что считает виджет.
+  await expect(income.getByRole("link", { name: "Категории" })).toHaveAttribute("href", "/categories?kind=income");
+  await expect(group.getByRole("link", { name: "Категории" })).toHaveAttribute("href", "/categories?kind=expense");
+
   // Выбор пережил перезагрузку — вместе с тем, что категория доходная.
   await page.reload();
   await expect(income.getByTestId("watch-widget")).toHaveAttribute("data-watch-kind", "income");
@@ -283,6 +287,8 @@ test("«Тег под наблюдением»: расходы и доходы �
   await expect(body.locator('[data-watch-head="expense"]')).toContainText(/35\s000/);
   await expect(body.locator('[data-watch-head="income"]')).toContainText(/150\s000/);
   await expect(widget).toContainText("квартира");
+
+  await expect(widget.getByRole("link", { name: "Теги" })).toHaveAttribute("href", "/tags");
 
   // Клик по стороне открывает её операции за месяц.
   await body.locator('[data-watch-head="income"]').click();
