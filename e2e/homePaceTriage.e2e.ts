@@ -360,36 +360,3 @@ test("«Активность»: подсказка дня с суммой — и
   await expect(tip).toContainText(/Расходы:.*35/);
   await expect(tip).toContainText(/операци/);
 });
-
-test("«Итоги месяца» в рамке: заголовок и кнопки стоят по сетке страницы", async ({ page }) => {
-  await connectZen(page, "/");
-  await page.evaluate(async () => {
-    const w = window as unknown as Win;
-    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
-    await useDashboardLayoutStore.getState().setView("month", "framed");
-  });
-  const left = async (selector: string) =>
-    Math.round((await page.locator(selector).first().boundingBox())!.x);
-  // Сетка страницы — левый край первой плитки следующего ряда.
-  const grid = await left('[data-tour="widget-links"]');
-  const hero = '[data-tour="widget-month"]';
-  await expect.poll(() => left(`${hero} h1, ${hero} h2`)).toBe(grid);
-  expect(await left(`${hero} a[href^="/transactions"]`)).toBe(grid);
-  expect(await left(`${hero} p`)).toBe(grid);
-  // Рамка выходит влево за сетку, но не за край окна.
-  const frame = await left(`${hero} .card-sunken`);
-  expect(frame).toBeLessThan(grid);
-  expect(frame).toBeGreaterThanOrEqual(0);
-
-  // Во второй колонке рамка за сетку не выходит: левее неё — соседний виджет.
-  await page.evaluate(async () => {
-    const w = window as unknown as Win;
-    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
-    await (useDashboardLayoutStore.getState() as unknown as {
-      shift: (key: string, dir: number) => Promise<void>;
-    }).shift("month", 1);
-  });
-  await expect
-    .poll(async () => (await left(`${hero} .card-sunken`)) - (await left(hero)))
-    .toBe(0);
-});

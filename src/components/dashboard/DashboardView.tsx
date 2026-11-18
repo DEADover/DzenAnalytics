@@ -1010,7 +1010,6 @@ export function DashboardView() {
               onDrop={(sourceKey) => drag.drop(sourceKey, p.key)}
               onShift={(dir) => void shift(p.key, dir)}
               // Шаг есть, пока рядом сосед или пустая клетка своего ряда.
-              firstColumn={(colOf.get(cell) ?? 0) === 0}
               canBack={canShiftWidget(layout, p.key, -1)}
               canForward={canShiftWidget(layout, p.key, 1)}
             >
