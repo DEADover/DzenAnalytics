@@ -14,7 +14,7 @@
  * раскладка не пляшет под курсором и на диск уходит одна запись, а не тридцать.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import clsx from "clsx";
 import {
@@ -452,6 +452,43 @@ function WidgetPicker({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Список стоит по центру клетки — и у низкой полосы в конце раскладки
+  // половина его уходила под нижний край окна: первые пункты видны, остальных
+  // не достать, пока не прокрутишь страницу. Меряем, где он оказался, и
+  // сдвигаем ровно настолько, чтобы он целиком встал между шапкой и низом окна.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [nudge, setNudge] = useState(0);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const fit = () => {
+      const box = boxRef.current;
+      if (!box) return;
+      const rect = box.getBoundingClientRect();
+      // Где список стоял бы без поправки: текущую вычитаем.
+      const applied = Number(box.dataset.nudge ?? 0);
+      const top = rect.top - applied;
+      const bottom = rect.bottom - applied;
+      const margin = 12;
+      const header = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+      const lo = Math.max(header, 0) + margin;
+      const hi = window.innerHeight - margin;
+      let next = 0;
+      if (bottom > hi) next = hi - bottom;
+      // Верх важнее низа: заголовок списка и крестик должны быть видны всегда.
+      if (top + next < lo) next = lo - top;
+      setNudge(Math.round(next));
+    };
+    fit();
+    // Страницу могут прокрутить и при открытом списке — он едет вместе с
+    // клеткой, и поправку надо пересчитать.
+    window.addEventListener("scroll", fit, { passive: true });
+    window.addEventListener("resize", fit);
+    return () => {
+      window.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", fit);
+    };
+  }, [open]);
+
   if (!open) {
     return (
       <button
@@ -536,6 +573,9 @@ function WidgetPicker({
           `transform` в кадрах, и на одном элементе она перебивала центрирующий
           `-translate-y-1/2`: список уезжал в нижнюю половину клетки. */}
       <div
+        ref={boxRef}
+        data-nudge={nudge}
+        style={nudge ? { marginTop: nudge } : undefined}
         className={clsx(
           // По центру клетки и по её ширине, но НЕ по её высоте: клетка бывает
           // и в полэкрана, и в одну кнопку (полоса «поставить сюда» в конце
@@ -550,7 +590,8 @@ function WidgetPicker({
         role="dialog"
         aria-label="Поставить виджет"
         className={clsx(
-          "animate-picker-in max-h-[min(26rem,70vh)] overflow-y-auto scroll-soft",
+          // Выше окна список не бывает: остаток листается внутри него.
+          "animate-picker-in max-h-[min(26rem,calc(100vh-7rem))] overflow-y-auto scroll-soft",
           "rounded-[16px] border border-border bg-panel shadow-xl p-3"
         )}
       >

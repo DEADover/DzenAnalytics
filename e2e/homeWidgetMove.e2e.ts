@@ -158,3 +158,27 @@ test("виджет под пустой клеткой поднимается в 
   await expect.poll(() => rows(page)).toEqual(["month | accounts | categories"]);
   expect(await colOf("categories")).toBe(col3);
 });
+
+test("список виджетов из полосы внизу страницы целиком помещается в окно", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await connectZen(page, "/");
+  await edit(page);
+  // Полоса «поставить сюда» в конце раскладки — у самого низа страницы.
+  const strip = page.locator("[data-widget-gap]").last();
+  await strip.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await strip.getByRole("button", { name: "Поставить сюда виджет" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Поставить виджет" });
+  await expect(dialog).toBeVisible();
+  // Целиком в окне: и заголовок с крестиком, и нижний край — без прокрутки страницы.
+  await expect(dialog).toBeInViewport({ ratio: 1 });
+  const header = (await page.locator("header").first().boundingBox())!;
+  expect((await dialog.boundingBox())!.y).toBeGreaterThanOrEqual(header.y + header.height);
+  // Последний пункт достаётся прокруткой внутри списка, а не страницы.
+  const last = dialog.getByRole("button", { name: /Новый тег под наблюдением/ });
+  await last.scrollIntoViewIfNeeded();
+  await expect(last).toBeInViewport({ ratio: 1 });
+  await last.click();
+  await expect(page.locator('[data-widget-key="watchTag"]')).toBeVisible();
+});
