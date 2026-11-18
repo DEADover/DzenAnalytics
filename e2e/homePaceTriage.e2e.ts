@@ -170,3 +170,43 @@ test("«Категория под наблюдением»: заводится �
   await first.getByTestId("watch-bars").getByRole("button").first().click();
   await expect(page.locator("[data-exit-panel]")).toContainText("Дом · Май");
 });
+
+test("«Цели»: видны ровно две цели, третья — только после прокрутки", async ({ page }) => {
+  await connectZen(page, "/");
+  await place(page, "goals");
+  await page.evaluate(async () => {
+    const w = window as unknown as Win;
+    const { useGoalsStore } = await w.__store("useGoalsStore");
+    for (const [name, current] of [["Первая", 90_000], ["Вторая", 50_000], ["Третья", 10_000]] as const) {
+      await useGoalsStore.getState().add({
+        name,
+        target: 100_000,
+        current,
+        deadline: null,
+        monthlyContribution: 5_000,
+      });
+    }
+  });
+  const goals = tile(page, "goals");
+  const list = goals.locator("[data-goal-list]");
+  await expect(list.locator("[data-goal]")).toHaveCount(3);
+
+  /** Где карточка относительно окна списка: целиком внутри, целиком снаружи или обрезана. */
+  const where = (name: string) =>
+    list.evaluate((el, n) => {
+      const box = el.getBoundingClientRect();
+      const card = el.querySelector(`[data-goal="${n}"]`)!.getBoundingClientRect();
+      if (card.top >= box.top - 1 && card.bottom <= box.bottom + 1) return "inside";
+      if (card.top >= box.bottom - 1 || card.bottom <= box.top + 1) return "outside";
+      return "cut";
+    }, name);
+
+  expect(await where("Первая")).toBe("inside");
+  expect(await where("Вторая")).toBe("inside");
+  expect(await where("Третья")).toBe("outside");
+
+  // Прокрутка открывает третью целиком и останавливается на границе карточки.
+  await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  await expect.poll(() => where("Третья")).toBe("inside");
+  expect(await where("Первая")).toBe("outside");
+});

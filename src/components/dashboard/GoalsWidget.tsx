@@ -110,7 +110,7 @@ export function GoalsWidget({ base }: { base: string }) {
             />
           </div>
 
-          <div className="scroll-soft flex flex-col gap-2.5 flex-1 min-h-0 -mx-2 px-2">
+          <div className="goal-list scroll-soft flex flex-col gap-2.5 flex-1 min-h-0 -mx-2 px-2 snap-y snap-mandatory" data-goal-list>
             {rows.map(({ g, m }) => {
               const late = !m.done && g.deadline !== null && !m.onTrack;
               const inTime = !m.done && g.deadline !== null && m.onTrack;
@@ -138,10 +138,11 @@ export function GoalsWidget({ base }: { base: string }) {
                   type="button"
                   data-goal={g.name}
                   onClick={() => smoothNavigate("/goals")}
-                  // Карточки делят высоту виджета поровну: две цели и свод
-                  // занимают его целиком, без пустого подвала. Больше целей —
-                  // карточки держат свою высоту, список листается.
-                  className="w-full flex-[1_0_auto] max-h-[170px] text-left group flex flex-col justify-center gap-2 rounded-[14px] border border-border px-3.5 py-2.5 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  // Карточка — ровно половина высоты списка: в виджете видны
+                  // две цели целиком, третья не выглядывает обрезком. Остальные
+                  // открывает прокрутка, и останавливается она на границе
+                  // карточки. Единственная цель занимает свою половину сверху.
+                  className="goal-card w-full snap-start text-left group flex flex-col justify-center gap-2 rounded-[14px] border border-border px-3.5 py-2.5 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
                   <span className="flex items-center gap-3">
                     <GoalRing ratio={m.ratio} tone={tone} />
