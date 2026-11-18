@@ -182,3 +182,42 @@ test("список виджетов из полосы внизу страниц�
   await last.click();
   await expect(page.locator('[data-widget-key="watchTag"]')).toBeVisible();
 });
+
+test("ручки виджета наблюдения стоят по центру, как у остальных", async ({ page }) => {
+  await connectZen(page, "/");
+  await page.evaluate(async () => {
+    const w = window as unknown as {
+      __store: (n: string) => Promise<Record<string, { getState: () => Record<string, unknown> }>>;
+    };
+    const { useDashboardLayoutStore } = await w.__store("useDashboardLayoutStore");
+    const s = useDashboardLayoutStore.getState() as unknown as {
+      add: (k: string) => Promise<void>;
+      setCategory: (key: string, category: string) => Promise<void>;
+    };
+    await s.add("watch");
+    await s.add("watch");
+    await s.setCategory("watch", "Дом");
+  });
+  await edit(page);
+
+  /** Насколько центр дорожки ручек отстоит от центра плитки, в долях её высоты. */
+  const offCentre = async (key: string) => {
+    const box = (await tile(page, key).boundingBox())!;
+    const bar = (await tile(page, key).getByRole("button", { name: "Сдвинуть назад" }).boundingBox())!;
+    return Math.abs(bar.y + bar.height / 2 - (box.y + box.height / 2)) / box.height;
+  };
+  expect(await offCentre("month")).toBeLessThan(0.05);
+  expect(await offCentre("watch")).toBeLessThan(0.05);
+  expect(await offCentre("watch-2")).toBeLessThan(0.05);
+
+  // С выбранной категорией виджет приглушён, как остальные; без выбора — жив,
+  // и категорию можно назвать, не выходя из настройки.
+  await expect(tile(page, "watch").getByRole("button", { name: "Сменить категорию" })).toHaveCSS(
+    "pointer-events",
+    "none"
+  );
+  await tile(page, "watch-2").getByTestId("watch-picker").getByText("Выберите категорию").click();
+  await page.getByRole("option", { name: "Продукты", exact: true }).click();
+  await expect(tile(page, "watch-2")).toContainText("Продукты");
+  expect(await offCentre("watch-2")).toBeLessThan(0.05);
+});

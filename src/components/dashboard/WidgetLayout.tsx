@@ -31,6 +31,7 @@ import {
 import {
   WIDGETS,
   isDefaultLayout,
+  isLiveWidget,
   widgetMeta,
   widgetView,
   type WidgetMeta,
@@ -212,7 +213,12 @@ export function WidgetShell({
   // и глушить нажатия у него нечего — там и настраивают. Поэтому дорожка встаёт
   // НАД содержимым, а не поверх: посреди собственных кнопок она закрывала бы
   // ровно то, что человек пришёл менять.
-  const inlineBar = editing && meta.live;
+  const live = isLiveWidget(placement);
+  // Над содержимым дорожка встаёт только у полоски: та ростом в одну кнопку, и
+  // по центру дорожка закрыла бы её целиком. У виджета обычной высоты она
+  // стоит по центру, как у всех, — даже пока он жив и ждёт выбора категории:
+  // поле выбора у него наверху, и дорожка его не закрывает.
+  const inlineBar = editing && live && meta.autoHeight === true;
 
   /**
    * Варианты оформления — своей дорожкой в углу плитки, а не в общей.
@@ -279,13 +285,13 @@ export function WidgetShell({
       <div
         className={clsx(
           inlineBar ? "flex-1 min-h-0" : "h-full",
-          editing && !meta.live && "opacity-50 pointer-events-none select-none"
+          editing && !live && "opacity-50 pointer-events-none select-none"
         )}
       >
         {bare ? children : <WidgetPlate sunken={sunken}>{children}</WidgetPlate>}
       </div>
 
-      {editing && !meta.live && (
+      {editing && !inlineBar && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-2 pointer-events-none">
           {bar}
         </div>

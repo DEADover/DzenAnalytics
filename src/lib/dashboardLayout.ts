@@ -401,6 +401,22 @@ export function widgetView(meta: WidgetMeta, id?: string): WidgetView | undefine
   return meta.views.find((v) => v.id === id) ?? meta.views[0];
 }
 
+/**
+ * Остаётся ли виджет живым в режиме настройки — ловит нажатия и не приглушён.
+ *
+ * Полоска с кнопками жива всегда: её и настраивают изнутри. Виджеты наблюдения
+ * живы, только пока в них НЕ ВЫБРАНО, за чем следить: без выбора виджет пуст, и
+ * выбрать нужно тут же, не выходя из настройки. С выбранной категорией или
+ * тегом настраивать в нём нечего — он приглушается, как остальные, и ручки
+ * встают по его центру.
+ */
+export function isLiveWidget(p: WidgetPlacement): boolean {
+  if (!widgetMeta(p.kind).live) return false;
+  if (p.kind === "watch") return !p.category;
+  if (p.kind === "watchTag") return !p.tag;
+  return true;
+}
+
 /** Рисует ли виджет себя сам — зависит от варианта, а не только от вида. */
 export function isBareWidget(meta: WidgetMeta, id?: string): boolean {
   return widgetView(meta, id)?.bare ?? meta.bare ?? false;
