@@ -98,8 +98,20 @@ export interface CapitalSummary {
   perMonth: number | null;
 }
 
-export function capitalSummary(points: CapitalPoint[]): CapitalSummary | null {
+/**
+ * `current` — остаток «сейчас», если он известен точнее последней точки: сумма
+ * остатков счетов до копейки. Последняя точка ряда — то же число, сложенное
+ * через всю историю операций, и в копейках оно могло разойтись с разбивкой
+ * под ним и с «Балансами счетов».
+ */
+export function capitalSummary(
+  points: CapitalPoint[],
+  current?: number | null
+): CapitalSummary | null {
   if (points.length === 0) return null;
+  if (current != null && Number.isFinite(current)) {
+    points = [...points.slice(0, -1), { ...points[points.length - 1], net: current }];
+  }
   const first = points[0];
   const last = points[points.length - 1];
   let max = first;

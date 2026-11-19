@@ -91,3 +91,40 @@ test("шапка с переключателем: заголовок не реж
   }
   expect(problems, problems.join("\n")).toEqual([]);
 });
+
+test("итог «Балансов счетов» — ровно сумма строк, с копейками и архивным счётом", async ({ page, zen }) => {
+  // Валютный остаток с четырьмя знаками (606,4932 $ по 90 = 54 583,788 ₽) и
+  // архивный счёт с деньгами: Дзен-мани его остаток в итогах считает. Раньше
+  // итог брался из истории остатков, строка архивного счёта пряталась, и
+  // копейки итога со строками не сходились.
+  zen.patchFull = (diff) => ({
+    ...diff,
+    account: [
+      ...diff.account.map((a) => (a.id === "acc-usd" ? { ...a, balance: 606.4932 } : a)),
+      { ...diff.account[0], id: "acc-old", title: "Старый кошелёк", archive: true, balance: 838.73 },
+    ],
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await connectZen(page, "/");
+  await page.evaluate(async () => {
+    type S = { getState: () => { setFractionDigits: (n: number) => Promise<void> } };
+    const store = (window as unknown as { __store: (n: string) => Promise<Record<string, S>> }).__store;
+    const { useDisplayStore } = await store("useDisplayStore");
+    await useDisplayStore.getState().setFractionDigits(2);
+  });
+  const w = widget(page);
+  await expect(w.list.getByText("Старый кошелёк")).toBeVisible();
+  await expect(w.list.getByText(/· Архив/)).toBeVisible();
+
+  const kopecks = (s: string) =>
+    Math.round(Number(s.replace(/[⁠⁣\s₽]/g, "").replace("−", "-").replace(",", ".")) * 100);
+  const rows = await w.list
+    .locator("button .text-right > span:first-child")
+    .allTextContents();
+  const total = kopecks((await w.total.textContent()) ?? "");
+  expect(rows.length).toBeGreaterThan(3);
+  expect(total).toBe(rows.reduce((s, r) => s + kopecks(r), 0));
+  // Валютная строка действительно с копейками — иначе проверка выше ничего
+  // бы не доказывала.
+  expect(rows.map(kopecks).some((k) => k % 100 !== 0 && k !== 83_873)).toBe(true);
+});

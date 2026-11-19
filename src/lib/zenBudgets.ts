@@ -18,6 +18,7 @@
 // «Работа» with a planned salary) reads far too low (or even negative).
 
 import { periodKey } from "./period";
+import { roundMoney } from "./money";
 import type {
   ZenBudget,
   ZenInstrument,
@@ -170,9 +171,10 @@ export function plannedOpsByTagMonth(
     if (dateIso && histRate && codeOf) {
       const code = codeOf(instr);
       const r = code ? histRate(dateIso, code) : null;
-      if (r != null) return amt * r;
+      if (r != null) return roundMoney(amt * r);
     }
-    return (amt * (rateById.get(instr) ?? baseRate)) / baseRate;
+    const rate = rateById.get(instr) ?? baseRate;
+    return rate === baseRate ? amt : roundMoney((amt * rate) / baseRate);
   };
   for (const m of markers) {
     // Связанный с фактической операцией маркер считается исполненным, каким бы

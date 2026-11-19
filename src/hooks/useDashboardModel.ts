@@ -58,6 +58,7 @@ import {
 import type { Currency, Transaction } from "../types";
 import { accountKeyOf } from "../lib/accountKey";
 import { useAccountDirectory } from "./useAccountDirectory";
+import { roundMoney, sumMoney } from "../lib/money";
 
 export interface DashboardAccount {
   /** Ключ счёта (`lib/accountKey`) — по нему открываются операции. */
@@ -304,14 +305,19 @@ export function useDashboardModel(opts: DashboardModelOptions = {}): DashboardMo
   const dir = useAccountDirectory();
   const accountsAll = useMemo<DashboardAccount[]>(() => {
     if (liveAccounts && liveAccounts.length > 0) {
+      // Архивные остаются, пока на них есть деньги: Дзен-мани считает их
+      // остаток в итогах (и в накоплениях, и в долгах), и наш итог берёт их из
+      // истории остатков. Спрячь мы строку — сумма строк разошлась бы с итогом
+      // ровно на этот остаток. Пустые архивные отсекает проверка остатка.
       return liveAccounts
-        .filter((a) => !a.archive)
         .filter((a) => Math.abs(a.balance) > 0.005)
         .map((a) => ({
           key: accountKeyOf(a),
           title: dir.label(accountKeyOf(a)),
           balanceBase:
-            a.currency === base ? a.balance : a.balance * (rates.rates[a.currency] || 1),
+            a.currency === base
+              ? a.balance
+              : roundMoney(a.balance * (rates.rates[a.currency] || 1)),
           nativeBalance: a.balance,
           nativeCurrency: a.currency,
           type: a.type,
@@ -319,7 +325,13 @@ export function useDashboardModel(opts: DashboardModelOptions = {}): DashboardMo
           archive: a.archive,
           offBalance: !a.inBalance,
         }))
-        .sort((a, b) => Math.abs(b.balanceBase) - Math.abs(a.balanceBase));
+        // Архивные — в конце, как на «Счетах»: закрытый счёт не должен
+        // оказаться первым только потому, что на нём что-то осталось.
+        .sort(
+          (a, b) =>
+            Number(a.archive) - Number(b.archive) ||
+            Math.abs(b.balanceBase) - Math.abs(a.balanceBase)
+        );
     }
     return balancesByAccount(transactions)
       .filter((a) => Math.abs(a.balance) > 0.005)
@@ -346,9 +358,17 @@ export function useDashboardModel(opts: DashboardModelOptions = {}): DashboardMo
     return includeOffBalance ? accountsAll : accountsAll.filter((a) => !a.offBalance);
   }, [accountsAll, includeOffBalance, accountKeys]);
 
-  const netWorth = netWorthSeries.length
-    ? netWorthSeries[netWorthSeries.length - 1].net
-    : accounts.reduce((s, a) => s + a.balanceBase, 0);
+  // С Дзен-мани «на счетах сейчас» — ровно сумма строк «Балансов счетов»:
+  // те же остатки, по тому же курсу, до копейки. Последняя точка истории
+  // считает то же самое, но через тысячи операций, и могла разойтись со
+  // строками на копейки. Без Дзен-мани (CSV) остатки известны только из
+  // истории с поправками — её и берём.
+  const netWorth =
+    liveAccounts && liveAccounts.length > 0
+      ? sumMoney(accounts.map((a) => a.balanceBase))
+      : netWorthSeries.length
+        ? netWorthSeries[netWorthSeries.length - 1].net
+        : sumMoney(accounts.map((a) => a.balanceBase));
 
   const { liquid, savings } = useMemo(() => {
     let liq = 0;

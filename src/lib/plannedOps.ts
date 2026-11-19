@@ -2,6 +2,7 @@ import { accountKeyOf } from "./accountKey";
 import type { ZenCache } from "./zenmoneyCache";
 import type { CurrencyRates, Transaction } from "../types";
 import { isDebtAccountType } from "./accountType";
+import { roundMoney } from "./money";
 
 /**
  * Planned / forecast operations (issue #47).
@@ -94,7 +95,7 @@ export function plannedOps(
 
   const toBase = (amount: number, instrumentId: number) => {
     const code = instrumentById.get(instrumentId)?.shortTitle || rates.base;
-    return code === rates.base ? amount : amount * (rates.rates[code] || 1);
+    return code === rates.base ? amount : roundMoney(amount * (rates.rates[code] || 1));
   };
   /** «Категория / Подкатегория» from the marker's first tag. NB: unlike the
    *  transaction mapper we do NOT relabel transfers as «Перевод» — a planned
@@ -142,7 +143,7 @@ export function plannedOps(
       if (done && opts.histRate) {
         const c = code(instr);
         const r = c === rates.base ? 1 : opts.histRate(m.date, c);
-        if (r != null) return amt * r;
+        if (r != null) return c === rates.base ? amt : roundMoney(amt * r);
       }
       return toBase(amt, instr);
     };

@@ -8,6 +8,7 @@ import { CategoryDot } from "../../CategoryDot";
 import { AccountLogo } from "../../AccountLogo";
 import { accountKindLabel } from "../../../lib/accountType";
 import { formatMoney, formatPct, formatDate, monthLabel } from "../../../lib/format";
+import { sumMoney } from "../../../lib/money";
 import type { DashboardAccount, DashboardModel } from "../../../hooks/useDashboardModel";
 import type { PlannedOp } from "../../../lib/plannedOps";
 import { SectionEmpty } from "../../SectionEmpty";
@@ -43,18 +44,16 @@ export function AccountsBlock({
   onAccount?: (key: string, label: string) => void;
 }) {
   const show = offBalance ?? m.includeOffBalance;
-  const offSum = m.accountsAll.reduce((s, a) => (a.offBalance ? s + a.balanceBase : s), 0);
   const hasOff = !picked && m.accountsAll.some((a) => a.offBalance);
   const accounts = picked
     ? m.accounts
     : show
       ? m.accountsAll
       : m.accountsAll.filter((a) => !a.offBalance);
-  // Совокупный баланс модели посчитан по настройке; виджет её поправляет на
-  // сумму счетов вне баланса, если его выбор другой.
-  const total = picked
-    ? m.netWorth
-    : m.netWorth + (show === m.includeOffBalance ? 0 : show ? offSum : -offSum);
+  // Итог — сумма тех самых строк, что под ним, до копейки. Раньше он брался из
+  // истории остатков и поправлялся на счета вне баланса: число то же по
+  // смыслу, но сложенное другим путём, и копейки со строками не сходились.
+  const total = sumMoney(accounts.map((a) => a.balanceBase));
   return (
     <>
       <BlockTitle
@@ -147,6 +146,7 @@ export function AccountsList({
                 <span className="block text-[12px] text-muted truncate">
                   {kind}
                   {a.offBalance && " · Вне баланса"}
+                  {a.archive && " · Архив"}
                 </span>
               )}
             </span>

@@ -528,7 +528,7 @@ export function DashboardView() {
             </>
           );
         }
-        return <CapitalBlock series={m.netWorthSeries} base={m.base} today={todayIso} accounts={m.accounts} />;
+        return <CapitalBlock series={m.netWorthSeries} base={m.base} today={todayIso} accounts={m.accounts} current={m.netWorth} />;
 
       case "monthOverMonth":
         return (

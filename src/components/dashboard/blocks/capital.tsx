@@ -70,10 +70,13 @@ export function CapitalBlock({
   base,
   today,
   accounts,
+  current,
 }: {
   series: CapitalPoint[];
   base: string;
   today: string;
+  /** Остаток сейчас — сумма остатков счетов; без него — последняя точка ряда. */
+  current?: number | null;
   /** Счета главной — из них складывается разбивка «Из чего состоит». */
   accounts: { balanceBase: number; savings: boolean; archive: boolean }[];
 }) {
@@ -83,7 +86,7 @@ export function CapitalBlock({
     () => capitalSlice(series, capitalPeriodStart(period, today), today),
     [series, period, today]
   );
-  const summary = useMemo(() => capitalSummary(points), [points]);
+  const summary = useMemo(() => capitalSummary(points, current), [points, current]);
   const chart = useMemo(() => thinBalances(points), [points]);
   // Сравнение двух дат протяжкой по графику — то же, что у «Совокупного
   // баланса» на «Счетах»: общий хук, общий расчёт и общая карточка итога.
@@ -113,8 +116,9 @@ export function CapitalBlock({
     let cash = 0;
     let saved = 0;
     let debt = 0;
+    // Архивные с остатком — тоже: Дзен-мани их остаток в итогах учитывает, и
+    // без них разбивка не складывалась бы в число над ней.
     for (const a of accounts) {
-      if (a.archive) continue;
       if (a.balanceBase < 0) debt += a.balanceBase;
       else if (a.savings) saved += a.balanceBase;
       else cash += a.balanceBase;

@@ -19,6 +19,7 @@ import type {
 } from "./zenmoney";
 import { SYNTHETIC_CATEGORY_COLORS } from "./categoryColor";
 import { isDebtAccountType } from "./accountType";
+import { roundMoney } from "./money";
 
 /**
  * Label for an operation with NO category. Zenmoney has no «uncategorized» tag —
@@ -187,7 +188,7 @@ export function mapZenmoneyDiff(diff: ZenDiffResponse): MappedDiff {
   const toBase = (amount: number, currency: string): number => {
     if (currency === baseCurrency) return amount;
     const r = rates.rates[currency];
-    return r ? amount * r : amount;
+    return r ? roundMoney(amount * r) : amount;
   };
 
   const txs: Transaction[] = [];

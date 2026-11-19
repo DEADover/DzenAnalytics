@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import type { RawRow, Transaction, CurrencyRates } from "../types";
+import { roundMoney } from "./money";
 
 function makeId(row: RawRow, idx: number): string {
   return `${row.createdDate || row.date}-${idx}-${row.payee?.slice(0, 20) || ""}`;
@@ -26,7 +27,7 @@ function splitCategory(raw: string): { category: string; subcategory: string | n
 export function toBase(amount: number, currency: string, rates: CurrencyRates): number {
   if (currency === rates.base) return amount;
   const rate = rates.rates[currency];
-  return rate ? amount * rate : amount;
+  return rate ? roundMoney(amount * rate) : amount;
 }
 
 export function buildTransaction(row: RawRow, idx: number, rates: CurrencyRates): Transaction {

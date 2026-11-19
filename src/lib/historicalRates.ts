@@ -16,6 +16,7 @@
 
 import * as db from "./db";
 import { toBase } from "./csv";
+import { roundMoney } from "./money";
 import type { CurrencyRates } from "../types";
 
 interface CbrResponse {
@@ -519,7 +520,7 @@ export function baseWithHistory(
   if (currency === rates.base) return amount;
   if (rates.base === "RUB") {
     const r = hist[date]?.[currency];
-    if (r != null) return amount * r;
+    if (r != null) return roundMoney(amount * r);
   }
   return toBase(amount, currency, rates);
 }
@@ -545,7 +546,10 @@ export function makeRateAt(
   hist: HistDayRates,
   today: string
 ): (currency: string, date: string) => number {
-  const sync = (currency: string) => toBase(1, currency, rates);
+  // Сам курс, а не сумма: `toBase` округляет до копейки, и курс 82,2281
+  // превратился бы в 82,23.
+  const sync = (currency: string) =>
+    currency === rates.base ? 1 : rates.rates[currency] || 1;
   if (rates.base !== "RUB") {
     return (currency) => (!currency || currency === rates.base ? 1 : sync(currency));
   }
