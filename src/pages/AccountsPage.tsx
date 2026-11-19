@@ -145,6 +145,7 @@ import { SectionEmpty } from "../components/SectionEmpty";
 import { Badge } from "../components/Badge";
 import { SectionControls } from "../components/SectionControls";
 import { FilterResetButton } from "../components/FilterResetButton";
+import { roundMoney, sumMoney } from "../lib/money";
 
 const STACK_COLORS = [
   "#22D3EE", "#A78BFA", "#F59E0B", "#10B981", "#EC4899",
@@ -672,7 +673,7 @@ export function AccountsPage() {
   // renders negative (red) and reduces the totals correctly.
   /** Пересчёт суммы в базовую валюту — нужен и таблице, и якорю графика. */
   const toBase = useCallback(
-    (amt: number, cur: string) => (cur === base ? amt : amt * (rates.rates[cur] || 1)),
+    (amt: number, cur: string) => (cur === base ? amt : roundMoney(amt * (rates.rates[cur] || 1))),
     [base, rates]
   );
 
@@ -1147,7 +1148,7 @@ export function AccountsPage() {
     [capitalView]
   );
   const visibleTotal = useMemo(
-    () => visibleRows.reduce((sum, r) => sum + rowHeadline(r), 0),
+    () => sumMoney(visibleRows.map(rowHeadline)),
     [visibleRows, rowHeadline]
   );
   /** Знаменатель для доли в капитале — только положительные остатки. */
@@ -1197,7 +1198,7 @@ export function AccountsPage() {
       .map(([label, rows]) => ({
         label,
         rows,
-        sum: rows.reduce((s, r) => s + rowHeadline(r), 0),
+        sum: sumMoney(rows.map(rowHeadline)),
         positive: positiveBalanceTotal(rows.map((r) => r.balanceBase ?? r.delta)),
         // Группа целиком из архивных счетов уходит вниз — иначе закрытый вклад
         // с крупным остатком вставал выше рабочих счетов, хотя внутри списка

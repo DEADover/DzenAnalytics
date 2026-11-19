@@ -9,6 +9,7 @@ import { MONTHS } from "./months";
 import { affectsExpense, expenseDelta } from "./txKindStyle";
 import { counterpartyOf, debtKey } from "./debtFilter";
 import { txAccountKey, txInKey, txOutKey } from "./accountKey";
+import { roundMoney } from "./money";
 
 export interface MonthBucket {
   ym: string;
@@ -443,7 +444,9 @@ function valuedLines(
       // последняя операция была несколько дней назад: иначе «Совокупный
       // баланс» расходился бы с суммой остатков в списке на курсовую разницу.
       const rateDate = i === dates.length - 1 ? LATEST_RATE_DATE : date;
-      out[i] += running * valuation.rateAt(currency, rateDate);
+      // Каждый счёт — до копейки, как его строка в списке: иначе хвосты
+      // пересчёта валюты складывались, и итог расходился со строками на копейку.
+      out[i] += roundMoney(running * valuation.rateAt(currency, rateDate));
     }
   }
   return { dates, layers, lines };
@@ -636,16 +639,19 @@ function assembleStack(
     let total = 0;
     for (const a of shown) {
       const v = line.get(a)![i];
-      point[a] = Math.round(v);
+      point[a] = roundMoney(v);
       total += v;
     }
     if (hasOther) {
       let other = 0;
       for (const a of rest) other += line.get(a)![i];
-      point["Прочие"] = Math.round(other);
+      point["Прочие"] = roundMoney(other);
       total += other;
     }
-    point.total = Math.round(total);
+    // До копейки, а не до рубля: этот итог показывается числом — «Совокупный
+    // баланс» на «Счетах», «Капитал» на главной. Округление до рубля давало
+    // «76 270,00 ₽» над строками, сложенными в 76 269,65 ₽.
+    point.total = roundMoney(total);
     return point;
   });
 
