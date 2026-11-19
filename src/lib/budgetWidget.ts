@@ -4,10 +4,17 @@
  *
  * План и факт приходят готовыми из расчёта раздела «Бюджет»
  * (`budgetPlanRows`), чтобы виджет и раздел не разошлись ни в одной сумме.
- * Здесь только отбор и порядок.
+ * Здесь отбор, порядок и сборка категорий с подкатегориями.
+ *
+ * Категория с подкатегориями (#141) — одна строка на всю ветку. В расчёте
+ * раздела строка категории берёт только траты, у которых своей строки нет:
+ * когда план задан по подкатегориям, у категории выходил ноль трат при
+ * полном плане, будто в «Жильё» никто не платил. Теперь у категории — вся
+ * ветка целиком, а подкатегории стоят под ней разбивкой.
  */
 
 import type { BudgetMonthRow } from "./budgetMonth";
+import { sumMoney } from "./money";
 
 export interface BudgetWidgetRow {
   key: string;
@@ -19,33 +26,124 @@ export interface BudgetWidgetRow {
   ratio: number;
   /** План — прогноз, а не заданная сумма. */
   forecast: boolean;
+  /** Подкатегории под строкой категории — разбивка её суммы. */
+  children?: BudgetWidgetRow[];
 }
 
 export interface BudgetWidget {
-  /** Все расходные статьи с планом, самые потраченные первыми. */
+  /** Статьи с планом — категории с ветками, самые потраченные первыми. */
   rows: BudgetWidgetRow[];
+  /** Сколько статей считаются по отдельности: перерасход и остаток — по ним. */
+  total: number;
   /** У скольких статей план уже превышен. */
   over: number;
+  /** На сколько превышены планы — сумма перерасходов по статьям. */
+  overBy: number;
+  /** Сколько ещё можно потратить по планам, где они не превышены. */
+  left: number;
 }
 
+const OVER_EPS = 0.5;
+
+function widgetRow(
+  key: string,
+  category: string,
+  subcategory: string | null,
+  planned: number,
+  fact: number,
+  forecast: boolean
+): BudgetWidgetRow {
+  return { key, category, subcategory, planned, fact, ratio: planned > 0 ? fact / planned : 0, forecast };
+}
+
+const byHeat = (a: BudgetWidgetRow, b: BudgetWidgetRow) =>
+  // При равной доле выше та статья, где на кону больше денег.
+  b.ratio - a.ratio || b.planned - a.planned;
+
 export function buildBudgetWidget(rows: readonly BudgetMonthRow[]): BudgetWidget {
-  const out: BudgetWidgetRow[] = [];
+  const byCategory = new Map<string, { parent: BudgetMonthRow | null; subs: BudgetMonthRow[] }>();
   for (const r of rows) {
     if (r.line.kind !== "expense") continue;
     if (r.planGroup || r.opening || r.unplanned) continue;
-    if (!(r.planned > 0)) continue;
-    const subcategory = r.line.subcategory ?? null;
-    out.push({
-      key: `${r.line.category}|${subcategory ?? ""}`,
-      category: r.line.category,
-      subcategory,
-      planned: r.planned,
-      fact: r.fact,
-      ratio: r.fact / r.planned,
-      forecast: r.forecast,
-    });
+    const sub = r.line.subcategory ?? null;
+    // Подкатегория без своего плана в виджет не идёт, как и раньше. А вот
+    // категорию без своего плана держим, если у неё есть подкатегории: её
+    // собственные траты — часть ветки.
+    if (!(r.planned > 0) && sub !== null) continue;
+    let g = byCategory.get(r.line.category);
+    if (!g) {
+      g = { parent: null, subs: [] };
+      byCategory.set(r.line.category, g);
+    }
+    if (sub === null) g.parent = r;
+    else g.subs.push(r);
   }
-  // При равной доле выше та статья, где на кону больше денег.
-  out.sort((a, b) => b.ratio - a.ratio || b.planned - a.planned);
-  return { rows: out, over: out.filter((r) => r.fact > r.planned + 0.5).length };
+
+  const out: BudgetWidgetRow[] = [];
+  /** Статьи, которые считаются по отдельности: перебор одной не гасится другой. */
+  const counted: { planned: number; fact: number }[] = [];
+  for (const [category, { parent, subs }] of byCategory) {
+    const parentPlanned = parent && parent.planned > 0 ? parent.planned : 0;
+    if (subs.length === 0) {
+      if (!parent || !(parent.planned > 0)) continue;
+      out.push(widgetRow(`${category}|`, category, null, parent.planned, parent.fact, parent.forecast));
+      counted.push({ planned: parent.planned, fact: parent.fact });
+      continue;
+    }
+    if (!parent && subs.length === 1) {
+      const s = subs[0];
+      const sub = s.line.subcategory ?? null;
+      out.push(widgetRow(`${category}|${sub ?? ""}`, category, sub, s.planned, s.fact, s.forecast));
+      counted.push({ planned: s.planned, fact: s.fact });
+      continue;
+    }
+    // Замок на категории — «вся категория целиком»: её сумма уже включает
+    // подкатегории, и их планы к ней не прибавляются (как `rowPlanForTotal`).
+    const locked = !!parent?.locked && parentPlanned > 0;
+    // Без замка — своя сумма категории плюс подкатегории. Отрицательная своя
+    // сумма — поправка Дзен-мани к сумме подкатегорий, её тоже складываем.
+    const planned = locked
+      ? parentPlanned
+      : sumMoney([parent?.planned ?? 0, ...subs.map((s) => s.planned)]);
+    // Факт категории в расчёте раздела — без подкатегорий со своей строкой;
+    // ветка целиком — это он плюс они.
+    const fact = sumMoney([parent?.fact ?? 0, ...subs.map((s) => s.fact)]);
+    const children = subs
+      .map((s) =>
+        widgetRow(
+          `${category}|${s.line.subcategory ?? ""}`,
+          category,
+          s.line.subcategory ?? null,
+          s.planned,
+          s.fact,
+          s.forecast
+        )
+      )
+      .sort(byHeat);
+    const head = widgetRow(
+      `${category}|`,
+      category,
+      null,
+      planned,
+      fact,
+      !!parent?.forecast || (parentPlanned === 0 && subs.every((s) => s.forecast))
+    );
+    out.push({ ...head, children });
+    if (locked) {
+      counted.push({ planned, fact });
+    } else {
+      if (parentPlanned > 0) counted.push({ planned: parentPlanned, fact: parent?.fact ?? 0 });
+      for (const s of subs) counted.push({ planned: s.planned, fact: s.fact });
+    }
+  }
+  out.sort(byHeat);
+
+  const overRows = counted.filter((r) => r.fact > r.planned + OVER_EPS);
+  return {
+    rows: out,
+    total: counted.length,
+    over: overRows.length,
+    overBy: sumMoney(overRows.map((r) => r.fact - r.planned)),
+    left: sumMoney(counted.map((r) => Math.max(0, r.planned - r.fact))),
+  };
 }

@@ -230,6 +230,8 @@ export interface BudgetCell {
   kind?: BudgetKind;
   category: string;
   subcategory: string | null;
+  /** Вся ветка категории — с подкатегориями; `subcategory` тогда не смотрим. */
+  branch?: boolean;
 }
 
 /** Операции, стоящие за ячейкой бюджета: то же правило, что и в суммах. */
@@ -251,7 +253,7 @@ export function transactionsForCell(
     }
     return budgetHits(t, scope).some((hit) => {
       if (cell.kind && hit.kind !== cell.kind) return false;
-      return hit.category === cell.category && hit.subcategory === cell.subcategory;
+      return hit.category === cell.category && (cell.branch || hit.subcategory === cell.subcategory);
     });
   });
 }

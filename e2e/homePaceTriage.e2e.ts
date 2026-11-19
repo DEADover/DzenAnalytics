@@ -107,6 +107,53 @@ test("«Бюджет месяца»: статьи с планом и опера�
   await expect(page.locator("[data-exit-panel]")).toContainText("Продукты · Октябрь");
 });
 
+test("«Бюджет месяца»: категория с подкатегориями — вся ветка, суммы в строке над списком (#140, #141)", async ({ page, zen }) => {
+  // «Транспорт» под замком на 6 000 ₽, внутри — «Такси» на 2 000 ₽. Все траты
+  // идут в «Такси», у самого «Транспорта» своих операций нет: раньше его
+  // строка показывала ноль трат при полном плане.
+  zen.patchFull = (diff) => ({
+    ...diff,
+    budget: [
+      ...(diff.budget ?? []),
+      { ...diff.budget![0], tag: "tag-transport", outcome: 6_000, outcomeLock: true },
+      { ...diff.budget![0], tag: "tag-taxi", outcome: 2_000, outcomeLock: false },
+    ],
+  });
+  await connectZen(page, "/");
+  await place(page, "budget");
+  const budget = tile(page, "budget");
+  const group = budget.locator('[data-budget-row="Транспорт|"]');
+  const taxi = budget.locator('[data-budget-row="Транспорт|Такси"]');
+  await expect(group).toBeVisible();
+  await expect(taxi).toBeVisible();
+
+  const money = (s: string) => Number(s.replace(/[^\d]/g, ""));
+  // Подпись «потрачено из плана» — последняя строка карточки статьи.
+  const spent = async (row: typeof group) =>
+    money(((await row.locator("div.tabular-nums").last().textContent()) ?? "").split("из")[0]);
+  // Ветка целиком: траты «Такси» входят в «Транспорт», план — сумма под замком.
+  const taxiSpent = await spent(taxi);
+  expect(taxiSpent).toBeGreaterThan(0);
+  expect(await spent(group)).toBe(taxiSpent);
+  await expect(group).toContainText(/из\s*.?6\s000/);
+  // Подкатегория стоит сразу под своей категорией.
+  const keys = await budget.locator("[data-budget-row]").evaluateAll((els) =>
+    els.map((e) => e.getAttribute("data-budget-row"))
+  );
+  expect(keys.indexOf("Транспорт|Такси")).toBe(keys.indexOf("Транспорт|") + 1);
+
+  // #140: на сколько превышены планы и сколько ещё в них осталось.
+  const summary = budget.getByTestId("budget-summary");
+  await expect(summary).toContainText(/План превышен у \d+ из \d+ стат\S+ на .+₽/);
+  await expect(summary).toContainText(/Ещё .+₽.? в планах/);
+
+  // Клик по категории — операции всей ветки, с подкатегорией.
+  await group.click();
+  const panel = page.locator("[data-exit-panel]");
+  await expect(panel).toContainText("Транспорт · Октябрь");
+  await expect(panel).toContainText("Яндекс Go");
+});
+
 test("«Цели»: пустое состояние и цель с прогрессом", async ({ page }) => {
   await connectZen(page, "/");
   await place(page, "goals");
