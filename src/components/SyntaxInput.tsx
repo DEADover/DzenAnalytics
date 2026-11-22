@@ -1,13 +1,16 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import clsx from "clsx";
 import { awaitsValue, completePrefix, completeValue, queryPieces } from "../lib/textQuery";
-import { queryValueLists } from "../lib/queryValueLists";
+import { queryHashtags, queryValueLists } from "../lib/queryValueLists";
+import { hashFragment, insertHashtag, matchHashtags, type HashFragment } from "../lib/hashtagInput";
+import { HashtagMenu } from "./HashtagMenu";
 
 /**
  * Поле текстового поиска, которое понимает условия (#135): подсвечивает
  * «комм:» и минус перед словом, на набранное «комм» предлагает условие по
  * комментарию — Tab подставляет «комм:», — а после «счёт:» и «кат:» дописывает
- * название счёта или категории.
+ * название счёта или категории. На «#» открывает список хэштегов из
+ * комментариев — тот же, что в окне операции.
  *
  * В самом `<input>` раскрасить часть текста нельзя, поэтому поверх поля лежит
  * слой с тем же текстом по кускам, а текст поля на это время прозрачен (каретка
@@ -30,6 +33,31 @@ export function SyntaxInput({
   const layer = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const [box, setBox] = useState<CSSProperties | null>(null);
+
+  // Набираемый «#тег». Считается от каретки, поэтому хранится отдельно от текста.
+  const [fragment, setFragment] = useState<HashFragment | null>(null);
+  const [hashIndex, setHashIndex] = useState(0);
+  const hashtags = useMemo(
+    () => (focused && fragment ? matchHashtags(queryHashtags(), fragment.query) : []),
+    [focused, fragment]
+  );
+  const menuOpen = hashtags.length > 0;
+  const closeMenu = useCallback(() => setFragment(null), []);
+  const syncFragment = (text: string, caret: number) => {
+    const next = hashFragment(text, caret);
+    if (next?.query !== fragment?.query) setHashIndex(0);
+    setFragment(next);
+  };
+  const pickHashtag = (tag: string) => {
+    if (!fragment) return;
+    const { next, caret } = insertHashtag(value, fragment, tag);
+    onChange(next);
+    setFragment(null);
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(caret, caret);
+    });
+  };
 
   const pieces = queryPieces(value);
   // Сначала — условие («сумм» → «сумма:»), а после двоеточия — название счёта
@@ -64,19 +92,55 @@ export function SyntaxInput({
         {...rest}
         ref={input}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          syncFragment(e.target.value, e.target.selectionStart ?? e.target.value.length);
+        }}
+        onClick={(e) => syncFragment(e.currentTarget.value, e.currentTarget.selectionStart ?? 0)}
         onFocus={(e) => {
           setFocused(true);
           rest.onFocus?.(e);
         }}
         onBlur={(e) => {
           setFocused(false);
+          setFragment(null);
           rest.onBlur?.(e);
         }}
         onScroll={follow}
         onSelect={follow}
-        onKeyUp={follow}
+        onKeyUp={(e) => {
+          follow();
+          // Каретку двинули стрелками. Esc, Enter и Tab уже всё решили сами:
+          // отпущенная клавиша не должна снова открыть закрытый список.
+          if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Home" || e.key === "End") {
+            syncFragment(e.currentTarget.value, e.currentTarget.selectionStart ?? 0);
+          }
+        }}
         onKeyDown={(e) => {
+          if (menuOpen) {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setHashIndex((i) => (i + 1) % hashtags.length);
+              return;
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setHashIndex((i) => (i - 1 + hashtags.length) % hashtags.length);
+              return;
+            }
+            if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) {
+              e.preventDefault();
+              pickHashtag(hashtags[Math.min(hashIndex, hashtags.length - 1)]);
+              return;
+            }
+            if (e.key === "Escape") {
+              // Закрываем список, а не шторку или окно вокруг поля.
+              e.preventDefault();
+              e.stopPropagation();
+              setFragment(null);
+              return;
+            }
+          }
           // Tab дописывает условие, только когда каретка в конце запроса:
           // иначе это обычный переход к следующему полю.
           if (
@@ -93,6 +157,15 @@ export function SyntaxInput({
         }}
         className={clsx(className, overlay && box && "!text-transparent caret-text")}
       />
+      {menuOpen && (
+        <HashtagMenu
+          anchorRef={input}
+          items={hashtags}
+          index={Math.min(hashIndex, hashtags.length - 1)}
+          onPick={pickHashtag}
+          onDismiss={closeMenu}
+        />
+      )}
       {overlay && box && (
         <div
           ref={layer}

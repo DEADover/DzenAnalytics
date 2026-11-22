@@ -1,5 +1,6 @@
 import type { QueryValueLists } from "./textQuery";
 import type { Transaction } from "../types";
+import { extractHashtags } from "./aggregations";
 
 /**
  * Названия счетов и категорий для подстановки после «счёт:» и «кат:» в полях
@@ -53,4 +54,24 @@ export function queryValueLists(): QueryValueLists {
     cache.set(transactions, lists);
   }
   return lists;
+}
+
+const hashtagCache = new WeakMap<readonly Transaction[], string[]>();
+
+/** Хэштеги из комментариев — самые ходовые первыми, для подсказки после «#». */
+export function queryHashtags(): string[] {
+  const transactions = source();
+  let tags = hashtagCache.get(transactions);
+  if (!tags) {
+    const uses = new Map<string, number>();
+    for (const t of transactions) {
+      if (!t.comment?.includes("#")) continue;
+      for (const tag of extractHashtags(t.comment)) uses.set(tag, (uses.get(tag) ?? 0) + 1);
+    }
+    tags = [...uses.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru"))
+      .map(([tag]) => tag);
+    hashtagCache.set(transactions, tags);
+  }
+  return tags;
 }

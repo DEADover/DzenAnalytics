@@ -1,3 +1,5 @@
+import { hashFragment, matchHashtags } from "../../lib/hashtagInput";
+import { queryHashtags } from "../../lib/queryValueLists";
 import { useCallback, useRef, useState } from "react";
 import clsx from "clsx";
 import { Check, Filter, Globe } from "lucide-react";
@@ -64,7 +66,11 @@ export function ScopedSearchInput({
    *  пока поле не очистят. Открыть снова — стрелкой вниз или меткой. */
   const [chosen, setChosen] = useState(false);
   const hasText = value.trim().length > 0;
-  const shown = open && hasText;
+  // Пока набирают «#тег», под полем стоит список тегов: второй список поверх
+  // него только мешал бы.
+  const hashFrag = hashFragment(value, value.length);
+  const typingTag = hashFrag !== null && matchHashtags(queryHashtags(), hashFrag.query, 1).length > 0;
+  const shown = open && hasText && !typingTag;
   const close = useCallback(() => setOpen(false), []);
 
   const pick = (next: SearchScope) => {
