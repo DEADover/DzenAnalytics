@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CounterpartyName } from "../components/CounterpartyNote";
 import { useDataStore } from "../store/useDataStore";
 import { useFiltersStore, applyFilters } from "../store/useFiltersStore";
@@ -52,7 +53,11 @@ export function TopPage() {
   const filters = useFiltersStore();
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
 
-  const [tab, setTab] = useState<Tab>("categories");
+  // С виджета «Крупные траты месяца» приходят сразу на вид «Операции».
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(
+    searchParams.get("view") === "transactions" ? "transactions" : "categories"
+  );
   const [kind, setKind] = useState<"expense" | "income">("expense");
   // Главная сумма каждой таблицы топа — цветом стороны.
   const sideTone = kind === "expense" ? "expense" : "income";

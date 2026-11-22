@@ -169,6 +169,13 @@ test("«Крупные траты месяца»: самые большие ра
   await rows.first().click();
   const panel = page.locator("[data-exit-panel]");
   await expect(panel).toContainText("Управляющая компания · 10 октября");
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+
+  // Ссылка в шапке ведёт в «Топ», сразу на вид «Операции».
+  await big.getByRole("link", { name: /Топ/ }).click();
+  await expect(page).toHaveURL(/\/top\?view=transactions/);
+  await expect(page.getByRole("button", { name: "Операции", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("«Подушка безопасности»: месяцы, цель и те же числа, что в «Здоровье»", async ({ page }) => {

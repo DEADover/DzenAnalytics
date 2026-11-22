@@ -47,8 +47,8 @@ export function BigExpensesWidget({
             и переводы в список не входят. Клик открывает операцию.
           </p>
         }
-        to="/transactions"
-        linkLabel="Операции"
+        to="/top?view=transactions"
+        linkLabel="Топ"
       />
       {shown === 0 ? (
         <SectionEmpty variant="compact">Расходов за {monthTitle(ym).toLowerCase()} нет</SectionEmpty>
