@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  amountInBase,
+  stripAmountMarks,
   axisFractionDigits,
   niceStep,
   currencySymbol,
@@ -260,5 +262,45 @@ describe("formatFixed", () => {
 
   it("группирует тысячи, как остальные числа", () => {
     expect(formatFixed(12345.6).replace(/\s/g, " ")).toBe("12 345,6");
+  });
+});
+
+describe("amountInBase — сумма в базовой валюте под суммой операции", () => {
+  const op = {
+    kind: "expense" as const,
+    amount: 100,
+    amountBase: 9_240,
+    currency: "USD",
+    incomeAmount: 0,
+    incomeCurrency: "USD",
+  };
+  const text = (v: string | null) => (v === null ? v : stripAmountMarks(v).replace(/\s/g, " "));
+
+  it("показывает базовую у операции в другой валюте", () => {
+    expect(text(amountInBase(op, "RUB"))).toBe("9 240 ₽");
+  });
+
+  it("у операции в базовой валюте подписи нет", () => {
+    expect(amountInBase({ ...op, currency: "RUB" }, "RUB")).toBeNull();
+  });
+
+  it("нет курса — пересчёт дал ту же цифру, подписи нет", () => {
+    expect(amountInBase({ ...op, amountBase: 100 }, "RUB")).toBeNull();
+  });
+
+  it("у перевода, где базовая уже показана как полученная, не повторяем", () => {
+    expect(
+      amountInBase({ ...op, kind: "transfer", incomeAmount: 9_000, incomeCurrency: "RUB" }, "RUB")
+    ).toBeNull();
+  });
+
+  it("перевод между двумя чужими валютами — подпись есть", () => {
+    expect(
+      text(amountInBase({ ...op, kind: "transfer", incomeAmount: 90, incomeCurrency: "EUR" }, "RUB"))
+    ).toBe("9 240 ₽");
+  });
+
+  it("минус не теряет смысл: сумма без знака, знак стоит у основной", () => {
+    expect(text(amountInBase({ ...op, amount: -100, amountBase: -9_240 }, "RUB"))).toBe("9 240 ₽");
   });
 });

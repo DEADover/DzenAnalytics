@@ -190,6 +190,25 @@ export function crossCurrencyReceived(
 }
 
 /**
+ * Сумма операции в базовой валюте — подпись к сумме в другой валюте. `null`,
+ * когда подпись ничего не добавит: операция и так в базовой валюте, у перевода
+ * базовая уже показана как полученная сумма, или курса нет (тогда пересчёт
+ * возвращает ту же цифру, и «100 $ (100 ₽)» было бы неправдой).
+ */
+export function amountInBase(
+  t: Pick<
+    Transaction,
+    "kind" | "amount" | "amountBase" | "currency" | "incomeAmount" | "incomeCurrency"
+  >,
+  base: string
+): string | null {
+  if (t.currency === base || !Number.isFinite(t.amountBase)) return null;
+  if (t.kind === "transfer" && t.incomeAmount && t.incomeCurrency === base) return null;
+  if (t.amountBase === t.amount) return null;
+  return formatMoney(Math.abs(t.amountBase), base);
+}
+
+/**
  * Дробное число с постоянным числом знаков и русской запятой: «2,5 мес»,
  * «1,0σ». `toFixed` ставил точку — «2.5 мес» посреди русского текста, — а
  * `formatNum` отбрасывает нули, и у бегунка «2» и «2,5» прыгала ширина.

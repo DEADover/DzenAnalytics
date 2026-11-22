@@ -1,3 +1,4 @@
+import { useDataStore } from "../store/useDataStore";
 import { localToday } from "../lib/period";
 import { useState } from "react";
 import { CalendarCheck, CalendarClock, Link2, MoreHorizontal, Pencil, X } from "lucide-react";
@@ -27,6 +28,7 @@ import { AccountName } from "../components/AccountName";
  */
 /** `time` — в сетке есть столбец «Время» ленты: у плана времени нет, ячейка пустая. */
 export function usePlanRows(template: string, time = false) {
+  const base = useDataStore((s) => s.rates.base);
   const today = localToday();
   const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
   const [fact, setFact] = useState<PlannedOp | null>(null);
@@ -117,7 +119,7 @@ export function usePlanRows(template: string, time = false) {
           data-cell="amount"
           className={`op-muted text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
         >
-          <OperationAmount tx={tx} />
+          <OperationAmount tx={tx} base={base} />
         </div>
         <div data-cell="actions" className="flex items-center justify-center">
           <button

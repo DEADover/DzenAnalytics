@@ -106,6 +106,11 @@ interface DisplayState {
    */
   commentWrap: boolean;
   /**
+   * Под суммой в другой валюте — та же сумма в базовой, в скобках, в лентах
+   * операций и в шторке. По умолчанию выключено: строка становится выше.
+   */
+  amountInBase: boolean;
+  /**
    * Столбец «Время» в ленте «Операций» и в списке операций сбоку — перед
    * «Счётом» (#139). По умолчанию выключен: время в Дзен-мани есть не у всех
    * операций, а лента и так широкая.
@@ -234,6 +239,7 @@ interface DisplayState {
   setQuickSettings: (on: boolean) => Promise<void>;
   setHints: (on: boolean) => Promise<void>;
   setRowClickSelect: (on: boolean) => Promise<void>;
+  setAmountInBase: (on: boolean) => Promise<void>;
   setFiltersMode: (mode: FiltersMode) => Promise<void>;
   setMonthKind: (kind: MonthKind) => Promise<void>;
   setWindowKind: (kind: WindowKind) => Promise<void>;
@@ -248,6 +254,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   tableFontLevel: DEFAULT_TABLE_FONT_LEVEL,
   statementLine: false,
   commentWrap: true,
+  amountInBase: false,
   timeColumn: false,
   newMark: "dot",
   columnResize: false,
@@ -276,6 +283,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel?: number;
       statementLine?: boolean;
       commentWrap?: boolean;
+      amountInBase?: boolean;
       timeColumn?: boolean;
       newMark?: string;
       columnResize?: boolean;
@@ -305,6 +313,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       tableFontLevel: level,
       statementLine: stored?.statementLine === true,
       commentWrap: stored?.commentWrap !== false,
+      amountInBase: stored?.amountInBase === true,
       timeColumn: stored?.timeColumn === true,
       newMark: stored?.newMark === "strip" || stored?.newMark === "fill" ? stored.newMark : "dot",
       columnResize: stored?.columnResize === true,
@@ -348,6 +357,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   setCommentWrap: async (on) => {
     set({ commentWrap: on });
     await db.saveJSON(KEY, { ...persisted(get()), commentWrap: on });
+  },
+
+  setAmountInBase: async (on) => {
+    set({ amountInBase: on });
+    await db.saveJSON(KEY, { ...persisted(get()), amountInBase: on });
   },
 
   setTimeColumn: async (on) => {
@@ -448,6 +462,7 @@ function persisted(s: DisplayState) {
     tableFontLevel: s.tableFontLevel,
     statementLine: s.statementLine,
     commentWrap: s.commentWrap,
+    amountInBase: s.amountInBase,
     timeColumn: s.timeColumn,
     newMark: s.newMark,
     columnResize: s.columnResize,

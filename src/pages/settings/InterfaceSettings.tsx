@@ -82,6 +82,8 @@ export function InterfaceSettings() {
   const setHintsOn = useDisplayStore((s) => s.setHints);
   const rowClickSelect = useDisplayStore((s) => s.rowClickSelect);
   const setRowClickSelect = useDisplayStore((s) => s.setRowClickSelect);
+  const amountInBase = useDisplayStore((s) => s.amountInBase);
+  const setAmountInBase = useDisplayStore((s) => s.setAmountInBase);
   const setHideThanks = useDisplayStore((s) => s.setHideThanks);
   const setFractionDigits = useDisplayStore((s) => s.setFractionDigits);
   const tableFontLevel = useDisplayStore((s) => s.tableFontLevel);
@@ -492,6 +494,30 @@ export function InterfaceSettings() {
               checked={commentWrap}
               label="Переносить длинные комментарии на вторую строку"
               onChange={(next) => setCommentWrap(next)}
+            />
+          }
+        />
+
+        <SettingRow
+          title="Сумма в базовой валюте"
+          status={
+            amountInBase
+              ? "Под суммой в другой валюте — она же в базовой, в скобках"
+              : "Только сумма в валюте операции"
+          }
+          help={
+            <p>
+              В лентах операций и в списке операций в шторке под суммой в другой
+              валюте появляется та же сумма в базовой: «100 $» и ниже «(9 240 ₽)».
+              Пересчёт — по курсу дня операции, как в итогах и отчётах. Операции в
+              базовой валюте не меняются.
+            </p>
+          }
+          control={
+            <Switch
+              checked={amountInBase}
+              label="Показывать сумму в базовой валюте"
+              onChange={(next) => setAmountInBase(next)}
             />
           }
         />

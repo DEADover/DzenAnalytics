@@ -18,6 +18,7 @@ import {
   formatMoney,
   secondaryPayee,
   transferCounterparty,
+  amountInBase,
 } from "../../lib/format";
 import { kindGlyphClass, kindSignGlyph } from "../../lib/txKindStyle";
 import { CategoryDot } from "../CategoryDot";
@@ -144,8 +145,17 @@ export function OperationComment({ text, className = "" }: { text: string; class
 }
 
 /** Сумма: знак или значок вида, сумма в валюте операции, полученное в другой валюте — строкой ниже. */
-export function OperationAmount({ tx }: { tx: Transaction }) {
+export function OperationAmount({
+  tx,
+  base,
+}: {
+  tx: Transaction;
+  /** Базовая валюта: по настройке под суммой в другой валюте стоит она. */
+  base?: string;
+}) {
   const received = crossCurrencyReceived(tx);
+  const showBase = useDisplayStore((s) => s.amountInBase);
+  const inBase = showBase && base ? amountInBase(tx, base) : null;
   return (
     <>
       {tx.category === "Долг" ? (
@@ -157,6 +167,11 @@ export function OperationAmount({ tx }: { tx: Transaction }) {
       )}
       {formatMoney(tx.amount, tx.currency)}
       {received && <div className="text-[0.85em] font-normal text-muted/80">({received})</div>}
+      {inBase && (
+        <div className="text-[0.85em] font-normal text-muted/80" data-amount-base>
+          ({inBase})
+        </div>
+      )}
     </>
   );
 }
