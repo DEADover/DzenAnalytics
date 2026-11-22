@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { useDataStore } from "../store/useDataStore";
 import { useThemeStore } from "../store/useThemeStore";
 import { useCategoryMetaStore } from "../store/useCategoryMetaStore";
-import { useFiltersStore, applyFilters, presetToRange } from "../store/useFiltersStore";
+import { useFiltersStore, applyFilters, presetToRange, isNarrowed } from "../store/useFiltersStore";
 import { previousWindows } from "../lib/period";
 import { buildHierarchy, type CategoryNode } from "../lib/aggregations";
 import { useReportPeriodStore } from "../store/useReportPeriodStore";
@@ -18,7 +18,11 @@ import { useDrillStore } from "../store/useDrillStore";
 import { useDiffMode } from "../store/useDiffModeStore";
 import { affectsExpense } from "../lib/txKindStyle";
 import { colorForCategory, subcategoryColor } from "../lib/categoryColor";
-import { formatMoney, formatPct } from "../lib/format";
+import { formatMoney, formatPct, monthTitle } from "../lib/format";
+import { useBudgetSources } from "../hooks/useBudgetSources";
+import { useBudgetsStore } from "../store/useBudgetsStore";
+import { budgetPlanRows } from "../lib/budgetMonth";
+import { buildCategoryPlan } from "../lib/categoryPlan";
 import { Segmented } from "../components/Segmented";
 import { EmptyState } from "../components/EmptyState";
 import { GlobalFilters } from "../components/GlobalFilters";
@@ -315,6 +319,8 @@ export function CategoriesPage() {
   // Bars view: how many previous periods feed the «среднее» baseline (Zenmoney
   // «Среднее за N месяцев»). Default 3.
   const [avgMonths, setAvgMonths] = useState<3 | 6 | 12>(3);
+  // С чем сравнивать полосы: со средним или с планом месяца из «Бюджета».
+  const [planMode, setPlanMode] = useState(false);
 
   const showDrill = useDrillStore((s) => s.show);
 
@@ -392,6 +398,34 @@ export function CategoriesPage() {
     for (const [k, v] of ownSum) own.set(k, v / avgMonths);
     return { comparable: true, cat, sub, own };
   }, [transactions, filters, monthStartDay, kind, avgMonths]);
+
+  // План — на отчётный месяц, поэтому сравнивать можно только один такой
+  // месяц. И без фильтров: план считается по всем счетам и статьям, а факт под
+  // фильтром — по части из них, и «ниже плана» было бы неправдой.
+  const planYm =
+    filters.preset === "period" || (filters.preset === "month" && monthStartDay === 1)
+      ? filters.monthYM
+      : null;
+  const planComparable = !!planYm && !isNarrowed(filters);
+  const { sources: budgetSources, scope: budgetScope } = useBudgetSources(planMode);
+  // Раздел могут открыть сразу по ссылке, минуя главную и «Бюджет»: тогда планы
+  // ещё не прочитаны, и у статей стоял бы прочерк.
+  const budgetsLoaded = useBudgetsStore((s) => s.loaded);
+  const hydrateBudgets = useBudgetsStore((s) => s.hydrate);
+  useEffect(() => {
+    if (planMode && !budgetsLoaded) void hydrateBudgets();
+  }, [planMode, budgetsLoaded, hydrateBudgets]);
+  const planComp = useMemo(
+    () =>
+      planMode && planComparable && planYm
+        ? buildCategoryPlan(budgetPlanRows(budgetSources, planYm, budgetScope), kind)
+        : { cat: new Map<string, number>(), sub: new Map<string, number>(), own: new Map<string, number>() },
+    [planMode, planComparable, planYm, budgetSources, budgetScope, kind]
+  );
+  const comp = useMemo(
+    () => (planMode ? { ...planComp, comparable: planComparable } : avgComp),
+    [planMode, planComp, planComparable, avgComp]
+  );
 
   // «Отклонение» — ₽, % of the N-month average or both (toggle in the header,
   // remembered per table).
@@ -527,7 +561,7 @@ export function CategoriesPage() {
           value: node.total,
           count: node.count,
           share: totalAll > 0 ? node.total / totalAll : 0,
-          compare: avgComp.cat.get(node.name),
+          compare: comp.cat.get(node.name),
           color,
           children: node.subs
             .filter((sub) => sub.total > 0)
@@ -540,7 +574,7 @@ export function CategoriesPage() {
                 value: sub.total,
                 count: sub.count,
                 share: totalAll > 0 ? sub.total / totalAll : 0,
-                compare: avgComp.sub.get(sub.fullName),
+                compare: comp.sub.get(sub.fullName),
                 color: own,
                 dotFallback: own,
               };
@@ -550,14 +584,14 @@ export function CategoriesPage() {
                 value: node.own,
                 count: node.ownCount,
                 share: totalAll > 0 ? node.own / totalAll : 0,
-                compare: avgComp.own.get(node.name),
+                compare: comp.own.get(node.name),
                 color,
                 dotFallback: color,
               })
             ),
         };
       }),
-    [tree, resolvedCategoryColors, totalAll, avgComp, categoryMeta]
+    [tree, resolvedCategoryColors, totalAll, comp, categoryMeta]
   );
 
   if (transactions.length === 0) return <EmptyState />;
@@ -614,20 +648,29 @@ export function CategoriesPage() {
                 )}
                 {view === "bars" && (
                   <>
+                    {planMode && !planComparable && (
+                      <span className="text-xs text-muted" data-testid="plan-unavailable">
+                        План можно сравнить за один месяц и без фильтров
+                      </span>
+                    )}
                     <label className="inline-flex items-center gap-2 text-xs text-muted">
-                      Сравнить со средним за
+                      Сравнить с
                       <Select
                         size="sm"
-                        className="w-24"
-                        value={String(avgMonths)}
-                        onChange={(v) => setAvgMonths(Number(v) as 3 | 6 | 12)}
+                        className="w-40"
+                        value={planMode ? "plan" : String(avgMonths)}
+                        onChange={(v) => {
+                          setPlanMode(v === "plan");
+                          if (v !== "plan") setAvgMonths(Number(v) as 3 | 6 | 12);
+                        }}
                         options={[
-                          { value: "3", label: "3 мес" },
-                          { value: "6", label: "6 мес" },
-                          { value: "12", label: "12 мес" },
+                          { value: "3", label: "Средним за 3 мес" },
+                          { value: "6", label: "Средним за 6 мес" },
+                          { value: "12", label: "Средним за 12 мес" },
+                          { value: "plan", label: "Планом месяца" },
                         ]}
-                        ariaLabel="Сколько предыдущих месяцев усреднять"
-                        title="Сколько предыдущих месяцев усреднять для базовой линии"
+                        ariaLabel="С чем сравнивать категории"
+                        title="Что показывает засечка на полосе: среднее за прошлые месяцы или план из «Бюджета»"
                       />
                     </label>
                     {/* Выгрузка таблицы — в этой же строке: своей шапки у
@@ -659,8 +702,23 @@ export function CategoriesPage() {
               base={base}
               kind={kind}
               bar
-              barMax={tree[0]?.total || 1}
-              compare={{
+              // План бывает больше самой крупной траты, и засечка должна на
+              // полосу поместиться, а не упереться в край.
+              barMax={planMode ? undefined : tree[0]?.total || 1}
+              compare={planMode ? {
+                label: "План",
+                title: `План из «Бюджета»${planYm ? ` на ${monthTitle(planYm)}` : ""}`,
+                changeLabel: "Отклонение",
+                changeTitle: "Насколько факт выше или ниже плана",
+                comparable: planComparable,
+                sameLabel: "≈ план",
+                upTitle: "Выше плана",
+                downTitle: "Ниже плана",
+                onlyWithBaseline: true,
+                markerLabel: `План${planYm ? ` на ${monthTitle(planYm)}` : ""}`,
+                mode: devMode,
+                onModeChange: setDevMode,
+              } : {
                 label: "Среднее",
                 title: `Средний ${kind === "expense" ? "расход" : "доход"} по категории за ${avgMonths} предыдущих ${avgMonths === 3 ? "месяца" : "месяцев"} (без текущего)`,
                 changeLabel: "Отклонение",

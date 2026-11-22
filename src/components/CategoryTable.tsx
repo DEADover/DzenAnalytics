@@ -31,6 +31,11 @@ interface CompareSpec {
   /** Разница деньгами, процентом или и тем и другим — переключается в шапке. */
   mode: DiffMode;
   onModeChange: (next: DiffMode) => void;
+  /**
+   * Отклонение только у строк, где есть с чем сравнить. У плана так: статья без
+   * плана — не «перерасход на всю сумму», а просто без плана.
+   */
+  onlyWithBaseline?: boolean;
   /** Клик по сумме сравнения — операции второго периода (клик по строке — первого). */
   onClick?: (row: CategoryTableRow) => void;
 }
@@ -193,7 +198,9 @@ export function CategoryTable({
         headerTitle: compare.changeTitle,
         headerLead: <DiffModeToggle mode={compare.mode} onChange={compare.onModeChange} base={base} />,
         sortValue: (r) =>
-          compare.comparable ? diffSortValue(r.value, r.compare, compare.mode) : undefined,
+          compare.comparable && (!compare.onlyWithBaseline || r.compare !== undefined)
+            ? diffSortValue(r.value, r.compare, compare.mode)
+            : undefined,
         render: (r) => (
           <DeviationPill
             current={r.value}
@@ -201,7 +208,7 @@ export function CategoryTable({
             base={base}
             mode={compare.mode}
             kind={kind}
-            comparable={compare.comparable}
+            comparable={compare.comparable && (!compare.onlyWithBaseline || r.compare !== undefined)}
             sameLabel={compare.sameLabel}
             upTitle={compare.upTitle}
             downTitle={compare.downTitle}

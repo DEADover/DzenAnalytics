@@ -154,6 +154,32 @@ test("«Бюджет месяца»: категория с подкатегор�
   await expect(panel).toContainText("Яндекс Go");
 });
 
+test("«Крупные траты месяца»: самые большие расходы и переход к операции", async ({ page }) => {
+  await connectZen(page, "/");
+  await place(page, "bigExpenses");
+  const big = tile(page, "bigExpenses");
+  await expect(big).toBeVisible();
+  const rows = big.locator("[data-big-expense]");
+  await expect(rows).toHaveCount(5);
+  // Самая большая трата октября в поддельном аккаунте — аренда.
+  await expect(rows.first()).toContainText("Управляющая компания");
+  await expect(rows.first()).toContainText(/35\s000/);
+  await expect(big.getByTestId("big-expenses-summary")).toContainText(/5 из \d+ операц\S+ — \d+\s?% расходов/);
+  await rows.first().click();
+  const panel = page.locator("[data-exit-panel]");
+  await expect(panel).toContainText("Управляющая компания · 10 октября");
+});
+
+test("«Подушка безопасности»: месяцы, цель и те же числа, что в «Здоровье»", async ({ page }) => {
+  await connectZen(page, "/");
+  await place(page, "cushion");
+  const cushion = tile(page, "cushion");
+  await expect(cushion).toBeVisible();
+  await expect(cushion.getByTestId("cushion-months")).toContainText(/месяц/);
+  await expect(cushion).toContainText("Цель — 6 месяцев");
+  await expect(cushion).toContainText("Накопления");
+});
+
 test("«Цели»: пустое состояние и цель с прогрессом", async ({ page }) => {
   await connectZen(page, "/");
   await place(page, "goals");

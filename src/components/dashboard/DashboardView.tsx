@@ -38,6 +38,8 @@ import { ActivityHeat } from "./blocks/activity";
 import { MonthOverMonthBlock } from "./blocks/monthOverMonth";
 import { PaceBlock } from "./blocks/pace";
 import { BudgetWidget } from "./BudgetWidget";
+import { BigExpensesWidget } from "./BigExpensesWidget";
+import { CushionWidget } from "./CushionWidget";
 import { GoalsWidget } from "./GoalsWidget";
 import { WatchWidget } from "./WatchWidget";
 import { TagWatchWidget } from "./TagWatchWidget";
@@ -712,6 +714,12 @@ export function DashboardView() {
 
       case "goals":
         return <GoalsWidget base={m.base} />;
+
+      case "bigExpenses":
+        return <BigExpensesWidget transactions={monthTx} ym={m.ym} base={m.base} onOpen={showDrill} />;
+
+      case "cushion":
+        return <CushionWidget base={m.base} />;
 
       case "watch":
         return (
