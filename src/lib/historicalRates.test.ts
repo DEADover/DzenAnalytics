@@ -13,6 +13,7 @@ vi.mock("./db", () => ({
 }));
 
 import {
+  operationRate,
   fetchHistoricalRubRates,
   getHistoricalRubRate,
   resetDayCache,
@@ -326,5 +327,26 @@ describe("historicalRates — пропуски в архиве ЦБ (issue #53)"
     expect(Object.keys(out)).toHaveLength(0);
     // Без короткого замыкания это было бы ~11 рабочих дней окна на каждую дату.
     expect(archiveCalls().length).toBeLessThan(dates.length * 4);
+  });
+});
+
+describe("operationRate — курс, по которому пересчитана операция", () => {
+  const rates = { base: "RUB", rates: { USD: 90 } } as never;
+  const hist = { "2026-10-15": { USD: 92.4 } };
+
+  it("курс ЦБ на день операции", () => {
+    expect(operationRate({ currency: "USD", date: "2026-10-15" }, rates, hist)).toEqual({
+      rate: 92.4,
+      date: "2026-10-15",
+    });
+  });
+
+  it("на этот день курса нет — текущий, без даты", () => {
+    expect(operationRate({ currency: "USD", date: "2026-10-16" }, rates, hist)).toEqual({ rate: 90, date: null });
+  });
+
+  it("базовая валюта и валюта без курса — ничего", () => {
+    expect(operationRate({ currency: "RUB", date: "2026-10-15" }, rates, hist)).toBeNull();
+    expect(operationRate({ currency: "EUR", date: "2026-10-15" }, rates, hist)).toBeNull();
   });
 });

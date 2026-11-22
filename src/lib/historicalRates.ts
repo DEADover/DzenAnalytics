@@ -526,6 +526,25 @@ export function baseWithHistory(
 }
 
 /**
+ * По какому курсу операция пересчитана в базовую валюту — то же правило, что в
+ * `baseWithHistory`. `date` — день курса; `null` — курса ЦБ на этот день нет, и
+ * взят текущий, с последней синхронизации.
+ */
+export function operationRate(
+  t: { currency: string; date: string },
+  rates: CurrencyRates,
+  hist: HistDayRates
+): { rate: number; date: string | null } | null {
+  if (t.currency === rates.base) return null;
+  if (rates.base === "RUB") {
+    const r = hist[t.date]?.[t.currency];
+    if (r != null) return { rate: r, date: t.date.slice(0, 10) };
+  }
+  const sync = rates.rates[t.currency];
+  return sync ? { rate: sync, date: null } : null;
+}
+
+/**
  * Курс для оценки ОСТАТКА на дату: сколько базовой валюты стоит единица
  * `currency` в день `date`.
  *

@@ -1191,7 +1191,6 @@ const Row = memo(function Row({
 }) {
   const open = () => onEdit(tx);
   const toggle = (gesture?: SelectGesture) => onToggleSelect(tx.id, gesture);
-  const base = useDataStore((s) => s.rates.base);
   const timeColumn = useDisplayStore((s) => s.timeColumn);
   const newMark = useDisplayStore((s) => s.newMark);
   return (
@@ -1223,7 +1222,7 @@ const Row = memo(function Row({
         data-cell="amount"
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
-        <OperationAmount tx={tx} base={base} />
+        <OperationAmount tx={tx} />
       </div>
       <OperationActions
         onEdit={open}

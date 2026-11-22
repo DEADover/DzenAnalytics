@@ -19,11 +19,16 @@ import {
   secondaryPayee,
   transferCounterparty,
   amountInBase,
+  currencySymbol,
+  dayTitle,
 } from "../../lib/format";
 import { kindGlyphClass, kindSignGlyph } from "../../lib/txKindStyle";
 import { CategoryDot } from "../CategoryDot";
 import { ExtraCategoriesLine } from "../ExtraCategoriesLine";
 import { Tooltip } from "../Tooltip";
+import { TooltipFacts } from "../TooltipFacts";
+import { operationRate } from "../../lib/historicalRates";
+import { useDataStore } from "../../store/useDataStore";
 import { CounterpartyNoteMark } from "../CounterpartyNote";
 
 /** Ячейка «Время» лент и шторки (настройка «Столбец „Время“»). */
@@ -145,17 +150,33 @@ export function OperationComment({ text, className = "" }: { text: string; class
 }
 
 /** Сумма: знак или значок вида, сумма в валюте операции, полученное в другой валюте — строкой ниже. */
-export function OperationAmount({
-  tx,
-  base,
-}: {
-  tx: Transaction;
-  /** Базовая валюта: по настройке под суммой в другой валюте стоит она. */
-  base?: string;
-}) {
+export function OperationAmount({ tx }: { tx: Transaction }) {
   const received = crossCurrencyReceived(tx);
+  const rates = useDataStore((s) => s.rates);
+  const hist = useDataStore((s) => s.histDayRates);
   const showBase = useDisplayStore((s) => s.amountInBase);
-  const inBase = showBase && base ? amountInBase(tx, base) : null;
+  const base = rates.base;
+  const inBase = showBase ? amountInBase(tx, base) : null;
+  const used = operationRate(tx, rates, hist);
+  // Значение, а не пояснение (`data`): узнать курс операции больше негде.
+  const rateTip = used ? (
+    <TooltipFacts
+      facts={[
+        {
+          label: "Курс",
+          value: `1 ${currencySymbol(tx.currency)} = ${used.rate.toLocaleString("ru-RU", { maximumFractionDigits: 4 })} ${currencySymbol(base)}`,
+          strong: true,
+        },
+        { label: "Дата курса", value: used.date ? dayTitle(used.date) : "Текущий курс" },
+        { label: "В базовой валюте", value: formatMoney(Math.abs(tx.amountBase), base) },
+      ]}
+      note={
+        received
+          ? "Курс для отчётов. Фактический курс обмена виден по двум суммам перевода."
+          : undefined
+      }
+    />
+  ) : null;
   return (
     <>
       {tx.category === "Долг" ? (
@@ -165,12 +186,16 @@ export function OperationAmount({
       ) : (
         <span className={kindGlyphClass(tx.kind)}>{kindSignGlyph(tx.kind)}</span>
       )}
-      {formatMoney(tx.amount, tx.currency)}
+      <Tooltip data content={rateTip}>
+        <span data-amount-main>{formatMoney(tx.amount, tx.currency)}</span>
+      </Tooltip>
       {received && <div className="text-[0.85em] font-normal text-muted/80">({received})</div>}
       {inBase && (
-        <div className="text-[0.85em] font-normal text-muted/80" data-amount-base>
-          ({inBase})
-        </div>
+        <Tooltip data content={rateTip}>
+          <div className="text-[0.85em] font-normal text-muted/80" data-amount-base>
+            ({inBase})
+          </div>
+        </Tooltip>
       )}
     </>
   );

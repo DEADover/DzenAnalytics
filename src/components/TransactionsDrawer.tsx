@@ -259,7 +259,7 @@ export function TransactionsDrawer() {
       label: "Сумма",
       sortValue: (t) => t.amountBase,
       cellTitle: (t) => (t.kind === "refund" ? "Возврат — уменьшает расход категории" : ""),
-      render: (t) => <OperationAmount tx={t} base={base} />,
+      render: (t) => <OperationAmount tx={t} />,
     },
     {
       key: "actions",
@@ -503,7 +503,7 @@ export function TransactionsDrawer() {
                         data-cell="amount"
                         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(t)]}`}
                       >
-                        <OperationAmount tx={t} base={base} />
+                        <OperationAmount tx={t} />
                       </div>
                       <OperationActions onEdit={() => setEditing(t)} onDelete={() => handleDelete(t)} />
                     </OperationListRow>

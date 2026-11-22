@@ -549,7 +549,6 @@ function Row({
   onApply: (s: CategorySuggestion) => void;
 }) {
   const key = suggestion ? suggestionKey(suggestion) : null;
-  const base = useDataStore((s) => s.rates.base);
   return (
     <OperationListRow
       template={template}
@@ -572,7 +571,7 @@ function Row({
         data-cell="amount"
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
-        <OperationAmount tx={tx} base={base} />
+        <OperationAmount tx={tx} />
       </div>
       <div data-cell="actions" className="flex items-center justify-center gap-0.5">
         {suggestion && !applied && key && (

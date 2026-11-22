@@ -51,6 +51,13 @@ test("сумма в базовой валюте в ленте и в шторке
     page.locator(".op-row", { hasText: "Пятёрочка" }).first().locator("[data-amount-base]")
   ).toHaveCount(0);
 
+  // Наведение на сумму — курс и его дата.
+  await row.locator("[data-amount-main]").hover();
+  const tip = page.getByRole("tooltip");
+  await expect(tip).toContainText(/1 \$ = 9\d/);
+  await expect(tip).toContainText("Дата курса");
+  await page.mouse.move(0, 0);
+
   // Шторка — та же настройка.
   await page.goto("/");
   await page.evaluate(async () => {

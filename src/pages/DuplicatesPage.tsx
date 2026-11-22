@@ -333,7 +333,7 @@ export function DuplicatesPage() {
                     data-cell="amount"
                     className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(t)]}`}
                   >
-                    <OperationAmount tx={t} base={base} />
+                    <OperationAmount tx={t} />
                   </div>
                   <OperationActions onEdit={() => setEditing(t)} onDelete={() => void deleteOne(t)} />
                 </OperationListRow>

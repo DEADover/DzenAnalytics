@@ -709,7 +709,6 @@ function FeedRowView({
   onCancel?: () => void;
 }) {
   const { tx } = row;
-  const base = useDataStore((s) => s.rates.base);
   return (
     <OperationListRow template={template} selected={selected} onToggleSelect={onToggleSelect}>
       <Checkbox checked={selected} stopPropagation onChange={(_, gesture) => onToggleSelect(gesture)} label="Выбрать операцию" />
@@ -734,7 +733,7 @@ function FeedRowView({
         data-cell="amount"
         className={`text-right tabular-nums font-medium whitespace-nowrap ${TONE_CLASS[operationTone(tx)]}`}
       >
-        <OperationAmount tx={tx} base={base} />
+        <OperationAmount tx={tx} />
       </div>
       <div data-cell="actions" className="flex items-center justify-center">
         {row.status === "restore-pending" ? (
