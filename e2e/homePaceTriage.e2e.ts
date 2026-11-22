@@ -177,9 +177,30 @@ test("«Подушка безопасности»: месяцы, цель и т�
   const cushion = tile(page, "cushion");
   await expect(cushion).toBeVisible();
   await expect(cushion.getByTestId("cushion-months")).toContainText(/месяц/);
-  await expect(cushion).toContainText("Цель — 6 месяцев");
+  const goal = cushion.getByRole("group", { name: "Цель по подушке" });
+  await expect(goal.getByRole("button", { name: "6 мес" })).toHaveAttribute("aria-pressed", "true");
   await expect(cushion).toContainText("Накопления");
   await expect(cushion.getByTestId("cushion-chart").locator(".recharts-area-area")).toHaveCount(1);
+
+  // Цель общая с «Здоровьем» и переживает перезагрузку.
+  await goal.getByRole("button", { name: "12 мес" }).click();
+  await expect(goal.getByRole("button", { name: "12 мес" })).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() =>
+    page.evaluate(async () => {
+      const w = window as unknown as { __store: (n: string) => Promise<Record<string, { getState: () => { cushionTarget: number } }>> };
+      const { useBenchmarksStore } = await w.__store("useBenchmarksStore");
+      return useBenchmarksStore.getState().cushionTarget;
+    })
+  ).toBe(12);
+  await page.reload();
+  await place(page, "cushion");
+  await expect(
+    tile(page, "cushion").getByRole("group", { name: "Цель по подушке" }).getByRole("button", { name: "12 мес" })
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/health");
+  await expect(
+    page.locator("[data-cushion-goal]").getByRole("button", { name: "12 мес" })
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("«Цели»: пустое состояние и цель с прогрессом", async ({ page }) => {

@@ -5,7 +5,7 @@
  * виджет поставил.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Area,
   CartesianGrid,
@@ -19,8 +19,10 @@ import { BlockTitle } from "./blocks/shared";
 import { ChartContainer } from "../ChartContainer";
 import { ChartTooltipCard, TooltipFacts } from "../TooltipFacts";
 import { ProgressBar } from "../ProgressBar";
+import { Segmented } from "../Segmented";
 import { SectionEmpty } from "../SectionEmpty";
 import { useCushionHistory, useHealthScore } from "../../hooks/useHealthScore";
+import { CUSHION_TARGETS, type CushionTarget } from "../../lib/benchmarks";
 import { cushionView } from "../../lib/cushionWidget";
 import type { CushionPoint } from "../../lib/health";
 import { MONTHS } from "../../lib/months";
@@ -32,6 +34,7 @@ import {
   monthTitle,
 } from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
+import { useBenchmarksStore } from "../../store/useBenchmarksStore";
 
 /** «3,4 месяца», «3 месяца», «5 месяцев»: у дробного числа форма одна. */
 function monthsLabel(n: number): string {
@@ -128,6 +131,19 @@ function CushionChart({
 export function CushionWidget({ base }: { base: string }) {
   const health = useHealthScore();
   const history = useCushionHistory();
+  const target = useBenchmarksStore((s) => s.cushionTarget);
+  const loaded = useBenchmarksStore((s) => s.loaded);
+  const hydrate = useBenchmarksStore((s) => s.hydrate);
+  const update = useBenchmarksStore((s) => s.update);
+  useEffect(() => {
+    if (!loaded) void hydrate();
+  }, [loaded, hydrate]);
+  // Настройки «Ориентиров» сохраняются целиком: до чтения с диска запись
+  // затёрла бы остальные значениями по умолчанию.
+  const setTarget = async (next: CushionTarget) => {
+    if (!useBenchmarksStore.getState().loaded) await hydrate();
+    await update({ cushionTarget: next });
+  };
   const chartPoints = useMemo(() => history.filter((p) => p.months !== null), [history]);
   const view = useMemo(
     () => cushionView(health?.components.find((c) => c.id === "emergency_fund")),
@@ -144,7 +160,8 @@ export function CushionWidget({ base }: { base: string }) {
             На сколько месяцев хватит денег, если доход пропадёт, а траты останутся
             прежними: остаток на счетах, делённый на средний расход за 6 полных
             месяцев. График показывает запас на конец каждого месяца, пунктир —
-            цель. Цель задаётся в «Финансовом здоровье», числа те же, что там.
+            цель. Цель общая с «Финансовым здоровьем» и влияет на его оценку;
+            числа те же, что там.
             Общие фильтры главной на виджет не действуют.
           </p>
         }
@@ -167,8 +184,17 @@ export function CushionWidget({ base }: { base: string }) {
           </div>
           <div>
             <ProgressBar value={view.ratio} tone={tone} label="Доля цели по подушке" />
-            <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[12px] text-muted tabular-nums">
-              <span>Цель — {monthsLabel(view.target)}</span>
+            <div className="mt-2 flex items-center justify-between gap-2 text-[12px] text-muted tabular-nums">
+              <span className="flex items-center gap-2">
+                Цель
+                <Segmented
+                  tight
+                  label="Цель по подушке"
+                  value={target}
+                  options={CUSHION_TARGETS.map((t) => ({ value: t, label: `${t} мес` }))}
+                  onChange={(v) => void setTarget(v)}
+                />
+              </span>
               <span>{Math.round(view.ratio * 100)}%</span>
             </div>
           </div>
