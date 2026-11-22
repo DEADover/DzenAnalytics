@@ -1,3 +1,5 @@
+import { useRangeToggle } from "../hooks/useRangeToggle";
+import type { SelectGesture } from "../lib/rangeSelection";
 import { accountKeyOf, txAccountKey } from "../lib/accountKey";
 import { AccountName } from "../components/AccountName";
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -306,15 +308,6 @@ export function TransactionsPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected.size, anythingOnTop]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
   async function applyBulk(patch: TransactionEdit, commentAppend?: string) {
     const ids = Array.from(selected);
     if (ids.length === 0) return;
@@ -517,6 +510,12 @@ export function TransactionsPage() {
   );
 
   const visible = useMemo(() => feedRows.slice(0, visibleCount), [feedRows, visibleCount]);
+  // Диапазон через Shift — по порядку ленты, планы в выделение не входят.
+  const selectableOrder = useMemo(
+    () => feedRows.filter((t) => !planById.has(t.id)).map((t) => t.id),
+    [feedRows, planById]
+  );
+  const toggleSelect = useRangeToggle(selectableOrder, setSelected);
 
   // Обучение открывает карточку первой операции ленты, чтобы показать значки
   // внизу, и само закрывает (`components/tour`). Без отметки «просмотрено»:
@@ -1122,7 +1121,7 @@ function DayGroup({
   /** Не задан — делить нечем: без подключённого Дзен-мани частей не создать. */
   onSplit?: (t: Transaction) => void;
   selected: Set<string>;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, gesture?: SelectGesture) => void;
   /** Строка плана («Запланированные в ленте» → «В ленте»); `null` — не план. */
   renderPlan?: (t: Transaction) => ReactNode;
 }) {
@@ -1187,11 +1186,11 @@ const Row = memo(function Row({
   /** Разделить операцию на части. Нет — делить нечего или незачем. */
   onSplit?: (t: Transaction) => void;
   selected: boolean;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, gesture?: SelectGesture) => void;
   hideDate?: boolean;
 }) {
   const open = () => onEdit(tx);
-  const toggle = () => onToggleSelect(tx.id);
+  const toggle = (gesture?: SelectGesture) => onToggleSelect(tx.id, gesture);
   const timeColumn = useDisplayStore((s) => s.timeColumn);
   const newMark = useDisplayStore((s) => s.newMark);
   return (
@@ -1205,7 +1204,7 @@ const Row = memo(function Row({
       <Checkbox
         checked={selected}
         stopPropagation
-        onChange={toggle}
+        onChange={(_, gesture) => toggle(gesture)}
         label="Выбрать операцию"
       />
       {!hideDate && (

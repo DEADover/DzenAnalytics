@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode, type Ref } from "re
 import { Pin, PinOff } from "lucide-react";
 import clsx from "clsx";
 import { formatNum } from "../../lib/format";
+import type { SelectGesture } from "../../lib/rangeSelection";
 import { useDisplayStore } from "../../store/useDisplayStore";
 
 /**
@@ -154,6 +155,13 @@ export function ListHeadCell({
 const DOUBLE_CLICK_MS = 220;
 
 /**
+ * Отложенное выделение строки, которое ещё не сработало. Общее на все строки:
+ * быстрый Shift + клик по другой строке должен считать диапазон от только что
+ * кликнутой, а не дождаться её таймера и снять её обратно.
+ */
+let flushPendingSelect: (() => void) | null = null;
+
+/**
  * Строка ленты. Клик выделяет её, двойной клик открывает (`onOpen`).
  * Настройка «Выделение строки кликом» выключена — одиночный клик ничего не
  * делает (отмечают галочкой), двойной открывает сразу.
@@ -174,7 +182,7 @@ export function OperationListRow({
   className?: string;
   selected: boolean;
   /** Клик по строке. Нет — строка не откликается на клик (план в ленте). */
-  onToggleSelect?: () => void;
+  onToggleSelect?: (gesture?: SelectGesture) => void;
   /** Двойной клик. Нет — открывать нечего, и выделение не ждёт второго клика. */
   onOpen?: () => void;
   children: ReactNode;
@@ -189,12 +197,17 @@ export function OperationListRow({
     if (clickTimer.current) {
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
+      flushPendingSelect = null;
     }
   };
   useEffect(() => cancelPendingSelect, []);
 
   return (
     <div
+      // Shift + клик иначе растянул бы выделение текста от прошлого клика.
+      onMouseDown={(e) => {
+        if (onClickSelect && e.shiftKey) e.preventDefault();
+      }}
       onClick={(e) => {
         if (!onClickSelect) return;
         // Второй клик двойного — гасим отложенное выделение и уходим.
@@ -204,8 +217,14 @@ export function OperationListRow({
         }
         const el = e.target as HTMLElement;
         if (el.closest("button, a, input, label, select, textarea")) return;
-        // Клик с зажатым Shift/Ctrl — привычный системный жест; не трогаем.
-        if (e.shiftKey || e.metaKey || e.ctrlKey) return;
+        // Ctrl/Cmd — системный жест, не трогаем.
+        if (e.metaKey || e.ctrlKey) return;
+        // Shift — диапазон, сразу: двойного клика с ним не ждём.
+        if (e.shiftKey) {
+          flushPendingSelect?.();
+          onClickSelect({ shift: true });
+          return;
+        }
         // Выделение текста мышью тоже не должно переключать строку.
         if ((window.getSelection()?.toString() || "").length > 0) return;
         cancelPendingSelect();
@@ -213,10 +232,14 @@ export function OperationListRow({
           onClickSelect();
           return;
         }
-        clickTimer.current = setTimeout(() => {
+        const run = () => {
+          if (clickTimer.current) clearTimeout(clickTimer.current);
           clickTimer.current = null;
+          flushPendingSelect = null;
           onClickSelect();
-        }, DOUBLE_CLICK_MS);
+        };
+        flushPendingSelect = run;
+        clickTimer.current = setTimeout(run, DOUBLE_CLICK_MS);
       }}
       onDoubleClick={
         onOpen &&

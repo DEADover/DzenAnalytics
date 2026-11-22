@@ -1,3 +1,5 @@
+import { useRangeToggle } from "../hooks/useRangeToggle";
+import type { SelectGesture } from "../lib/rangeSelection";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Calendar, Clock, Coins, Copy, List, Trash2, Undo2, X } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -418,13 +420,8 @@ function DeletedFeed({
   const selectedRows = useMemo(() => sorted.filter((r) => selected.has(r.id)), [sorted, selected]);
   const allSelected = sorted.length > 0 && selectedRows.length === sorted.length;
   const someSelected = selectedRows.length > 0 && !allSelected;
-  const toggleSelect = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const selectOrder = useMemo(() => sorted.map((r) => r.id), [sorted]);
+  const toggleSelect = useRangeToggle(selectOrder, setSelected);
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(sorted.map((r) => r.id)));
   const clearSelection = () => setSelected(new Set());
 
@@ -499,7 +496,7 @@ function DeletedFeed({
       cols={cols}
       template={template}
       selected={selected.has(r.id)}
-      onToggleSelect={() => toggleSelect(r.id)}
+      onToggleSelect={(gesture) => toggleSelect(r.id, gesture)}
       onRestore={() => void onRestore([r])}
       onCancel={onCancel && (() => void onCancel([r]))}
     />
@@ -707,14 +704,14 @@ function FeedRowView({
   cols: Columns;
   template: string;
   selected: boolean;
-  onToggleSelect: () => void;
+  onToggleSelect: (gesture?: SelectGesture) => void;
   onRestore: () => void;
   onCancel?: () => void;
 }) {
   const { tx } = row;
   return (
     <OperationListRow template={template} selected={selected} onToggleSelect={onToggleSelect}>
-      <Checkbox checked={selected} stopPropagation onChange={onToggleSelect} label="Выбрать операцию" />
+      <Checkbox checked={selected} stopPropagation onChange={(_, gesture) => onToggleSelect(gesture)} label="Выбрать операцию" />
       {cols.date && (
         <div className="text-muted tabular-nums whitespace-nowrap">{formatDate(tx.date, "full")}</div>
       )}

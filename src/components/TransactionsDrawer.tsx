@@ -1,3 +1,5 @@
+import { useRangeToggle } from "../hooks/useRangeToggle";
+import type { SelectGesture } from "../lib/rangeSelection";
 import { useScrollLock } from "../hooks/useScrollLock";
 import { txAccountKey, txInKey } from "../lib/accountKey";
 import { useAccountDirectory } from "../hooks/useAccountDirectory";
@@ -298,6 +300,9 @@ export function TransactionsDrawer() {
     return { inc, exp, net: inc - exp };
   }, [filtered]);
 
+  const rowOrder = useMemo(() => sorted.map((t) => t.id), [sorted]);
+  const toggleRow = useRangeToggle(rowOrder, setSelected);
+
   // Sums of the currently-selected rows, split by kind — shown in the bulk bar.
   const selectedTotals = useMemo(
     () => kindTotals(filtered.filter((t) => selected.has(t.id))),
@@ -475,12 +480,7 @@ export function TransactionsDrawer() {
               <div>
                 {sorted.map((t) => {
                   const on = selected.has(t.id);
-                  const toggle = () => {
-                    const next = new Set(selected);
-                    if (on) next.delete(t.id);
-                    else next.add(t.id);
-                    setSelected(next);
-                  };
+                  const toggle = (gesture?: SelectGesture) => toggleRow(t.id, gesture);
                   const who = displayPayee(t) || (transferCounterparty(t) ? dir.label(txInKey(t)) : null);
                   return (
                     <OperationListRow
@@ -491,7 +491,7 @@ export function TransactionsDrawer() {
                       onOpen={() => setEditing(t)}
                       className={operationMarkClass(newMark, t, !!drafts[t.id])}
                     >
-                      <Checkbox checked={on} stopPropagation onChange={toggle} label="Выбрать операцию" />
+                      <Checkbox checked={on} stopPropagation onChange={(_, gesture) => toggle(gesture)} label="Выбрать операцию" />
                       <OperationCategory tx={t} edited={!!edits[t.id]} draft={!!drafts[t.id]} />
                       <div data-cell="payee" className="min-w-0 text-muted">
                         <span className="truncate">

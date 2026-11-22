@@ -1,3 +1,4 @@
+import { useRangeToggle } from "../hooks/useRangeToggle";
 import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
@@ -359,6 +360,10 @@ export function DataTable<T>({
 
   const allKeys = selection ? sorted.map((row, i) => rowKey(row, i)) : [];
   const selectedCount = selection ? allKeys.filter((k) => selection.selected.has(k)).length : 0;
+  // Клик с Shift отмечает диапазон — в порядке строк таблицы.
+  const toggleRow = useRangeToggle(allKeys, (fn) => {
+    if (selection) selection.onChange(fn(new Set(selection.selected)));
+  });
 
   const colCount = columns.length + (selection ? 1 : 0);
   const exportInHeader = showExport && exportSlot === undefined;
@@ -502,12 +507,7 @@ export function DataTable<T>({
                           <Checkbox
                             checked={isSelected}
                             stopPropagation
-                            onChange={(on) => {
-                              const next = new Set(selection.selected);
-                              if (on) next.add(f.key);
-                              else next.delete(f.key);
-                              selection.onChange(next);
-                            }}
+                            onChange={(_, gesture) => toggleRow(f.key, gesture)}
                             label="Выбрать строку"
                           />
                         )}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent } from "react";
 import clsx from "clsx";
+import type { SelectGesture } from "../lib/rangeSelection";
 
 /**
  * Чекбокс продукта: 16 px, цвет акцента.
@@ -22,7 +23,8 @@ export function Checkbox({
   checked: boolean;
   /** «Выбрано не всё»: черта вместо галочки. */
   indeterminate?: boolean;
-  onChange: (next: boolean) => void;
+  /** `gesture` — кликнули ли с Shift: списки так выделяют диапазон. */
+  onChange: (next: boolean, gesture: SelectGesture) => void;
   /** Для скринридера — что выбирает этот чекбокс. */
   label: string;
   title?: string;
@@ -44,7 +46,14 @@ export function Checkbox({
       aria-label={label}
       title={title}
       onClick={stopPropagation ? (e: MouseEvent) => e.stopPropagation() : undefined}
-      onChange={(e) => onChange(e.target.checked)}
+      // Клик с Shift иначе растянул бы выделение текста по всей странице.
+      onMouseDown={(e) => {
+        if (e.shiftKey) e.preventDefault();
+      }}
+      // У чекбокса React строит `change` из клика, поэтому Shift виден здесь.
+      onChange={(e) =>
+        onChange(e.target.checked, { shift: (e.nativeEvent as globalThis.MouseEvent).shiftKey === true })
+      }
       className={clsx(
         "w-4 h-4 shrink-0 align-middle accent-accent cursor-pointer",
         "disabled:cursor-not-allowed disabled:opacity-40",

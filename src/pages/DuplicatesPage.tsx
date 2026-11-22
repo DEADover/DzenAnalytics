@@ -1,3 +1,4 @@
+import { useRangeToggle } from "../hooks/useRangeToggle";
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Calendar, Coins, Copy, CopyCheck, Layers, Pencil, ShieldOff, Trash2 } from "lucide-react";
 import { useDataStore } from "../store/useDataStore";
@@ -142,14 +143,6 @@ export function DuplicatesPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
 
-  const toggleOne = (id: string) =>
-    setSelected((cur) => {
-      const next = new Set(cur);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
   /** Отметить копии группы; если все уже отмечены — снять. */
   const toggleCopies = (list: Transaction[]) =>
     setSelected((cur) => {
@@ -164,6 +157,8 @@ export function DuplicatesPage() {
 
   const allCopies = useMemo(() => groups.flatMap(copiesOf), [groups]);
   const allOps = useMemo(() => groups.flatMap((g) => g.txs), [groups]);
+  const opIds = useMemo(() => allOps.map((t) => t.id), [allOps]);
+  const toggleOne = useRangeToggle(opIds, setSelected);
   const allSelected = allOps.length > 0 && allOps.every((t) => selected.has(t.id));
   const someSelected = selected.size > 0 && !allSelected;
 
@@ -308,13 +303,13 @@ export function DuplicatesPage() {
                   key={t.id}
                   template={template}
                   selected={selected.has(t.id)}
-                  onToggleSelect={() => toggleOne(t.id)}
+                  onToggleSelect={(gesture) => toggleOne(t.id, gesture)}
                   onOpen={() => setEditing(t)}
                 >
                   <Checkbox
                     checked={selected.has(t.id)}
                     stopPropagation
-                    onChange={() => toggleOne(t.id)}
+                    onChange={(_, gesture) => toggleOne(t.id, gesture)}
                     label="Выбрать операцию"
                   />
                   <div className="text-muted tabular-nums whitespace-nowrap">

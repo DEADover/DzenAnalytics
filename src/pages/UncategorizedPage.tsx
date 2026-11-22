@@ -1,3 +1,5 @@
+import { useRangeToggle } from "../hooks/useRangeToggle";
+import type { SelectGesture } from "../lib/rangeSelection";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
@@ -204,14 +206,8 @@ export function UncategorizedPage() {
   const allSelected = sorted.length > 0 && selected.size === sorted.length;
   const someSelected = selected.size > 0 && !allSelected;
 
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const selectOrder = useMemo(() => sorted.map((t) => t.id), [sorted]);
+  const toggleSelect = useRangeToggle(selectOrder, setSelected);
 
   function toggleAll() {
     setSelected((prev) => (prev.size === sorted.length ? new Set() : new Set(sorted.map((t) => t.id))));
@@ -324,7 +320,7 @@ export function UncategorizedPage() {
       applied={applied.has(t.id)}
       busy={busy}
       selected={selected.has(t.id)}
-      onToggleSelect={() => toggleSelect(t.id)}
+      onToggleSelect={(gesture) => toggleSelect(t.id, gesture)}
       onOpen={() => setEditing(t)}
       onApply={(s) => void applySuggestions([s])}
     />
@@ -548,7 +544,7 @@ function Row({
   applied: boolean;
   busy: boolean;
   selected: boolean;
-  onToggleSelect: () => void;
+  onToggleSelect: (gesture?: SelectGesture) => void;
   onOpen: () => void;
   onApply: (s: CategorySuggestion) => void;
 }) {
@@ -560,7 +556,7 @@ function Row({
       onToggleSelect={onToggleSelect}
       onOpen={onOpen}
     >
-      <Checkbox checked={selected} stopPropagation onChange={onToggleSelect} label="Выбрать операцию" />
+      <Checkbox checked={selected} stopPropagation onChange={(_, gesture) => onToggleSelect(gesture)} label="Выбрать операцию" />
       <div className="text-muted tabular-nums whitespace-nowrap">{formatDate(tx.date, "full")}</div>
       <AccountName className="truncate text-muted block" accountKey={txAccountKey(tx)} title={tx.account} />
       {/* На узком экране получатель — главной строкой (категории тут нет), подсказка — под ним. */}
