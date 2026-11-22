@@ -42,8 +42,8 @@ export function BigExpensesWidget({
         title="Крупные траты месяца"
         info={
           <p>
-            Самые большие расходные операции месяца и какая доля расходов на них
-            пришлась. Сумма — в основной валюте, по курсу дня операции. Возвраты
+            Самые большие расходные операции месяца с комментарием и какая доля
+            расходов на них пришлась. Сумма — в основной валюте, по курсу дня операции. Возвраты
             и переводы в список не входят. Клик открывает операцию.
           </p>
         }
@@ -68,10 +68,11 @@ export function BigExpensesWidget({
               </>
             )}
           </div>
-          <div className="scroll-soft flex flex-col gap-1 flex-1 min-h-0 -mx-2 px-2">
+          <div className="scroll-soft flex flex-col gap-0.5 flex-1 min-h-0 -mx-2 px-2">
             {big.rows.map(({ tx, share }) => {
               const name = displayPayee(tx) || tx.subcategory || tx.category;
               const category = tx.subcategory ?? tx.category;
+              const comment = tx.comment?.trim() ?? "";
               return (
                 <button
                   key={tx.id}
@@ -94,8 +95,19 @@ export function BigExpensesWidget({
                     </div>
                     <ProgressBar value={share} className="mt-1.5" />
                     <div className="mt-1 flex items-baseline justify-between gap-2 text-[12px] text-muted tabular-nums">
-                      <span className="truncate">
+                      {/* Комментарий — в этой же строке: отдельной строкой он
+                          делал карточки разной высоты и выталкивал пятую
+                          операцию за край виджета. Длинный виден в подсказке. */}
+                      <span className="truncate" title={comment || undefined}>
                         {dayMonth(tx.date)} · {category}
+                        {comment && (
+                          <>
+                            {" · "}
+                            <span className="text-text/80" data-big-expense-comment>
+                              {comment}
+                            </span>
+                          </>
+                        )}
                       </span>
                       <span className="shrink-0">{formatPct(share, 0)}</span>
                     </div>

@@ -452,6 +452,46 @@ export function healthHistory(opts: ComputeOptions, months = 12): HealthHistoryP
   });
 }
 
+export interface CushionPoint {
+  /** Отчётный месяц. */
+  ym: string;
+  /** На сколько месяцев хватало денег; `null` — расходов ещё не было. */
+  months: number | null;
+  liquid: number;
+  avgExpense: number;
+}
+
+/**
+ * Подушка на конец каждого из последних месяцев — тем же расчётом, что и
+ * показатель: остаток на тот день и средний расход за 6 полных месяцев до него.
+ * Последняя точка — сегодняшнее значение. Вся оценка здесь не нужна, поэтому
+ * месяцы группируются один раз, а не пересчитываются на каждую точку.
+ */
+export function cushionHistory(opts: ComputeOptions, count = 12): CushionPoint[] {
+  const startDay = opts.monthStartDay ?? 1;
+  const all = groupByMonth(opts.transactions, { monthStartDay: startDay });
+  const yms = all.map((m) => m.ym).slice(-count);
+  if (yms.length === 0) return [];
+  const net = netWorthSeries(opts.transactions, opts.calibration);
+  const extra = opts.extraLiquid ?? 0;
+  const current = monthsOf(opts);
+  let netIdx = -1;
+  return yms.map((ym, i) => {
+    const last = i === yms.length - 1;
+    const cutoff = last ? "9999-12-31" : periodRange(ym, startDay).to;
+    while (netIdx + 1 < net.length && net[netIdx + 1].date <= cutoff) netIdx++;
+    const liquid = (netIdx >= 0 ? net[netIdx].net : 0) + extra;
+    const pool = last ? current : all.filter((m) => m.ym <= ym);
+    const avgExpense = mean(pool.slice(-6).map((m) => m.expense));
+    return {
+      ym,
+      months: avgExpense > 0 ? Math.max(0, liquid / avgExpense) : null,
+      liquid,
+      avgExpense,
+    };
+  });
+}
+
 /** Следующий день, «2026-10-31» → «2026-11-01». */
 function dayAfter(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);

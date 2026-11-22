@@ -6,12 +6,31 @@
  */
 
 import { useMemo } from "react";
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  ReferenceLine,
+  Tooltip as ChartTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { BlockTitle } from "./blocks/shared";
+import { ChartContainer } from "../ChartContainer";
+import { ChartTooltipCard, TooltipFacts } from "../TooltipFacts";
 import { ProgressBar } from "../ProgressBar";
 import { SectionEmpty } from "../SectionEmpty";
-import { useHealthScore } from "../../hooks/useHealthScore";
+import { useCushionHistory, useHealthScore } from "../../hooks/useHealthScore";
 import { cushionView } from "../../lib/cushionWidget";
-import { formatMoney } from "../../lib/format";
+import type { CushionPoint } from "../../lib/health";
+import { MONTHS } from "../../lib/months";
+import {
+  chartAxisStroke,
+  chartGridStroke,
+  chartTooltipProps,
+  formatMoney,
+  monthTitle,
+} from "../../lib/format";
 import { pluralRu } from "../../lib/plural";
 
 /** «3,4 месяца», «3 месяца», «5 месяцев»: у дробного числа форма одна. */
@@ -22,8 +41,94 @@ function monthsLabel(n: number): string {
   return `${text} ${word}`;
 }
 
+function CushionTip({
+  active,
+  payload,
+  base,
+}: {
+  active?: boolean;
+  payload?: readonly { payload?: CushionPoint }[];
+  base: string;
+}) {
+  const p = payload?.[0]?.payload;
+  if (!active || !p || p.months === null) return null;
+  return (
+    <ChartTooltipCard>
+      <TooltipFacts
+        title={monthTitle(p.ym)}
+        facts={[
+          { label: "Запас", value: monthsLabel(p.months), strong: true },
+          { label: "Накопления", value: formatMoney(p.liquid, base) },
+          { label: "Расход в месяц", value: formatMoney(p.avgExpense, base) },
+        ]}
+      />
+    </ChartTooltipCard>
+  );
+}
+
+/** Запас по месяцам и линия цели: растёт подушка или тает. */
+function CushionChart({
+  points,
+  target,
+  base,
+}: {
+  points: readonly CushionPoint[];
+  target: number;
+  base: string;
+}) {
+  const top = Math.ceil(Math.max(target, ...points.map((p) => p.months ?? 0)) * 1.1);
+  return (
+    <div className="flex-1 min-h-[8rem] flex flex-col" data-testid="cushion-chart">
+      <div className="label mb-1">Запас за {points.length} {pluralRu(points.length, ["месяц", "месяца", "месяцев"])}</div>
+      <div className="flex-1 min-h-0">
+        <ChartContainer>
+          <ComposedChart data={[...points]} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="cushion-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgb(var(--c-accent))" stopOpacity={0.28} />
+                <stop offset="100%" stopColor="rgb(var(--c-accent))" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} vertical={false} />
+            <XAxis
+              dataKey="ym"
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickLine={false}
+              interval="preserveStartEnd"
+              minTickGap={28}
+              tickFormatter={(ym: string) => MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym}
+            />
+            <YAxis
+              stroke={chartAxisStroke}
+              fontSize={11}
+              tickLine={false}
+              width={24}
+              allowDecimals={false}
+              domain={[0, top]}
+            />
+            <ChartTooltip {...chartTooltipProps} content={(props) => <CushionTip {...props} base={base} />} />
+            <ReferenceLine y={target} stroke="rgb(var(--c-income))" strokeDasharray="4 3" />
+            <Area
+              type="monotone"
+              dataKey="months"
+              stroke="rgb(var(--c-accent))"
+              strokeWidth={2}
+              fill="url(#cushion-fill)"
+              dot={false}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ChartContainer>
+      </div>
+    </div>
+  );
+}
+
 export function CushionWidget({ base }: { base: string }) {
   const health = useHealthScore();
+  const history = useCushionHistory();
+  const chartPoints = useMemo(() => history.filter((p) => p.months !== null), [history]);
   const view = useMemo(
     () => cushionView(health?.components.find((c) => c.id === "emergency_fund")),
     [health]
@@ -38,7 +143,8 @@ export function CushionWidget({ base }: { base: string }) {
           <p>
             На сколько месяцев хватит денег, если доход пропадёт, а траты останутся
             прежними: остаток на счетах, делённый на средний расход за 6 полных
-            месяцев. Цель задаётся в «Финансовом здоровье», числа те же, что там.
+            месяцев. График показывает запас на конец каждого месяца, пунктир —
+            цель. Цель задаётся в «Финансовом здоровье», числа те же, что там.
             Общие фильтры главной на виджет не действуют.
           </p>
         }
@@ -66,7 +172,10 @@ export function CushionWidget({ base }: { base: string }) {
               <span>{Math.round(view.ratio * 100)}%</span>
             </div>
           </div>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm border-t border-border pt-3">
+          {chartPoints.length >= 2 && (
+            <CushionChart points={chartPoints} target={view.target} base={base} />
+          )}
+          <dl className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm border-t border-border pt-3">
             <dt className="text-muted">Накопления</dt>
             <dd className="text-right tabular-nums">{formatMoney(view.liquid, base)}</dd>
             <dt className="text-muted">Расход в месяц</dt>

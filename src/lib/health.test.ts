@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeHealthScore, healthHistory } from "./health";
+import { computeHealthScore, cushionHistory, healthHistory } from "./health";
 import { tx } from "../test/fixtures";
 import { stripAmountMarks } from "./format";
 
@@ -260,5 +260,38 @@ describe("оценка считается по полным месяцам", () 
     expect(h[h.length - 1].overall).toBe(computeHealthScore(opts).overall);
     const may = computeHealthScore({ ...base, transactions: full, today: "2026-06-01" }).overall;
     expect(h[h.length - 2]).toEqual({ ym: "2026-05", overall: may });
+  });
+});
+
+describe("cushionHistory", () => {
+  const month = (ym: string, amount: number) =>
+    tx({ id: `e-${ym}`, kind: "expense", amountBase: amount, amount, date: `${ym}-10` });
+  const income = tx({ id: "i", kind: "income", amountBase: 600_000, amount: 600_000, date: "2026-01-05" });
+
+  it("последняя точка совпадает с показателем, идущий месяц в средний расход не входит", () => {
+    const opts = {
+      transactions: [income, month("2026-01", 10_000), month("2026-02", 20_000), month("2026-03", 90_000)],
+      baseCurrency: "RUB",
+      calibration: null,
+      categoryMeta: {},
+      today: "2026-03-15",
+    };
+    const points = cushionHistory(opts);
+    expect(points.map((p) => p.ym)).toEqual(["2026-01", "2026-02", "2026-03"]);
+    const fund = computeHealthScore(opts).components.find((c) => c.id === "emergency_fund")!;
+    expect(points[2].months!).toBeCloseTo(fund.value as number);
+    expect(points[2].avgExpense).toBe(15_000);
+    // На конец января: остаток 590 000, средний расход — один этот месяц.
+    expect(points[0].months!).toBeCloseTo(59);
+  });
+
+  it("без расходов запаса посчитать нельзя", () => {
+    const points = cushionHistory({
+      transactions: [income],
+      baseCurrency: "RUB",
+      calibration: null,
+      categoryMeta: {},
+    });
+    expect(points[0].months).toBeNull();
   });
 });

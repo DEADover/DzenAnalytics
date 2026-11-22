@@ -10,6 +10,8 @@ import { useLoanAccountKeys, useOffBalanceExcluded } from "./useInBalanceTransac
 import { useAccountDirectory } from "./useAccountDirectory";
 import {
   computeHealthScore,
+  cushionHistory,
+  type CushionPoint,
   healthHistory,
   type HealthHistoryPoint,
   type HealthOptions,
@@ -41,6 +43,12 @@ export function useHealthScore(): HealthScore | null {
 export function useHealthHistory(): HealthHistoryPoint[] {
   const inputs = useHealthInputs();
   return useMemo(() => (inputs ? healthHistory(inputs) : []), [inputs]);
+}
+
+/** Подушка на конец каждого из последних месяцев — для графика в виджете. */
+export function useCushionHistory(): CushionPoint[] {
+  const inputs = useHealthInputs();
+  return useMemo(() => (inputs ? cushionHistory(inputs) : []), [inputs]);
 }
 
 /** Всё, из чего считается оценка, — одно на оценку и её историю. */

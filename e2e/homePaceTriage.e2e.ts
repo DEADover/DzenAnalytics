@@ -164,6 +164,7 @@ test("«Крупные траты месяца»: самые большие ра
   // Самая большая трата октября в поддельном аккаунте — аренда.
   await expect(rows.first()).toContainText("Управляющая компания");
   await expect(rows.first()).toContainText(/35\s000/);
+  await expect(rows.first().locator("[data-big-expense-comment]")).toHaveText("Аренда");
   await expect(big.getByTestId("big-expenses-summary")).toContainText(/5 из \d+ операц\S+ — \d+\s?% расходов/);
   await rows.first().click();
   const panel = page.locator("[data-exit-panel]");
@@ -178,6 +179,7 @@ test("«Подушка безопасности»: месяцы, цель и т�
   await expect(cushion.getByTestId("cushion-months")).toContainText(/месяц/);
   await expect(cushion).toContainText("Цель — 6 месяцев");
   await expect(cushion).toContainText("Накопления");
+  await expect(cushion.getByTestId("cushion-chart").locator(".recharts-area-area")).toHaveCount(1);
 });
 
 test("«Цели»: пустое состояние и цель с прогрессом", async ({ page }) => {
