@@ -46,7 +46,7 @@ type RefKind = "tag" | "account" | "merchant";
 
 function conditionKind(c: RuleCondition): RefKind | null {
   if (c.op !== "equals") return null;
-  if (c.field === "category") return "tag";
+  if (c.field === "category" || c.field === "extraCategory") return "tag";
   if (c.field === "account") return "account";
   if (c.field === "payee") return "merchant";
   return null;

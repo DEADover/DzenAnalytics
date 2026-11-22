@@ -946,3 +946,52 @@ describe("правила — строка из выписки и «уже соо
     expect(ruleChangesTx(tx({ comment: "хлеб" }), note)).toBe(true);
   });
 });
+
+describe("условие «Вторая категория» (#142)", () => {
+  const tx = (extraCategories?: string[]) =>
+    ({
+      id: "1",
+      kind: "expense",
+      category: "Еда",
+      subcategory: null,
+      categoryFull: "Еда",
+      categoryFullOriginal: "Еда",
+      extraCategories,
+    }) as unknown as Transaction;
+  const cond = (op: ConditionOp, value = ""): RuleCondition => ({
+    field: "extraCategory",
+    op,
+    value,
+    caseInsensitive: true,
+  });
+
+  it("находит операцию по любой из вторых категорий", () => {
+    const t = tx(["Отпуск", "Дети / Школа"]);
+    expect(conditionMatches(t, cond("equals", "Отпуск"))).toBe(true);
+    expect(conditionMatches(t, cond("equals", "Дети / Школа"))).toBe(true);
+    expect(conditionMatches(t, cond("contains", "школа"))).toBe(true);
+  });
+
+  it("не путает вторую категорию с основной", () => {
+    expect(conditionMatches(tx(["Отпуск"]), cond("equals", "Еда"))).toBe(false);
+  });
+
+  it("условие «Категория» по-прежнему смотрит только на основную", () => {
+    const c: RuleCondition = { ...cond("equals", "Отпуск"), field: "category" };
+    expect(conditionMatches(tx(["Отпуск"]), c)).toBe(false);
+  });
+
+  it("«не содержит» — ни в одной из вторых", () => {
+    const t = tx(["Отпуск", "Дети"]);
+    expect(conditionMatches(t, cond("not_contains", "Дети"))).toBe(false);
+    expect(conditionMatches(t, cond("not_contains", "Авто"))).toBe(true);
+  });
+
+  it("«не заполнено» и «заполнено»", () => {
+    expect(conditionMatches(tx(), cond("empty"))).toBe(true);
+    expect(conditionMatches(tx([]), cond("empty"))).toBe(true);
+    expect(conditionMatches(tx(), cond("not_empty"))).toBe(false);
+    expect(conditionMatches(tx(["Отпуск"]), cond("empty"))).toBe(false);
+    expect(conditionMatches(tx(["Отпуск"]), cond("not_empty"))).toBe(true);
+  });
+});

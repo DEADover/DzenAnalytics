@@ -876,7 +876,7 @@ export function RuleEditModal({
                             placeholder="Поиск счёта"
                           />
                         </div>
-                      ) : c.field === "category" && c.op === "equals" ? (
+                      ) : (c.field === "category" || c.field === "extraCategory") && c.op === "equals" ? (
                         <div className="flex-1 min-w-0">
                           <CategoryCascadePicker
                             category={
@@ -958,7 +958,7 @@ export function RuleEditModal({
                       {/* У значения из списка (тип, счёт или категория «равно»)
                           регистра нет — его выбирают, а не набирают. */}
                       {c.field === "kind" ||
-                      (c.op === "equals" && (c.field === "account" || c.field === "category")) ? null : NUMERIC_FIELDS.has(c.field) ? (
+                      (c.op === "equals" && (c.field === "account" || c.field === "category" || c.field === "extraCategory")) ? null : NUMERIC_FIELDS.has(c.field) ? (
                         <Tooltip content="Сумма берётся в валюте отчётов и без знака: «больше 1000» поймает и трату, и поступление">
                           <span className="text-xs text-muted shrink-0 whitespace-nowrap border-b border-dotted border-border cursor-help">
                             {currencySymbol(base)}

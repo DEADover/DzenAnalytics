@@ -40,6 +40,12 @@ export function applyEdits(
       merged.subcategory = null;
       merged.categoryFull = "Перевод";
     }
+    // Основная категория не бывает одновременно второй: правило могло поставить
+    // основной ту, что уже стояла второй. Отправка такой повтор убирает сама, а
+    // на экране он был бы виден до неё.
+    if (merged.extraCategories?.includes(merged.categoryFull)) {
+      merged.extraCategories = merged.extraCategories.filter((c) => c !== merged.categoryFull);
+    }
     if (
       patch.amount !== undefined ||
       patch.currency !== undefined ||

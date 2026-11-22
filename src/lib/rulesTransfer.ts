@@ -68,6 +68,7 @@ const FIELDS: ReadonlySet<string> = new Set<RuleField>([
   "statement",
   "comment",
   "category",
+  "extraCategory",
   "account",
   "amount",
   "kind",

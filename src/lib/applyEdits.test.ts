@@ -30,3 +30,12 @@ describe("applyEdits — transfer category normalization", () => {
     expect(out.category).toBe("Еда");
   });
 });
+
+describe("applyEdits — основная и вторая категории", () => {
+  it("категория, ставшая основной, уходит из вторых", () => {
+    const t = tx({ id: "a", category: "Еда", subcategory: null, categoryFull: "Еда", extraCategories: ["Отпуск", "Дети"] });
+    const out = run(t, { category: "Отпуск", subcategory: null, categoryFull: "Отпуск" });
+    expect(out.categoryFull).toBe("Отпуск");
+    expect(out.extraCategories).toEqual(["Дети"]);
+  });
+});

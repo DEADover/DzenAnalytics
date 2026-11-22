@@ -49,6 +49,7 @@ export const FIELD_LABELS: Record<RuleField, string> = {
   kind: "Тип операции",
   account: "Счёт",
   category: "Категория",
+  extraCategory: "Вторая категория",
   payee: "Контрагент",
   statement: "Строка из выписки",
   comment: "Комментарий",
@@ -464,6 +465,12 @@ export function conditionValues(t: Transaction, field: RuleField): string[] {
       return [t.comment ?? ""];
     case "category":
       return [t.categoryFullOriginal || t.categoryFull || ""];
+    // Отдельное поле, а не добавка к «Категории»: иначе уже сохранённые правила
+    // начали бы срабатывать на операциях, где нужная категория стоит второй, и
+    // менять им основную. Без вторых категорий поле пустое, а не «неизвестное»:
+    // условие «не заполнено» должно такую операцию находить.
+    case "extraCategory":
+      return t.extraCategories?.length ? t.extraCategories : [""];
     // У перевода счёт не один: списание идёт с одного, зачисление на другой.
     // Возвращаем обе ноги, иначе условие «Счёт = Карта» не поймало бы перевод
     // НА карту — а человек его ждёт.

@@ -153,3 +153,26 @@ test("«Что изменят правила»: операция с подпис
   await expect(dialog).not.toContainText("Отменить можно построчно");
   if (process.env.E2E_SHOTS) await dialog.screenshot({ path: process.env.E2E_SHOTS + "/rule-preview.png" });
 });
+
+test("правило находит операцию по второй категории (#142)", async ({ page }) => {
+  await connectZen(page, "/rules");
+  await page.evaluate(async () => {
+    type T = { id: string; payee: string; extraCategories?: string[] };
+    type S = { getState: () => { transactionsRaw: T[] }; setState: (p: { transactionsRaw: T[] }) => void };
+    const store = (window as unknown as { __store: (n: string) => Promise<Record<string, S>> }).__store;
+    const { useDataStore } = await store("useDataStore");
+    const all = useDataStore.getState().transactionsRaw;
+    const pick = new Set(all.filter((t) => t.payee === "Кофейня у дома").slice(0, 2).map((t) => t.id));
+    useDataStore.setState({
+      transactionsRaw: all.map((t) => (pick.has(t.id) ? { ...t, extraCategories: ["Отпуск"] } : t)),
+    });
+  });
+
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await editor.locator('[aria-label="Поле условия"]').first().click();
+  await page.getByRole("option", { name: "Вторая категория", exact: true }).click();
+  await expect(editor.locator('[aria-label="Поле условия"]').first()).toHaveText(/Вторая категория/);
+  await editor.getByLabel("Значение условия").first().fill("Отпуск");
+  await expect(editor.getByText(/Подойд[её]т 2 операции/)).toBeVisible();
+});
