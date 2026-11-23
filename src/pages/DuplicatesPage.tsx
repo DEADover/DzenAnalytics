@@ -1,3 +1,4 @@
+import { useAmountColumns } from "../hooks/useAmountColumns";
 import { useRangeToggle } from "../hooks/useRangeToggle";
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Calendar, Coins, Copy, CopyCheck, Layers, Pencil, ShieldOff, Trash2 } from "lucide-react";
@@ -196,7 +197,7 @@ export function DuplicatesPage() {
     [allOps, selected]
   );
 
-  const resize = useColumnResize("duplicates", COLUMNS, { mode: "grid" });
+  const resize = useColumnResize("duplicates", useAmountColumns(COLUMNS), { mode: "grid" });
   const template = resize.template;
 
   if (transactions.length === 0) return <EmptyState />;

@@ -1,3 +1,4 @@
+import { useAmountColumns } from "../../hooks/useAmountColumns";
 import type { PlannedOp } from "../../lib/plannedOps";
 import { useColumnResize, type ResizeColumn } from "../../hooks/useColumnResize";
 import { ListHeadCell, OperationListHead } from "./OperationList";
@@ -29,7 +30,7 @@ const PLAN_COLUMNS: ResizeColumn[] = [
  * удалить просроченную дату.
  */
 export function PlannedOpsTable({ ops, emptyText }: { ops: PlannedOp[]; emptyText?: string }) {
-  const resize = useColumnResize("recurring-plans", PLAN_COLUMNS, { mode: "grid" });
+  const resize = useColumnResize("recurring-plans", useAmountColumns(PLAN_COLUMNS), { mode: "grid" });
   return (
     <div className="rounded-xl border border-border overflow-hidden">
       <OperationListHead template={resize.template} pinnable={false}>

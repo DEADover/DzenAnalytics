@@ -1,3 +1,4 @@
+import { AMOUNT_WITH_BASE_WIDTH } from "../hooks/useAmountColumns";
 import { useRangeToggle } from "../hooks/useRangeToggle";
 import type { SelectGesture } from "../lib/rangeSelection";
 import { useScrollLock } from "../hooks/useScrollLock";
@@ -191,6 +192,7 @@ export function TransactionsDrawer() {
     );
   }, [liveTransactions, search]);
 
+  const amountWithBase = useDisplayStore((s) => s.amountInBase);
   const columns: Column<Transaction>[] = [
     {
       key: "date",
@@ -255,7 +257,8 @@ export function TransactionsDrawer() {
       key: "amount",
       type: "main",
       tone: operationTone,
-      width: "10rem",
+      // С пересчётом рядом — две суммы в одной строке.
+      width: amountWithBase ? AMOUNT_WITH_BASE_WIDTH : "10rem",
       label: "Сумма",
       sortValue: (t) => t.amountBase,
       cellTitle: (t) => (t.kind === "refund" ? "Возврат — уменьшает расход категории" : ""),

@@ -1,3 +1,4 @@
+import { useAmountColumns } from "../hooks/useAmountColumns";
 import { useRangeToggle } from "../hooks/useRangeToggle";
 import type { SelectGesture } from "../lib/rangeSelection";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -454,7 +455,7 @@ function DeletedFeed({
     () => feedColumns({ date: cols.date, deleted: cols.deleted, status: cols.status }),
     [cols.date, cols.deleted, cols.status]
   );
-  const resize = useColumnResize(`deleted-${mode}`, columns, { mode: "grid" });
+  const resize = useColumnResize(`deleted-${mode}`, useAmountColumns(columns), { mode: "grid" });
   const template = resize.template;
 
   function exportCsv() {

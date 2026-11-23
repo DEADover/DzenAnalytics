@@ -36,6 +36,8 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
  */
 export function InterfaceSettings() {
   const rates = useDataStore((s) => s.rates);
+  // Для примера нужна валюта, отличная от базовой.
+  const exampleCurrency = rates.base === "USD" ? "EUR" : "USD";
   const zenLastSyncAt = useZenmoneyStore((s) => s.lastSyncAt);
   const [membersCount, setMembersCount] = useState(0);
   useEffect(() => {
@@ -499,25 +501,24 @@ export function InterfaceSettings() {
         />
 
         <SettingRow
-          title="Сумма в базовой валюте"
+          title="Пересчёт в базовую валюту"
           status={
             amountInBase
-              ? "Под суммой в другой валюте — она же в базовой, в скобках"
-              : "Только сумма в валюте операции"
+              ? `Например: ${formatMoneyExample(100, exampleCurrency)} (${formatMoneyExample(9240, rates.base)})`
+              : `Например: ${formatMoneyExample(100, exampleCurrency)}`
           }
           help={
             <p>
-              В лентах операций и в списке операций в шторке под суммой в другой
-              валюте появляется та же сумма в базовой: «100 $» и ниже «(9 240 ₽)».
-              Пересчёт — по курсу дня операции, как в итогах и отчётах. Курс и его
-              дата видны при наведении на сумму. Операции в базовой валюте не
-              меняются.
+              Если операция не в базовой валюте, рядом с её суммой в скобках
+              появится пересчёт по курсу на день операции. Работает в лентах
+              операций и в списке операций сбоку. Курс и его дата видны при
+              наведении на сумму.
             </p>
           }
           control={
             <Switch
               checked={amountInBase}
-              label="Показывать сумму в базовой валюте"
+              label="Показывать пересчёт в базовую валюту"
               onChange={(next) => setAmountInBase(next)}
             />
           }

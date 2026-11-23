@@ -1,3 +1,4 @@
+import { useAmountColumns } from "../hooks/useAmountColumns";
 import { useRangeToggle } from "../hooks/useRangeToggle";
 import type { SelectGesture } from "../lib/rangeSelection";
 import { useEffect, useMemo, useState } from "react";
@@ -306,7 +307,7 @@ export function UncategorizedPage() {
     downloadCsv(csvFileName("uncategorized"), text);
   }
 
-  const resize = useColumnResize("uncategorized", COLUMNS, { mode: "grid" });
+  const resize = useColumnResize("uncategorized", useAmountColumns(COLUMNS), { mode: "grid" });
   const template = resize.template;
 
   if (transactions.length === 0) return <EmptyState />;

@@ -1,3 +1,4 @@
+import { useAmountColumns } from "../hooks/useAmountColumns";
 import { useRangeToggle } from "../hooks/useRangeToggle";
 import type { SelectGesture } from "../lib/rangeSelection";
 import { accountKeyOf, txAccountKey } from "../lib/accountKey";
@@ -558,7 +559,7 @@ export function TransactionsPage() {
   const byDate = sortMode === "date-desc" || sortMode === "date-asc";
   const timeColumn = useDisplayStore((s) => s.timeColumn);
   const columns = useMemo(() => opsColumns(byDate, timeColumn), [byDate, timeColumn]);
-  const resize = useColumnResize("operations", columns, {
+  const resize = useColumnResize("operations", useAmountColumns(columns), {
     mode: "grid",
   });
   // Строки планов в режиме «В ленте» — те же, что в ленте одних планов.

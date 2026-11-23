@@ -177,7 +177,7 @@ export function OperationAmount({ tx }: { tx: Transaction }) {
       }
     />
   ) : null;
-  return (
+  const amount = (
     <>
       {tx.category === "Долг" ? (
         <HandCoins className="inline-block w-3.5 h-3.5 align-[-2px] mr-0.5" aria-hidden />
@@ -189,14 +189,24 @@ export function OperationAmount({ tx }: { tx: Transaction }) {
       <Tooltip data content={rateTip}>
         <span data-amount-main>{formatMoney(tx.amount, tx.currency)}</span>
       </Tooltip>
-      {received && <div className="text-[0.85em] font-normal text-muted/80">({received})</div>}
-      {inBase && (
-        <Tooltip data content={rateTip}>
-          <div className="text-[0.85em] font-normal text-muted/80" data-amount-base>
-            ({inBase})
-          </div>
-        </Tooltip>
+    </>
+  );
+  return (
+    <>
+      {inBase ? (
+        // В одну строку; если столбец сузили руками, пересчёт уйдёт вниз целиком.
+        <div className="flex flex-wrap justify-end items-baseline gap-x-1">
+          <span className="whitespace-nowrap">{amount}</span>
+          <Tooltip data content={rateTip}>
+            <span className="whitespace-nowrap text-[0.85em] font-normal text-muted/80" data-amount-base>
+              ({inBase})
+            </span>
+          </Tooltip>
+        </div>
+      ) : (
+        amount
       )}
+      {received && <div className="text-[0.85em] font-normal text-muted/80">({received})</div>}
     </>
   );
 }

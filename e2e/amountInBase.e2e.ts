@@ -1,6 +1,6 @@
 /**
- * Настройка «Сумма в базовой валюте»: под суммой в другой валюте — она же в
- * рублях, в скобках. И в ленте, и в шторке. Выключена — подписи нет.
+ * Настройка «Пересчёт в базовую валюту»: рядом с суммой в другой валюте — она
+ * же в рублях, в скобках, в одной строке. И в ленте, и в шторке. Выключена — подписи нет.
  */
 import type { Page } from "@playwright/test";
 import { test, expect, connectZen } from "./harness";
@@ -46,6 +46,28 @@ test("сумма в базовой валюте в ленте и в шторке
 
   await setOption(page, true);
   await expect(row.locator("[data-amount-base]")).toContainText(/\(.*90.*₽/);
+  // В одной строке с суммой и в границах столбца — даже на узком экране и с копейками.
+  await page.evaluate(async () => {
+    type S = { getState: () => { setFractionDigits: (n: number) => Promise<void> } };
+    const w = window as unknown as { __store: (n: string) => Promise<Record<string, S>> };
+    const { useDisplayStore } = await w.__store("useDisplayStore");
+    await useDisplayStore.getState().setFractionDigits(2);
+  });
+  for (const width of [1440, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const fit = await row.locator('[data-cell="amount"]').evaluate((cell) => {
+      const main = cell.querySelector("[data-amount-main]")!.getBoundingClientRect();
+      const inBase = cell.querySelector("[data-amount-base]")!.getBoundingClientRect();
+      const box = cell.getBoundingClientRect();
+      return {
+        oneLine: Math.abs(main.bottom - inBase.bottom) < 4,
+        inside: inBase.right <= box.right + 1 && main.left >= box.left - 1,
+      };
+    });
+    expect(fit).toEqual({ oneLine: true, inside: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
   // Операция в рублях подписи не получает.
   await expect(
     page.locator(".op-row", { hasText: "Пятёрочка" }).first().locator("[data-amount-base]")
