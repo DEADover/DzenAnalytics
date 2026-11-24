@@ -1062,7 +1062,7 @@ describe("возврат дохода — трата в категории «т�
       [tx({ kind: "expense", account: "Карта", amount: 2150, amountBase: 2150, incomeRefund: true })],
       () => true
     );
-    expect(r).toEqual({ inc: -2150, exp: 0, xfer: 0 });
+    expect(r).toEqual({ inc: -2150, exp: 0, xfer: 0, xferIn: 0, xferOut: 0 });
   });
 });
 
@@ -1086,7 +1086,23 @@ describe("zenPeriodTotals — «Итоги за период» ленты Дзе
       ],
       inside
     );
-    expect(r).toEqual({ inc: 3000, exp: 410, xfer: 510 });
+    expect(r).toEqual({ inc: 3000, exp: 410, xfer: 510, xferIn: 0, xferOut: 0 });
+  });
+
+  it("счета выбраны в фильтре — переводы через границу выбора идут в переводы", () => {
+    const r = zenPeriodTotals(
+      [
+        mk({ kind: "expense", account: "Карта", amountBase: 100 }),
+        mk({ kind: "income", account: "Наличные", amountBase: 1000 }),
+        tr("Карта", "Цель", 300),
+        tr("Кредит", "Карта", 2000),
+        tr("Карта", "Наличные", 510, 500),
+      ],
+      inside,
+      true
+    );
+    // Доходы и расходы — только настоящие; комиссия перевода внутри — расход.
+    expect(r).toEqual({ inc: 1000, exp: 110, xfer: 510, xferIn: 2000, xferOut: 300 });
   });
 
   it("выдача кредита со страховкой — доходом то, что пришло на карту", () => {

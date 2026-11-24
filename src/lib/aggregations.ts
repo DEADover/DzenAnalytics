@@ -2961,14 +2961,24 @@ export function transferTotals(
  *
  * `inside` — S: выбранные в фильтре счета, а без выбора — счета в балансе.
  * `xfer` — переводы внутри S (перекладывание между своими счетами).
+ *
+ * `separateTransfers` — счета выбраны в фильтре САМИМ человеком. Тогда перевод
+ * через границу выбора — не доход и не расход, а перевод: пришло (`xferIn`) или
+ * ушло (`xferOut`). Отобрав один счёт, человек ждёт в «Доходах» доходы, а не
+ * пополнение с соседней карты (жалоба 24.11.2026). Без выбора — правило
+ * Дзен-мани: S — счета в балансе, и перевод наружу (в накопления, на кредит,
+ * в долг) — расход.
  */
 export function zenPeriodTotals(
   txs: readonly Transaction[],
-  inside: (key: string) => boolean
-): { inc: number; exp: number; xfer: number } {
+  inside: (key: string) => boolean,
+  separateTransfers = false
+): { inc: number; exp: number; xfer: number; xferIn: number; xferOut: number } {
   let inc = 0;
   let exp = 0;
   let xfer = 0;
+  let xferIn = 0;
+  let xferOut = 0;
   for (const t of txs) {
     if (t.kind === "transfer") {
       const outIn = inside(txOutKey(t));
@@ -2977,9 +2987,14 @@ export function zenPeriodTotals(
         xfer += t.amountBase;
         const fee = transferFee(t);
         if (fee) exp += fee.amountBase;
-      } else if (outIn) exp += t.amountBase;
-      // Доход — сколько пришло (у выдачи кредита меньше списанного).
-      else if (inIn) inc += incomeLegBase(t);
+      } else if (outIn) {
+        if (separateTransfers) xferOut += t.amountBase;
+        else exp += t.amountBase;
+      } else if (inIn) {
+        // Доход — сколько пришло (у выдачи кредита меньше списанного).
+        if (separateTransfers) xferIn += incomeLegBase(t);
+        else inc += incomeLegBase(t);
+      }
       continue;
     }
     if (!inside(txAccountKey(t))) continue;
@@ -2988,7 +3003,7 @@ export function zenPeriodTotals(
     else if (t.kind === "expense") exp += t.amountBase;
     else if (t.kind === "refund") exp -= t.amountBase;
   }
-  return { inc, exp, xfer };
+  return { inc, exp, xfer, xferIn, xferOut };
 }
 
 /** Строка аналитики «Кредиты и кредитки» — как в Дзен-мани. */

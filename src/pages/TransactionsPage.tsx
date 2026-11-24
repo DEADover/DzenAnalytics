@@ -426,6 +426,7 @@ export function TransactionsPage() {
    */
   const offBalance = useOffBalanceExcluded();
   const accountDir = useAccountDirectory();
+  const pickedAccounts = filters.accounts.size > 0 && !filters.accounts.has(FILTER_NONE);
   const insideTotals = useMemo(() => {
     const picked = filters.accounts;
     if (picked.size > 0 && !picked.has(FILTER_NONE)) {
@@ -437,10 +438,13 @@ export function TransactionsPage() {
   }, [filters.accounts, accountDir, offBalance]);
 
   const totals = useMemo(() => {
-    const { inc, exp, xfer } = zenPeriodTotals(searched, insideTotals);
+    const { inc, exp, xfer, xferIn, xferOut } = zenPeriodTotals(searched, insideTotals, pickedAccounts);
     const { savings } = transferTotals(searched, savingsAccounts);
-    return { inc, exp, xfer, savings, net: inc - exp, count: searched.length };
-  }, [searched, savingsAccounts, insideTotals]);
+    return { inc, exp, xfer, xferIn, xferOut, savings, net: inc - exp, count: searched.length };
+  }, [searched, savingsAccounts, insideTotals, pickedAccounts]);
+  // Счета выбраны в фильтре и через их границу ходили переводы: карточка
+  // «Переводы» показывает, сколько пришло и ушло, а не перекладывание внутри.
+  const borderTransfers = pickedAccounts && (totals.xferIn > 0 || totals.xferOut > 0);
 
   // Lazy reveal: render PAGE_SIZE rows initially; an IntersectionObserver at
   // the bottom of the list increases this by another PAGE_SIZE whenever the
@@ -624,14 +628,22 @@ export function TransactionsPage() {
           value={formatMoney(totals.inc, base)}
           tone="income"
           icon={<ArrowUp className="w-4 h-4" />}
-          tooltip="Как в Дзен-мани: поступления на счета в балансе (или на выбранные в фильтре) и переводы на них с остальных счетов — с накопительных, кредитов, из долга"
+          tooltip={
+            pickedAccounts
+              ? "Поступления на выбранные в фильтре счета. Переводы с других счетов сюда не входят — они в «Переводах»"
+              : "Как в Дзен-мани: поступления на счета в балансе и переводы на них с остальных счетов — с накопительных, кредитов, из долга"
+          }
         />
         <StatCell
           label="Расходы"
           value={formatMoney(totals.exp, base)}
           tone="expense"
           icon={<ArrowDown className="w-4 h-4" />}
-          tooltip="Как в Дзен-мани: траты со счетов в балансе (или с выбранных в фильтре), переводы с них на остальные счета — в накопления, на кредиты, в долг — и комиссии переводов. Возвраты уменьшают расход"
+          tooltip={
+            pickedAccounts
+              ? "Траты с выбранных в фильтре счетов и комиссии переводов. Переводы на другие счета сюда не входят — они в «Переводах». Возвраты уменьшают расход"
+              : "Как в Дзен-мани: траты со счетов в балансе, переводы с них на остальные счета — в накопления, на кредиты, в долг — и комиссии переводов. Возвраты уменьшают расход"
+          }
         />
         <StatCell
           label="Разница"
@@ -641,9 +653,31 @@ export function TransactionsPage() {
         />
         <StatCell
           label="Переводы"
-          value={formatMoney(totals.xfer, base)}
+          value={
+            borderTransfers
+              ? formatMoney(totals.xferIn - totals.xferOut, base, { signed: true })
+              : formatMoney(totals.xfer, base)
+          }
+          tone={
+            borderTransfers
+              ? totals.xferIn - totals.xferOut > 0
+                ? "income"
+                : totals.xferIn - totals.xferOut < 0
+                  ? "expense"
+                  : "default"
+              : "default"
+          }
+          note={
+            borderTransfers
+              ? `пришло ${formatMoney(totals.xferIn, base)}, ушло ${formatMoney(totals.xferOut, base)}`
+              : undefined
+          }
           icon={<ArrowLeftRight className="w-4 h-4" />}
-          tooltip="Переводы между счетами в балансе (или между выбранными в фильтре) — перекладывание своих денег, не доход и не расход"
+          tooltip={
+            pickedAccounts
+              ? "Переводы между выбранными в фильтре счетами и другими: сколько пришло на них и сколько ушло с них. Это перекладывание своих денег, не доход и не расход"
+              : "Переводы между счетами в балансе — перекладывание своих денег, не доход и не расход"
+          }
         />
         <StatCell
           label="Накопления"
