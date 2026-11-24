@@ -1,25 +1,17 @@
 import { localToday } from "../lib/period";
-import { useState } from "react";
-import { CalendarCheck, CalendarClock, Link2, MoreHorizontal, Pencil, X } from "lucide-react";
+import { CalendarClock, MoreHorizontal } from "lucide-react";
 import clsx from "clsx";
 import type { Transaction } from "../types";
-import { formatPlanDate as formatShort, planTitle, plannedAsTransaction, type PlannedOp } from "../lib/plannedOps";
-import { usePlannedDeletionsStore } from "../store/usePlannedDeletionsStore";
-import { toast } from "../store/useToastStore";
+import { formatPlanDate as formatShort, plannedAsTransaction, type PlannedOp } from "../lib/plannedOps";
+import { usePlanActions } from "./usePlanActions";
 import { operationTone } from "../lib/txKindStyle";
 import { TONE_CLASS } from "../components/table/tableKit";
-import { EditTransactionModal } from "../components/EditTransactionModal";
-import { MenuItem } from "../components/MenuItem";
-import { Popover } from "../components/Popover";
 import { OperationListRow } from "../components/operations/OperationList";
 import { OperationAmount, OperationCategory, OperationComment, OperationPayee } from "../components/operations/OperationCells";
-import { PlanLinkModal } from "../components/operations/PlanLinkModal";
-import { PlanEditModal } from "../components/operations/PlanEditModal";
 import { AccountName } from "../components/AccountName";
 
 /**
- * Строки планов и всё, что к ним прилагается: меню «⋯» с действиями,
- * подтверждения удаления и окна «Сохранить как факт», «Связать», «Изменить».
+ * Строки планов с меню «⋯» (само меню и его окна — в `usePlanActions`).
  *
  * Общее для ленты одних планов (`PlannedFeedList`) и для планов прямо в ленте
  * операций («Запланированные в ленте» → «В ленте»): строка плана везде одна.
@@ -28,35 +20,7 @@ import { AccountName } from "../components/AccountName";
 /** `time` — в сетке есть столбец «Время» ленты: у плана времени нет, ячейка пустая. */
 export function usePlanRows(template: string, time = false) {
   const today = localToday();
-  const [menu, setMenu] = useState<{ op: PlannedOp; anchor: HTMLElement } | null>(null);
-  const [fact, setFact] = useState<PlannedOp | null>(null);
-  const [link, setLink] = useState<PlannedOp | null>(null);
-  const [edit, setEdit] = useState<PlannedOp | null>(null);
-
-  // Удаление плана сначала встаёт в очередь на отправку, поэтому окно-вопрос
-  // не нужно: «Отменить» на плашке снимает его из очереди (или возвращает
-  // прежний выбор, если план там уже стоял).
-  async function queueDeletion(p: PlannedOp, wholePlan: boolean, text: string) {
-    const store = usePlannedDeletionsStore.getState();
-    const before = store.deletions[p.id];
-    await store.remove({ id: p.id, wholePlan, date: p.date, title: planTitle(p) });
-    toast(text, {
-      undo: async () => {
-        const cur = usePlannedDeletionsStore.getState();
-        if (before) await cur.remove(before);
-        else await cur.restore(p.id);
-      },
-    });
-  }
-
-  async function removeDate(p: PlannedOp) {
-    const oneOff = p.repeating === false;
-    await queueDeletion(p, oneOff, oneOff ? "План удалён" : `План на ${formatShort(p.date)} удалён`);
-  }
-
-  async function removeChain(p: PlannedOp) {
-    await queueDeletion(p, true, "Цепочка плана удалена");
-  }
+  const { openMenu, menuOpId, overlay } = usePlanActions();
 
   /** Строка плана; `grouped` — лента по дням, дата стоит в шапке дня. */
   const renderRow = (p: PlannedOp, grouped: boolean) => {
@@ -66,7 +30,7 @@ export function usePlanRows(template: string, time = false) {
       <OperationListRow
         key={p.id}
         template={template}
-        selected={menu?.op.id === p.id}
+        selected={menuOpId === p.id}
         // Действия — только по «⋯»: клик по строке ничего не делает, чтобы
         // случайное касание не открывало меню.
         // Будущие — приглушены: их время ещё не пришло. Просроченные — в
@@ -128,7 +92,7 @@ export function usePlanRows(template: string, time = false) {
             title="Сохранить как факт, связать, изменить или удалить"
             onClick={(e) => {
               e.stopPropagation();
-              setMenu({ op: p, anchor: e.currentTarget });
+              openMenu(p, e.currentTarget);
             }}
           >
             <MoreHorizontal className="w-4 h-4" />
@@ -137,87 +101,6 @@ export function usePlanRows(template: string, time = false) {
       </OperationListRow>
     );
     };
-
-  const anchorRef = { current: menu?.anchor ?? null };
-  const m = menu?.op;
-
-  const overlay = (
-    <>
-      <Popover
-        open={!!menu}
-        anchorRef={anchorRef}
-        onClose={() => setMenu(null)}
-        align="right"
-        className="card p-1 w-max text-[13px] [&_button]:py-1"
-      >
-        {m && (
-          <>
-            <MenuItem
-              icon={CalendarCheck}
-              onClick={() => {
-                setMenu(null);
-                setFact(m);
-              }}
-            >
-              Сохранить как факт
-            </MenuItem>
-            <MenuItem
-              icon={Link2}
-              onClick={() => {
-                setMenu(null);
-                setLink(m);
-              }}
-            >
-              Связать план с фактом
-            </MenuItem>
-            <MenuItem
-              icon={Pencil}
-              onClick={() => {
-                setMenu(null);
-                setEdit(m);
-              }}
-            >
-              Изменить
-            </MenuItem>
-            <div className="border-t border-border my-1" />
-            <MenuItem
-              icon={X}
-              danger
-              onClick={() => {
-                setMenu(null);
-                void removeDate(m);
-              }}
-            >
-              {m.repeating === false ? "Удалить план" : `Удалить план на ${formatShort(m.date)}`}
-            </MenuItem>
-            {m.repeating !== false && (
-              <MenuItem
-                icon={X}
-                danger
-                onClick={() => {
-                  setMenu(null);
-                  void removeChain(m);
-                }}
-              >
-                Удалить всю цепочку
-              </MenuItem>
-            )}
-          </>
-        )}
-      </Popover>
-
-      {fact && (
-        <EditTransactionModal
-          key={`fact-${fact.id}`}
-          template={plannedAsTransaction(fact)}
-          planMarker={{ id: fact.id, date: fact.date, title: planTitle(fact) }}
-          onClose={() => setFact(null)}
-        />
-      )}
-      {link && <PlanLinkModal plan={link} title={planTitle(link)} onClose={() => setLink(null)} />}
-      {edit && <PlanEditModal plan={edit} title={planTitle(edit)} onClose={() => setEdit(null)} />}
-    </>
-  );
 
   return { renderRow, overlay, today };
 }

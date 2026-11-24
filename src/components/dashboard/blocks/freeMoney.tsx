@@ -1,8 +1,8 @@
+import { ChoiceMenu } from "../../ChoiceMenu";
 import { BlockTitle, SectionLabel } from "./shared";
 import { dayAndMonth } from "../../../lib/dayLabel";
 import { type ReactNode } from "react";
 import { pluralRu } from "../../../lib/plural";
-import { Segmented } from "../../Segmented";
 import { useFreeMoneyStore } from "../../../store/useFreeMoneyStore";
 import { InfoTerm } from "../../InfoPopover";
 import { formatMoney, formatNum } from "../../../lib/format";
@@ -65,8 +65,8 @@ function FreeBar({ ratio }: { ratio: number }) {
   );
 }
 
-/** Строка разбивки: подпись слева, сумма справа. */
-function FreeRow({
+/** Строка разбивки: подпись слева, сумма справа. Общая с «Балансами счетов». */
+export function FreeRow({
   label,
   value,
   base,
@@ -85,7 +85,7 @@ function FreeRow({
   return (
     <div
       className={`flex items-baseline justify-between gap-3 ${
-        strong ? "pt-2 mt-1 border-t border-border" : ""
+        strong ? "pt-1 border-t border-border" : ""
       }`}
     >
       <span className={`text-[13px] truncate ${muted ? "text-muted" : ""}`}>{label}</span>
@@ -153,9 +153,10 @@ function freeMoneyInfo(withPlan: boolean, balanceMode: BalanceMode) {
     <>
       <p>
         <InfoTerm>Свободно до…</InfoTerm> — сколько можно потратить до конца
-        периода, не залезая в запланированное. Считаем как Дзен-мани:{" "}
-        {opening ? "«На счетах»" : "«Баланс периода»"} плюс «Ещё поступит»
-        минус «План на месяц».
+        периода, не залезая в запланированное. Если денег меньше, чем осталось
+        по плану, вместо этого показано, сколько <InfoTerm>не хватает</InfoTerm>.
+        Считаем как Дзен-мани: {opening ? "«На счетах»" : "«Баланс периода»"}{" "}
+        плюс «Ещё поступит» минус «Остаток плана».
       </p>
       <p>
         {opening ? (
@@ -178,7 +179,7 @@ function freeMoneyInfo(withPlan: boolean, balanceMode: BalanceMode) {
         зарплата отсюда уходит: она уже в балансе.
       </p>
       <p>
-        <InfoTerm>План на месяц</InfoTerm> — сколько ещё предстоит потратить по
+        <InfoTerm>Остаток плана</InfoTerm> — сколько ещё предстоит потратить по
         бюджету. У каждой статьи это её бюджет плюс назначенные на месяц платежи
         минус уже потраченное. Исполненный платёж из плана не уходит: он был
         обещан и остаётся обещанным, просто теперь его место заняла трата. Сумма
@@ -186,9 +187,9 @@ function freeMoneyInfo(withPlan: boolean, balanceMode: BalanceMode) {
         прибавляются.
       </p>
       <p>
-        Каждая статья считается отдельно, и перебор по одной не гасится остатком
-        соседней. Отсюда «из»: полная сумма — сколько свободных денег было бы без
-        единого перебора, а разница между ними и есть перерасход.
+        Каждая статья считается отдельно, и перерасход по одной не гасится
+        остатком соседней. Поэтому виджет показывает, сколько было бы свободно
+        без перерасхода и сколько забрали траты сверх плана.
       </p>
       {withPlan ? (
         <p>
@@ -207,8 +208,10 @@ function freeMoneyInfo(withPlan: boolean, balanceMode: BalanceMode) {
       <p>
         <InfoTerm>На сегодня</InfoTerm> — кольцо: сколько из положенного на
         сегодня ещё цело. Оно пустеет только от трат сверх плана, поэтому
-        обычный день его не трогает. Лимит дня считается от свободных денег на
-        утро: сегодняшняя трата сегодняшний же лимит не урезает.
+        обычный день его не трогает. В накопительном режиме лимит один на весь
+        месяц: сэкономленное прибавляется к сегодняшнему дню, а перерасход
+        прошлых дней вычитается. В ежедневном лимит считается от свободных
+        денег на утро.
       </p>
       <p>
         Метод деления по дням и неснижаемый остаток задаются в «Настройках →
@@ -246,9 +249,7 @@ function FreeMethodSwitch() {
   const method = useFreeMoneyStore((s) => s.method);
   const setMethod = useFreeMoneyStore((s) => s.setMethod);
   return (
-    <Segmented
-      size="sm"
-      tight
+    <ChoiceMenu
       label="Как делить свободные деньги по дням"
       value={method}
       onChange={(v) => void setMethod(v)}
@@ -270,39 +271,47 @@ function FreeMethodSwitch() {
 
 function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
   const { allowance, money } = f;
-  // Свободных денег нет вовсе — план съел всё, что будет. Дневного лимита в
-  // этом случае не существует, и придумывать его нельзя.
-  const noBudget = f.free <= 0;
+  // Положенного на сегодня нет вовсе — план съел всё, что будет. Дневного
+  // лимита в этом случае не существует, и придумывать его нельзя.
+  const noBudget = f.today <= 0;
+  // Денег меньше, чем осталось по плану: это нехватка, а не «свободно».
+  const short = f.free < 0;
+  const hasOverspend = f.overspent >= 1;
+  // В расчёте итог уже в заголовке, а промежуточная сумма нужна, только когда
+  // к балансу что-то прибавилось или из него что-то вычлось.
+  const showMoneyTotal = money.stillToCome > 0 || money.excluded > 0;
   // День уже перебрали: кольцо замыкается красным, как у Дзен-мани, — пустая
   // серая дуга в этом случае читалась бы как «ещё ничего не потрачено».
   const over = !noBudget && f.todayLeft < 0;
   const tone = noBudget || over ? "rgb(var(--c-expense))" : "rgb(var(--c-income))";
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 divide-y divide-border">
-      <div className="flex-1 flex flex-col pb-5">
+    // Высота виджета общая для ряда: в узкой колонке текст переносится, и
+    // расчёт листается, а не вылезает за нижний край карточки.
+    <div className="scroll-soft flex-1 flex flex-col min-h-0 divide-y divide-border">
+      <div className="flex-1 flex flex-col pb-3.5">
         <SectionLabel right={<FreeMethodSwitch />}>На сегодня</SectionLabel>
         <div className="flex-1 flex items-center gap-4 mt-2.5">
           <AllowanceRing ratio={noBudget ? 0 : over ? 1 : f.ratio} tone={tone} />
           <div className="min-w-0">
             <div
               className={`font-mono tabular-nums font-semibold text-3xl 3xl:text-4xl leading-none ${
-                noBudget || f.todayLeft <= 0 ? "text-expense" : ""
+                !noBudget && f.todayLeft <= 0 ? "text-expense" : ""
               }`}
               style={{ wordSpacing: "-0.22em" }}
             >
-              {noBudget ? "—" : formatMoney(Math.abs(f.todayLeft), base)}
+              {formatMoney(noBudget ? 0 : Math.abs(f.todayLeft), base)}
             </div>
             {noBudget ? (
               <div className="text-[13px] text-muted mt-1.5">
-                тратить нечего: план больше, чем будет денег
+                Свободных денег на сегодня нет
               </div>
             ) : (
               <div className="text-[13px] text-muted mt-1.5 space-y-0.5">
                 <div>
                   {f.todayLeft < 0 ? (
                     <>
-                      Сверх лимита{" "}
+                      Потрачено сверх лимита{" "}
                       <span className="font-mono tabular-nums text-text">
                         {formatMoney(f.today, base)}
                       </span>{" "}
@@ -347,6 +356,8 @@ function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
                         {formatMoney(-f.spentToday, base)}
                       </span>
                     </>
+                  ) : f.todayLeft < 0 ? (
+                    "Перерасход накопился за прошлые дни"
                   ) : (
                     "Сегодня всё по плану — свободные целы"
                   )}
@@ -358,37 +369,59 @@ function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
 
       </div>
 
-      <div className="flex-1 flex flex-col justify-center pt-5">
+      <div className="flex-1 flex flex-col justify-center pt-3.5">
         <SectionLabel>
-          Свободно до {dayAndMonth(f.periodEnd)} · {formatNum(f.daysLeft)}{" "}
-          {pluralRu(f.daysLeft, ["день", "дня", "дней"])}
+          {short ? "Не хватает" : "Свободно"} до {dayAndMonth(f.periodEnd)} ·{" "}
+          {formatNum(f.daysLeft)} {pluralRu(f.daysLeft, ["день", "дня", "дней"])}
         </SectionLabel>
-        <div className="flex items-baseline gap-2 mt-2 mb-2.5">
+        <div
+          className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 mt-2 ${short ? "" : "mb-2.5"}`}
+        >
           <span
             className={`font-mono tabular-nums font-semibold text-2xl leading-none ${
-              f.free < 0 ? "text-expense" : ""
+              short ? "text-expense" : ""
             }`}
             style={{ wordSpacing: "-0.22em" }}
           >
-            {f.free < 0 && "−"}
             {formatMoney(Math.abs(f.free), base)}
           </span>
-          {f.overspent >= 1 && (
-            <span className="text-[13px] text-muted font-mono tabular-nums">
-              из {formatMoney(f.freeTotal, base)}
-            </span>
+          {short ? (
+            <span className="text-[13px] text-muted">на запланированные расходы</span>
+          ) : (
+            hasOverspend &&
+            f.freeTotal > 0 && (
+              <span className="text-[13px] text-muted font-mono tabular-nums">
+                из {formatMoney(f.freeTotal, base)}
+              </span>
+            )
           )}
         </div>
-        <FreeBar ratio={f.freeTotal > 0 ? f.free / f.freeTotal : 0} />
-        {f.overspent >= 1 && (
-          <div className="text-[13px] text-muted mt-2">
-            Перебор по статьям съел{" "}
+        {/* При нехватке полоска всегда пуста и ничего не сообщает. */}
+        {!short && <FreeBar ratio={f.freeTotal > 0 ? f.free / f.freeTotal : 0} />}
+        {hasOverspend ? (
+          <div className="text-[13px] text-muted mt-1.5">
+            {short && f.freeTotal > 0 && (
+              <>
+                Было бы свободно{" "}
+                <span className="font-mono tabular-nums text-text">
+                  {formatMoney(f.freeTotal, base)}
+                </span>
+                , но перерасход забрал{" "}
+              </>
+            )}
+            {(!short || f.freeTotal <= 0) && "Траты сверх плана забрали "}
             <span className="font-mono tabular-nums text-expense">
               {formatMoney(f.overspent, base)}
             </span>
           </div>
+        ) : (
+          short && (
+            <div className="text-[13px] text-muted mt-1.5">
+              Запланировано больше, чем будет денег
+            </div>
+          )
         )}
-        <div className="space-y-1.5 mt-3.5 pt-3.5 border-t border-border">
+        <div className="space-y-1 mt-2.5 pt-2.5 border-t border-border">
           <FreeRow
             label={
               f.balanceMode === "includeOpeningBalance"
@@ -397,6 +430,8 @@ function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
             }
             value={money.balance}
             base={base}
+            // Баланс бывает отрицательным, и без знака минус читался как плюс.
+            sign={money.balance < 0 ? "−" : undefined}
           />
           {money.stillToCome > 0 && (
             <FreeRow
@@ -416,8 +451,17 @@ function FreeMoneySummary({ f, base }: { f: FreeMoneyModel; base: Currency }) {
               muted
             />
           )}
+          {showMoneyTotal && (
+            <FreeRow
+              label={`Деньги до ${dayAndMonth(f.periodEnd)}`}
+              value={money.total}
+              base={base}
+              sign={money.total < 0 ? "−" : undefined}
+              strong
+            />
+          )}
           <FreeRow
-            label="План на месяц"
+            label="Остаток плана"
             value={f.planLeft}
             base={base}
             sign="−"
@@ -449,7 +493,7 @@ export function FreeMoneyBlock({ f, base }: { f: FreeMoneyModel; base: Currency 
         <FreeMoneySummary f={f} base={base} />
 
         <div className="flex flex-col min-h-0">
-          <SectionLabel>План на месяц</SectionLabel>
+          <SectionLabel>Остаток плана</SectionLabel>
           {f.planRows.length === 0 ? (
             <p className="text-[13px] text-muted mt-2">
               Бюджет на этот период не задан, поэтому вычитать из денег нечего.

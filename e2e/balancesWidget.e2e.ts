@@ -3,7 +3,7 @@
  * шапке виджета — только в нём (#116). Итоги сервиса решает настройка.
  */
 import type { Page } from "@playwright/test";
-import { test, expect, connectZen } from "./harness";
+import { test, expect, connectZen, choose, choiceButton } from "./harness";
 
 const BROKER = "Брокерский счёт";
 
@@ -13,7 +13,7 @@ function widget(page: Page) {
     head,
     total: head.locator("xpath=following-sibling::div[1]"),
     list: head.locator("xpath=following-sibling::div[2]"),
-    choice: head.getByRole("group", { name: "Какие счета показывать" }),
+    choice: choiceButton(head, "Что показывать"),
   };
 }
 
@@ -32,11 +32,11 @@ test("счета вне баланса в «Балансах счетов» — 
   const w = widget(page);
 
   // По умолчанию — как в «Расчётах»: только счета в балансе.
-  await expect(w.choice.getByRole("button", { name: "В балансе" })).toHaveAttribute("aria-pressed", "true");
+  await expect(w.choice).toHaveAccessibleName("Что показывать: В балансе");
   await expect(w.list.getByText(BROKER)).toHaveCount(0);
   const before = money(await w.total.textContent());
 
-  await w.choice.getByRole("button", { name: "Все" }).click();
+  await choose(w.head, "Что показывать", "Все");
   await expect(w.list.getByText(BROKER)).toBeVisible();
   await expect.poll(async () => money(await w.total.textContent())).toBe(before + 50_000);
 
@@ -52,13 +52,14 @@ test("счета вне баланса в «Балансах счетов» — 
   // Выбор запоминается.
   await page.reload();
   await expect(widget(page).list.getByText(BROKER)).toBeVisible();
-  await expect(widget(page).choice.getByRole("button", { name: "Все" })).toHaveAttribute("aria-pressed", "true");
+  await expect(widget(page).choice).toHaveAccessibleName("Что показывать: Все");
 });
 
-test("нет счетов вне баланса — нет и переключателя", async ({ page }) => {
+test("нет счетов вне баланса — нет и «В балансе / Все», только «Свободные»", async ({ page }) => {
   await connectZen(page, "/");
   await expect(widget(page).head).toBeVisible();
-  await expect(widget(page).choice).toHaveCount(0);
+  await widget(page).choice.click();
+  await expect(page.getByRole("menu", { name: "Что показывать" }).getByRole("menuitemradio")).toHaveText(["Счета", "Свободные"]);
 });
 
 test("шапка с переключателем: заголовок не режется ни на одной ширине", async ({ page, zen }) => {
@@ -73,7 +74,7 @@ test("шапка с переключателем: заголовок не реж
     await page.waitForTimeout(200);
     const r = await widget(page).head.evaluate((el) => {
       const h3 = el.querySelector("h3")!;
-      const seg = el.querySelector('[role="group"]')!.getBoundingClientRect();
+      const seg = el.querySelector('[aria-haspopup="menu"]')!.getBoundingClientRect();
       const box = el.getBoundingClientRect();
       const link = el.querySelector("a")!.getBoundingClientRect();
       const title = h3.getBoundingClientRect();
@@ -113,8 +114,11 @@ test("итог «Балансов счетов» — ровно сумма ст�
     await useDisplayStore.getState().setFractionDigits(2);
   });
   const w = widget(page);
-  await expect(w.list.getByText("Старый кошелёк")).toBeVisible();
-  await expect(w.list.getByText(/· Архив/)).toBeVisible();
+  // Архивный счёт свёрнут в строку «Архивные счета» со своим остатком.
+  const group = w.list.locator("[data-archived-group]");
+  await expect(group).toContainText("Архивные счета");
+  await expect(group).toContainText("1 счёт с остатком");
+  await expect(w.list.getByText("Старый кошелёк")).toHaveCount(0);
 
   const kopecks = (s: string) =>
     Math.round(Number(s.replace(/[⁠⁣\s₽]/g, "").replace("−", "-").replace(",", ".")) * 100);
@@ -127,4 +131,11 @@ test("итог «Балансов счетов» — ровно сумма ст�
   // Валютная строка действительно с копейками — иначе проверка выше ничего
   // бы не доказывала.
   expect(rows.map(kopecks).some((k) => k % 100 !== 0 && k !== 83_873)).toBe(true);
+  expect(rows.map(kopecks)).toContain(83_873);
+
+  // Клик разворачивает строку: сам счёт с пометкой «Архив».
+  await group.click();
+  await expect(group).toHaveAttribute("aria-expanded", "true");
+  await expect(w.list.getByText("Старый кошелёк")).toBeVisible();
+  await expect(w.list.getByText(/· Архив/)).toBeVisible();
 });

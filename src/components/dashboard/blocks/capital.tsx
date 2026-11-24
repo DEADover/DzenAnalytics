@@ -1,9 +1,9 @@
+import { ChoiceMenu } from "../../ChoiceMenu";
 import { BlockTitle } from "./shared";
 import type { TipProps } from "./shared";
 import { useMemo, useState } from "react";
 import { ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Area, Line, ReferenceArea, ReferenceDot, ReferenceLine } from "recharts";
 import { ChartContainer } from "../../ChartContainer";
-import { Segmented } from "../../Segmented";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import { ChartTooltipCard, TooltipFacts } from "../../TooltipFacts";
 import { RangeCompareCard, RangeDatePill } from "../../RangeCompareCard";
@@ -152,8 +152,7 @@ export function CapitalBlock({
           </>
         }
         right={
-          <Segmented
-            tight
+          <ChoiceMenu
             label="Период капитала"
             value={period}
             onChange={setPeriod}
@@ -161,6 +160,7 @@ export function CapitalBlock({
             className="ml-auto"
           />
         }
+        rightSmall
         to="/accounts"
         linkLabel="Счета"
       />

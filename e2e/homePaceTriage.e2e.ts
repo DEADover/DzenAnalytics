@@ -2,7 +2,7 @@
  * Виджеты главной «Темп трат» и «Разобрать», и подсказка дня в «Календаре»
  * при выключенных «Всплывающих подсказках».
  */
-import { test, expect, connectZen } from "./harness";
+import { test, expect, connectZen, choose, choiceButton } from "./harness";
 import type { Page } from "@playwright/test";
 
 type Store = { getState: () => Record<string, (...a: unknown[]) => Promise<void>> };
@@ -184,14 +184,14 @@ test("«Подушка безопасности»: месяцы, цель и т�
   const cushion = tile(page, "cushion");
   await expect(cushion).toBeVisible();
   await expect(cushion.getByTestId("cushion-months")).toContainText(/месяц/);
-  const goal = cushion.getByRole("group", { name: "Цель по подушке" });
-  await expect(goal.getByRole("button", { name: "6 мес" })).toHaveAttribute("aria-pressed", "true");
+  const goal = choiceButton(cushion, "Цель по подушке");
+  await expect(goal).toHaveAccessibleName("Цель по подушке: 6 мес");
   await expect(cushion).toContainText("Накопления");
   await expect(cushion.getByTestId("cushion-chart").locator(".recharts-area-area")).toHaveCount(1);
 
   // Цель общая с «Здоровьем» и переживает перезагрузку.
-  await goal.getByRole("button", { name: "12 мес" }).click();
-  await expect(goal.getByRole("button", { name: "12 мес" })).toHaveAttribute("aria-pressed", "true");
+  await choose(cushion, "Цель по подушке", "12 мес");
+  await expect(goal).toHaveAccessibleName("Цель по подушке: 12 мес");
   await expect.poll(() =>
     page.evaluate(async () => {
       const w = window as unknown as { __store: (n: string) => Promise<Record<string, { getState: () => { cushionTarget: number } }>> };
@@ -201,9 +201,9 @@ test("«Подушка безопасности»: месяцы, цель и т�
   ).toBe(12);
   await page.reload();
   await place(page, "cushion");
-  await expect(
-    tile(page, "cushion").getByRole("group", { name: "Цель по подушке" }).getByRole("button", { name: "12 мес" })
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(choiceButton(tile(page, "cushion"), "Цель по подушке")).toHaveAccessibleName(
+    "Цель по подушке: 12 мес"
+  );
   await page.goto("/health");
   await expect(
     page.locator("[data-cushion-goal]").getByRole("button", { name: "12 мес" })

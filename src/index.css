@@ -631,7 +631,7 @@ h2,
    */
   .pill-link {
     @apply inline-flex shrink-0 items-center gap-1.5 rounded-control-sm border border-border
-           bg-panel2/60 px-3 py-1.5 text-[12.5px] font-medium text-accent
+           bg-panel2/60 px-3 h-[34px] text-[12.5px] font-medium text-accent
            transition-colors duration-150 hover:border-accent/50 hover:bg-panel2
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40;
   }

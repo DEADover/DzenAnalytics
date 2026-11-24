@@ -81,20 +81,21 @@ export function buildBudgetWidget(rows: readonly BudgetMonthRow[]): BudgetWidget
 
   const out: BudgetWidgetRow[] = [];
   /** Статьи, которые считаются по отдельности: перебор одной не гасится другой. */
-  const counted: { planned: number; fact: number }[] = [];
+  const counted: { planned: number; fact: number; left: number }[] = [];
+  const article = (planned: number, fact: number) => ({ planned, fact, left: Math.max(0, planned - fact) });
   for (const [category, { parent, subs }] of byCategory) {
     const parentPlanned = parent && parent.planned > 0 ? parent.planned : 0;
     if (subs.length === 0) {
       if (!parent || !(parent.planned > 0)) continue;
       out.push(widgetRow(`${category}|`, category, null, parent.planned, parent.fact, parent.forecast));
-      counted.push({ planned: parent.planned, fact: parent.fact });
+      counted.push(article(parent.planned, parent.fact));
       continue;
     }
     if (!parent && subs.length === 1) {
       const s = subs[0];
       const sub = s.line.subcategory ?? null;
       out.push(widgetRow(`${category}|${sub ?? ""}`, category, sub, s.planned, s.fact, s.forecast));
-      counted.push({ planned: s.planned, fact: s.fact });
+      counted.push(article(s.planned, s.fact));
       continue;
     }
     // Замок на категории — «вся категория целиком»: её сумма уже включает
@@ -130,20 +131,31 @@ export function buildBudgetWidget(rows: readonly BudgetMonthRow[]): BudgetWidget
     );
     out.push({ ...head, children });
     if (locked) {
-      counted.push({ planned, fact });
+      // Как в «Планах» Дзен-мани: остаток запертой категории не меньше суммы
+      // остатков подкатегорий, а полный план — большая из двух сумм. Категория
+      // на 2 000 ₽ с подкатегорией на 26 703 ₽ и тратами 15 318 ₽ оставляет в
+      // планах 12 202 ₽, а не ноль.
+      const subsLeft = sumMoney(subs.map((s) => Math.max(0, s.planned - s.fact)));
+      counted.push({
+        planned: Math.max(planned, sumMoney(subs.map((s) => s.planned))),
+        fact,
+        left: Math.max(0, planned - fact, subsLeft),
+      });
     } else {
-      if (parentPlanned > 0) counted.push({ planned: parentPlanned, fact: parent?.fact ?? 0 });
-      for (const s of subs) counted.push({ planned: s.planned, fact: s.fact });
+      if (parentPlanned > 0) counted.push(article(parentPlanned, parent?.fact ?? 0));
+      for (const s of subs) counted.push(article(s.planned, s.fact));
     }
   }
   out.sort(byHeat);
 
-  const overRows = counted.filter((r) => r.fact > r.planned + OVER_EPS);
+  // Перебор — траты сверх той части плана, которая уже выбрана.
+  const overOf = (r: (typeof counted)[number]) => r.fact - (r.planned - r.left);
+  const overRows = counted.filter((r) => overOf(r) > OVER_EPS);
   return {
     rows: out,
     total: counted.length,
     over: overRows.length,
-    overBy: sumMoney(overRows.map((r) => r.fact - r.planned)),
-    left: sumMoney(counted.map((r) => Math.max(0, r.planned - r.fact))),
+    overBy: sumMoney(overRows.map(overOf)),
+    left: sumMoney(counted.map((r) => r.left)),
   };
 }

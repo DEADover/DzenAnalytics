@@ -31,10 +31,10 @@ import {
   dailyAllowance,
   freeSpentToday,
   freeToSpend,
+  incomePlanTotal,
   incomeStillToCome,
   moneyBreakdown,
   planRemainder,
-  savedSoFar,
   spendableAccounts,
   type BalanceMode,
   type DailyAllowance,
@@ -52,17 +52,17 @@ export interface FreeMoneyModel {
   /** Остаток плана — всего и по строкам бюджета. */
   planLeft: number;
   planRows: PlanLeft[];
-  /** Потрачено сверх плана: ровно на столько свободных денег стало меньше. */
+  /** Потрачено мимо плана: ровно на столько свободных денег стало меньше. */
   overspent: number;
   free: number;
   /** Сколько свободных было бы, если бы ни одна статья не вышла за бюджет. */
   freeTotal: number;
   allowance: DailyAllowance;
-  /** Сколько положено на сегодня: лимит плюс накопленное. */
+  /** Сколько положено на сегодня: лимит плюс сэкономленное, если оно есть. */
   today: number;
   /** Сколько свободных съел сегодняшний день. Минус — сегодня их прибавилось. */
   spentToday: number;
-  /** Сколько из положенного на сегодня ещё цело. */
+  /** Сколько осталось на сегодня; минус — перерасход, прошлых дней тоже. */
   todayLeft: number;
   /** Доля сегодняшних денег, которая ещё не потрачена, — для кольца. */
   ratio: number;
@@ -115,22 +115,23 @@ export function useFreeMoney(
       balanceMode,
       range,
       daysTotal,
-      dayIndex,
       daysLeft,
-      income,
-      expense,
+      periodBalance,
+      exchangeDiff,
+      untaggedSpent,
       expenseToday,
       factYesterday,
       planRows,
       aheadOut,
       parents,
       stillToCome,
+      planFree,
       plan,
     } = core;
     const balance =
       balanceMode === "includeOpeningBalance"
         ? mine.reduce((s, a) => s + a.balanceBase, 0)
-        : income - expense;
+        : periodBalance;
     const money = moneyBreakdown({ balance, stillToCome, excluded: reserve });
     const free = freeToSpend(money, plan.total);
 
@@ -149,25 +150,30 @@ export function useFreeMoney(
     // Лимит дня считается от свободных НА НАЧАЛО ДНЯ: сегодняшняя трата не
     // должна уменьшать сегодняшний же лимит, иначе превышение недостижимо.
     const freeAtDayStart = free + spentToday;
-    const saved =
-      method === "cumulative"
-        ? savedSoFar({ free: freeAtDayStart, daysTotal, dayIndex })
-        : 0;
-    const allowance = dailyAllowance({ method, free: freeAtDayStart, daysLeft, saved });
-    const todayTotal = allowance.perDay + (allowance.saved ?? 0);
-    const todayLeft = todayTotal - spentToday;
+    const allowance = dailyAllowance({
+      method,
+      free: freeAtDayStart,
+      daysLeft,
+      planFree: planFree - reserve,
+      daysTotal,
+    });
+    const saved = allowance.saved ?? 0;
+    // Положено на сегодня — лимит и сэкономленное. Перерасход прошлых дней
+    // положенное не уменьшает, а вычитается из остатка: «43 935 ₽ сверх 1 370 ₽».
+    const todayTotal = allowance.perDay + Math.max(0, saved);
+    const todayLeft = allowance.perDay + saved - spentToday;
+    // Курсовая разница — не перебор: на неё «из» и не должно отличаться.
+    const overspent = Math.max(0, plan.overspent + untaggedSpent - exchangeDiff);
 
     return {
       ready: true,
       money,
       planLeft: plan.total,
       planRows: plan.rows,
-      overspent: plan.overspent,
+      overspent,
       free,
-      freeTotal: free + plan.overspent,
+      freeTotal: free + overspent,
       allowance,
-      // Положено на сегодня — лимит и всё накопленное: именно столько можно
-      // потратить, не залезая в завтрашний день.
       today: todayTotal,
       spentToday,
       todayLeft,
@@ -262,7 +268,6 @@ export function zenPeriodPlan(
   // оставшимся, и лимит «на день» делится ровно на показанное число.
   const days = periodDayCount(range, today);
   const daysTotal = Math.max(1, days.days);
-  const dayIndex = Math.min(daysTotal, Math.max(1, days.day));
   const daysLeft = Math.max(1, days.left);
 
   const conv = converter(cache, rates, histDayRates);
@@ -280,8 +285,17 @@ export function zenPeriodPlan(
   // ── Баланс периода ────────────────────────────────────────────────────
   // «excludeOpeningBalance»: деньги, лежавшие на счетах к началу периода, в
   // расчёт не идут — только то, что пришло и ушло за него.
-  let income = 0;
-  let expense = 0;
+  //
+  // БАЛАНС — ПО СЕГОДНЯШНЕМУ КУРСУ, факт по статьям — по курсу дня операции:
+  // разница и есть курсовая поправка Дзен-мани. В неё же входит обмен валюты
+  // между своими счетами: рубли ушли по курсу банка, доллары считаются по
+  // сегодняшнему. Сверено до копейки на двух месяцах живого аккаунта.
+  let periodBalance = 0;
+  // Тот же баланс по курсу дня операции: разница с ним и есть курсовая.
+  let balanceAtDayRates = 0;
+  // Траты без категории: строки плана у них нет, они идут мимо него.
+  let untaggedSpent = 0;
+  const atToday = (amount: number, instrument: number) => conv(amount, instrument, today);
   // Расход за сегодня — отдельно: по нему считается, сколько свободных денег
   // съел именно сегодняшний день (см. ниже про вчерашний срез).
   let expenseToday = 0;
@@ -295,11 +309,20 @@ export function zenPeriodPlan(
     if (t.date < range.from || t.date > today) continue;
     const out = t.outcome || 0;
     const inc = t.income || 0;
-    if (out > 0 && inc > 0) continue; // перевод: деньги не появились и не ушли
+    if (out > 0 && inc > 0) {
+      // Перевод между своими счетами денег не создаёт; остаётся только разница
+      // курсов, если валюты у счетов разные.
+      if (ours.has(t.outcomeAccount) && ours.has(t.incomeAccount)) {
+        periodBalance += atToday(inc, t.incomeInstrument) - atToday(out, t.outcomeInstrument);
+        balanceAtDayRates += conv(inc, t.incomeInstrument, t.date) - conv(out, t.outcomeInstrument, t.date);
+      }
+      continue;
+    }
     const isToday = t.date === today;
     if (out > 0 && ours.has(t.outcomeAccount)) {
       const v = conv(out, t.outcomeInstrument, t.date);
-      expense += v;
+      periodBalance -= atToday(out, t.outcomeInstrument);
+      balanceAtDayRates -= v;
       if (isToday) expenseToday += v;
       // Без категории — мимо плана: строки бюджета у такой траты нет, и
       // приписывать её чужой значило бы съесть чужой лимит.
@@ -307,11 +330,14 @@ export function zenPeriodPlan(
       if (tag) {
         factByTag.set(tag, (factByTag.get(tag) ?? 0) + v);
         if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) + v);
+      } else {
+        untaggedSpent += v;
       }
     }
     if (inc > 0 && ours.has(t.incomeAccount)) {
       const v = conv(inc, t.incomeInstrument, t.date);
-      income += v;
+      periodBalance += atToday(inc, t.incomeInstrument);
+      balanceAtDayRates += v;
       // ВОЗВРАТ УМЕНЬШАЕТ ФАКТ КАТЕГОРИИ. Поступление с расходным тегом —
       // это вернувшиеся деньги, а не доход по статье: Дзен-мани вычитает их
       // из потраченного. У доходных категорий строки бюджета-расхода нет, и
@@ -364,6 +390,7 @@ export function zenPeriodPlan(
   const month = `${ym}-01`;
   const planRows: PlanRow[] = [];
   const incomePlan = new Map<string, number>();
+  const incomeLocked = new Set<string>();
   for (const b of cache.budgets ?? []) {
     if (b.date !== month) continue;
     // Строка без тега — это итог месяца целиком, а не категория. Дзен-мани её
@@ -387,7 +414,10 @@ export function zenPeriodPlan(
         locked: b.outcomeLock === true,
       });
     }
-    if ((b.income || 0) > 0) incomePlan.set(tag, b.income);
+    if ((b.income || 0) > 0) {
+      incomePlan.set(tag, b.income);
+      if (b.incomeLock) incomeLocked.add(tag);
+    }
   }
   // Категории, у которых бюджета нет, но есть назначенные списания: без
   // строки их обязательства просто пропали бы из остатка плана.
@@ -430,22 +460,25 @@ export function zenPeriodPlan(
   const stillToCome = incomeStillToCome(incomePlan, upcomingIn, receivedByTag, parents);
 
   const plan = planRemainder(planRows, aheadOut, factByTag, parents);
+  // Свободные деньги по плану — от них считается постоянный лимит на день.
+  const planFree = incomePlanTotal(incomePlan, aheadIn, incomeLocked, parents) - plan.full;
   return {
     balanceMode,
     startDay,
     ym,
     range,
     daysTotal,
-    dayIndex,
     daysLeft,
-    income,
-    expense,
+    periodBalance,
+    exchangeDiff: periodBalance - balanceAtDayRates,
+    untaggedSpent,
     expenseToday,
     factYesterday,
     planRows,
     aheadOut,
     parents,
     stillToCome,
+    planFree,
     plan,
   };
 }

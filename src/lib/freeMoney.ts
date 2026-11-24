@@ -140,8 +140,13 @@ export interface PlanRemainder {
   total: number;
   /** Строки с ненулевым остатком, крупные сверху. */
   rows: PlanLeft[];
-  /** Сколько потрачено сверх плана — по всем перебравшим строкам вместе. */
+  /**
+   * Сколько потрачено мимо плана: сверх сумм строк и по категориям без строки.
+   * На эти деньги свободных стало меньше, чем было бы при тратах строго по плану.
+   */
   overspent: number;
+  /** Полный план расходов на месяц — без вычета уже потраченного. */
+  full: number;
 }
 
 /**
@@ -178,6 +183,12 @@ export interface PlanRemainder {
  * не идут, а траты по ним приходят в саму запертую строку. Проверено на
  * «Животных»: замок, 36 000 ₽ у родителя против 10 000 + 25 000 у детей, и на
  * экране 36 000, а не 71 000.
+ *
+ * НО ОСТАТОК ЗАПЕРТОЙ СТРОКИ НЕ МЕНЬШЕ ОСТАТКОВ ЕЁ ПОДСТРОК. Берётся большее из
+ * «сумма категории минус траты ветки» и суммы остатков подкатегорий: у категории
+ * на 2 000 ₽ с подкатегорией на 26 703 ₽ и тратами 15 318 ₽ в планах остаётся
+ * 12 202 ₽ подкатегории, а не ноль. Полный план такой ветки — большая из двух
+ * сумм: категории или её подкатегорий.
  *
  * ЗАМОК ЖЕ ОТМЕНЯЕТ И НАЗНАЧЕННЫЕ ОПЕРАЦИИ. Замок в Дзен-мани значит «сумму я
  * задал сам, не пересчитывай», и плановые операции к ней не прибавляются — то
@@ -239,24 +250,7 @@ export function planRemainder(
   const aheadBy = gather(ahead, live);
   const factBy = gather(fact, live);
 
-  // Остаток каждой считаемой строки: перебор гасится на самой строке.
-  const leftOf = new Map<string, number>();
-  let overspent = 0;
-  for (const tagId of live) {
-    const row = byTag.get(tagId);
-    if (!row) continue;
-    const rest =
-      row.plan +
-      (row.locked ? 0 : (aheadBy.get(tagId) ?? 0)) -
-      (factBy.get(tagId) ?? 0);
-    leftOf.set(tagId, Math.max(0, rest));
-    if (rest < 0) overspent += -rest;
-  }
-
-  // ── Разбивка по подстатьям ───────────────────────────────────────────
-  // Считаемые под-строки складываются в родительскую сумму; съеденные замком
-  // показываются справочно — по своему бюджету и своим тратам, как у Дзен-мани
-  // («Животные 22 909» с разбивкой «Кот 8 940» и «Собака 13 778»).
+  // Каждая строка со своими бюджетом и тратами — для подстрок под замком.
   const all = new Set(byTag.keys());
   const aheadAll = gather(ahead, all);
   const factAll = gather(fact, all);
@@ -270,6 +264,45 @@ export function planRemainder(
     else kids.set(holder, [...(kids.get(holder) ?? []), tagId]);
   }
 
+  /** Сумма строки сама по себе: под замком назначенные к ней не прибавляются. */
+  const ownPlan = (r: PlanRow) => r.plan + (r.locked ? 0 : (aheadAll.get(r.tagId) ?? 0));
+  const ownLeft = (r: PlanRow) => Math.max(0, ownPlan(r) - (factAll.get(r.tagId) ?? 0));
+  /** Сложить значение по всем подстрокам строки. */
+  const sumHeld = (tagId: string, value: (r: PlanRow) => number): number =>
+    (kids.get(tagId) ?? []).reduce((s, k) => {
+      const r = byTag.get(k);
+      return s + (r ? value(r) : 0) + sumHeld(k, value);
+    }, 0);
+
+  // Остаток каждой считаемой строки: перебор гасится на самой строке.
+  const leftOf = new Map<string, number>();
+  let overspent = 0;
+  let full = 0;
+  for (const tagId of live) {
+    const row = byTag.get(tagId);
+    if (!row) continue;
+    const spent = factBy.get(tagId) ?? 0;
+    const cover = row.locked
+      ? Math.max(row.plan, sumHeld(tagId, ownPlan))
+      : row.plan + (aheadBy.get(tagId) ?? 0);
+    const left = row.locked
+      ? Math.max(0, row.plan - spent, sumHeld(tagId, ownLeft))
+      : Math.max(0, cover - spent);
+    leftOf.set(tagId, left);
+    full += cover;
+    // Перебор — всё, что потрачено сверх той части плана, которая уже выбрана.
+    overspent += Math.max(0, spent - (cover - left));
+  }
+  // Категория без строки в плане: вся её трата прошла мимо плана.
+  for (const [tagId, v] of fact) {
+    if (v > 0 && nearest(tagId, live) === null) overspent += v;
+  }
+
+  // ── Разбивка по подстатьям ───────────────────────────────────────────
+  // Считаемые под-строки складываются в родительскую сумму; съеденные замком
+  // показываются справочно — по своему бюджету и своим тратам, как у Дзен-мани
+  // («Животные 22 909» с разбивкой «Кот 8 940» и «Собака 13 778»).
+
   /** Сумма остатков считаемых строк ветки — то, что показывает верхняя строка. */
   const branch = (tagId: string): number => {
     const own = leftOf.get(tagId) ?? 0;
@@ -282,12 +315,7 @@ export function planRemainder(
       ? branch(tagId)
       : // Строка под замком родителя: в сумму ветки она уже входит, поэтому
         // показываем её собственные бюджет и траты — это разбивка, не добавка.
-        Math.max(
-          0,
-          row.plan +
-            (row.locked ? 0 : (aheadAll.get(tagId) ?? 0)) -
-            (factAll.get(tagId) ?? 0)
-        );
+        ownLeft(row);
     if (left <= 0) return null;
     const children = (kids.get(tagId) ?? [])
       .map(build)
@@ -304,6 +332,7 @@ export function planRemainder(
     total: [...leftOf.values()].reduce((s, v) => s + v, 0),
     rows: out,
     overspent,
+    full,
   };
 }
 
@@ -363,6 +392,44 @@ export function incomeStillToCome(
   for (const tag of keys) {
     const budgetLeft = Math.max(0, (plan.get(tag) ?? 0) - (got.get(tag) ?? 0));
     total += Math.max(upcoming.get(tag) ?? 0, budgetLeft);
+  }
+  return total;
+}
+
+/**
+ * Полный план доходов на месяц — от него считается дневной лимит.
+ *
+ * По каждой категории берётся большее из бюджета и всех назначенных на месяц
+ * поступлений, включая уже исполненные. Запертая категория вбирает подкатегории:
+ * её сумма — большая из своей и суммы подкатегорий.
+ */
+export function incomePlanTotal(
+  plan: ReadonlyMap<string, number>,
+  /** Все назначенные поступления месяца, исполненные тоже. */
+  scheduled: ReadonlyMap<string, number>,
+  locked: ReadonlySet<string>,
+  parentOf: ReadonlyMap<string, string | null>
+): number {
+  const keys = new Set([...plan.keys(), ...scheduled.keys()]);
+  const own = (tag: string) => Math.max(plan.get(tag) ?? 0, scheduled.get(tag) ?? 0);
+  /** Ближайшая запертая категория выше по дереву. */
+  const lockedAbove = (tag: string): string | null => {
+    let cur = parentOf.get(tag) ?? null;
+    for (let i = 0; i < 32 && cur; i++) {
+      if (locked.has(cur) && keys.has(cur)) return cur;
+      cur = parentOf.get(cur) ?? null;
+    }
+    return null;
+  };
+  const held = new Map<string, number>();
+  for (const tag of keys) {
+    const holder = lockedAbove(tag);
+    if (holder) held.set(holder, (held.get(holder) ?? 0) + own(tag));
+  }
+  let total = 0;
+  for (const tag of keys) {
+    if (lockedAbove(tag)) continue;
+    total += locked.has(tag) ? Math.max(own(tag), held.get(tag) ?? 0) : own(tag);
   }
   return total;
 }
@@ -430,8 +497,8 @@ export interface DailyAllowance {
   /** Лимит на один день. */
   perDay: number;
   /**
-   * Накоплено сверх дневного лимита. `null` у ежедневного метода — там копить
-   * нечему, вчерашняя экономия просто чуть поднимает завтрашний лимит.
+   * Сэкономлено к сегодняшнему дню; минус — перерасход прошлых дней. `null` у
+   * ежедневного метода: там копить нечему, лимит каждое утро считается заново.
    */
   saved: number | null;
 }
@@ -440,16 +507,14 @@ export interface DailyAllowance {
  * Разделить свободные деньги по дням.
  *
  * ЕЖЕДНЕВНЫЙ ПЕРЕСЧЁТ: `свободные ÷ оставшиеся дни`, сегодняшний день считается
- * оставшимся. Сверено с Дзен-мани: 47 213 ÷ 21 = 2 248 ₽ — ровно то, что у него
- * на экране.
+ * оставшимся. Сверено с Дзен-мани: 47 213 ÷ 21 = 2 248 ₽.
  *
- * КОПИМ СЭКОНОМЛЕННОЕ: накопленное лежит отдельной суммой, а на оставшиеся дни
- * ровно делится всё, что не накоплено: `(свободные − накоплено) ÷ оставшиеся`.
- * Сверено там же: (47 213 − 24 408) ÷ 21 = 1 086 ₽.
- *
- * Инвариант метода: `свободные = накоплено + лимит × оставшиеся дни`. Он и
- * держит расчёт честным — в последний день доступно ровно то, что осталось, ни
- * рублём больше.
+ * КОПИМ СЭКОНОМЛЕННОЕ: лимит один на весь месяц — свободные деньги ПО ПЛАНУ
+ * (план доходов минус план расходов), делённые на все дни месяца. Всё, что
+ * случилось сверх плана, уходит в накопленное: `свободные − лимит × оставшиеся
+ * дни`. Экономия его поднимает, перерасход уводит в минус, и этот минус
+ * вычитается из сегодняшнего дня. Сверено на живом аккаунте: план 41 097 ÷ 30 =
+ * лимит 1 370 ₽, свободных −34 346, дней 8, и на сегодня «43 935 ₽ сверх 1 370 ₽».
  */
 export function dailyAllowance(opts: {
   method: DailyMethod;
@@ -460,52 +525,18 @@ export function dailyAllowance(opts: {
   free: number;
   /** Дней до конца периода, считая сегодняшний. */
   daysLeft: number;
-  /** Накоплено с начала периода. Учитывается только накопительным методом. */
-  saved: number;
+  /** Свободные деньги по плану: план доходов минус план расходов на месяц. */
+  planFree: number;
+  /** Дней в периоде. */
+  daysTotal: number;
 }): DailyAllowance {
   const daysLeft = Math.max(1, Math.round(opts.daysLeft));
   if (opts.method === "daily") {
     return { perDay: opts.free / daysLeft, saved: null };
   }
-  // Накопленное не может быть больше самих свободных: иначе лимит ушёл бы в
-  // минус, обещая долг вместо денег.
-  const saved = Math.min(Math.max(0, opts.saved), Math.max(0, opts.free));
-  return { perDay: (opts.free - saved) / daysLeft, saved };
-}
-
-/**
- * Сколько накопилось с начала периода.
- *
- * Накопленное — это доля свободных денег, приходящаяся на уже прожитые дни:
- * `свободные × прожито ÷ всего дней`. Отсюда и лимит выходит ровно
- * `свободные ÷ всего дней` — то есть постоянный, как и обещает название метода.
- *
- * ПОЧЕМУ ТАК, А НЕ ПО ИСТОРИИ ДНЕЙ. Дзен-мани ведёт накопленное изо дня в день
- * и хранит («Сэкономлено 24 408 ₽ с 1 сентября» — это накопленный журнал, под
- * ним столбики за каждый день). Из текущего среза такое число не выводится: при
- * тех же свободных 47 213 ₽ и девяти прожитых днях ровное накопление даёт
- * 14 164 ₽, а у Дзена 24 408 — разница накопилась в дни, когда свободных денег
- * было больше. Восстановить её без ежедневного журнала нельзя, а заводить свой
- * журнал значит завязать число на то, открывали ли приложение в тот день.
- *
- * Поэтому считаем ровно: лимит один и тот же весь период, непотраченное копится.
- * Это в точности то, что написано в описании метода, — и оно проверяемо по
- * экрану, в отличие от накопленного журнала.
- *
- * Трата внутри плана накопленного не трогает: она уменьшает и деньги, и остаток
- * плана, а свободные — их разницу — оставляет на месте.
- */
-export function savedSoFar(opts: {
-  free: number;
-  daysTotal: number;
-  /** Номер сегодняшнего дня внутри периода, считая с единицы. */
-  dayIndex: number;
-}): number {
   const daysTotal = Math.max(1, Math.round(opts.daysTotal));
-  const dayIndex = Math.min(daysTotal, Math.max(1, Math.round(opts.dayIndex)));
-  // Прожито дней ДО сегодняшнего: сегодняшняя доля — это и есть лимит на сегодня.
-  const lived = dayIndex - 1;
-  return Math.max(0, (opts.free * lived) / daysTotal);
+  const perDay = Math.max(0, opts.planFree) / daysTotal;
+  return { perDay, saved: opts.free - perDay * daysLeft };
 }
 
 /**

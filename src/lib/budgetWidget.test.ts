@@ -65,6 +65,15 @@ describe("buildBudgetWidget", () => {
     expect(w).toMatchObject({ total: 1, over: 1, overBy: 2_000, left: 0 });
   });
 
+  it("под замком остаток не меньше суммы остатков подкатегорий", () => {
+    const w = buildBudgetWidget([
+      row("Покупки", 2_000, 1_000, { locked: true }),
+      row("Покупки", 26_000, 14_000, { subcategory: "Подписки", locked: true }),
+    ]);
+    // Запас подкатегории остаётся в планах; своя тысяча категории — мимо него.
+    expect(w).toMatchObject({ total: 1, over: 1, overBy: 1_000, left: 12_000 });
+  });
+
   it("без замка план категории — своя сумма плюс подкатегории, статьи считаются по отдельности", () => {
     const w = buildBudgetWidget([
       row("Дети", 5_000, 1_000),

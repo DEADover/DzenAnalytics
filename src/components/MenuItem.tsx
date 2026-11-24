@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
+import { Check, type LucideIcon } from "lucide-react";
 import clsx from "clsx";
 
 /**
  * Пункт выпадающего меню: значок, подпись и, по желанию, пояснение справа
- * (сумма, дата). Один на меню строки бюджета и меню запланированной операции.
+ * (сумма, дата). Один на меню строки бюджета, меню запланированной операции
+ * и выбор варианта (`ChoiceMenu`): там вместо значка — галочка у выбранного.
  */
 export function MenuItem({
   icon: Icon,
+  checked,
   danger,
   disabled,
   hint,
@@ -15,7 +17,12 @@ export function MenuItem({
   onClick,
   children,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  /**
+   * Пункт выбора варианта: `true` — выбран (галочка), `false` — нет (пустое
+   * место под галочку, чтобы подписи стояли ровно).
+   */
+  checked?: boolean;
   /** Разрушительное действие — красным. */
   danger?: boolean;
   disabled?: boolean;
@@ -29,6 +36,8 @@ export function MenuItem({
   return (
     <button
       type="button"
+      role={checked === undefined ? undefined : "menuitemradio"}
+      aria-checked={checked}
       onClick={onClick}
       disabled={disabled}
       title={title}
@@ -37,7 +46,11 @@ export function MenuItem({
         danger && "text-expense"
       )}
     >
-      <Icon className="w-4 h-4 shrink-0" />
+      {checked !== undefined ? (
+        <Check className={clsx("w-4 h-4 shrink-0 text-accent", !checked && "invisible")} aria-hidden />
+      ) : (
+        Icon && <Icon className="w-4 h-4 shrink-0" />
+      )}
       <span className="flex-1 min-w-0 truncate">{children}</span>
       {hint && <span className="shrink-0 text-muted tabular-nums">{hint}</span>}
     </button>

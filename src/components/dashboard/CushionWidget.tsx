@@ -5,6 +5,7 @@
  * виджет поставил.
  */
 
+import { ChoiceMenu } from "../ChoiceMenu";
 import { useEffect, useMemo } from "react";
 import {
   Area,
@@ -19,7 +20,6 @@ import { BlockTitle } from "./blocks/shared";
 import { ChartContainer } from "../ChartContainer";
 import { ChartTooltipCard, TooltipFacts } from "../TooltipFacts";
 import { ProgressBar } from "../ProgressBar";
-import { Segmented } from "../Segmented";
 import { SectionEmpty } from "../SectionEmpty";
 import { useCushionHistory, useHealthScore } from "../../hooks/useHealthScore";
 import { CUSHION_TARGETS, type CushionTarget } from "../../lib/benchmarks";
@@ -187,8 +187,7 @@ export function CushionWidget({ base }: { base: string }) {
             <div className="mt-2 flex items-center justify-between gap-2 text-[12px] text-muted tabular-nums">
               <span className="flex items-center gap-2">
                 Цель
-                <Segmented
-                  tight
+                <ChoiceMenu
                   label="Цель по подушке"
                   value={target}
                   options={CUSHION_TARGETS.map((t) => ({ value: t, label: `${t} мес` }))}

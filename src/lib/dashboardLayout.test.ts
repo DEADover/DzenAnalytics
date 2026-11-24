@@ -22,6 +22,7 @@ import {
   setRowLinks,
   setWidgetHidden,
   setWidgetOffBalance,
+  setWidgetBalancesMode,
   setWidgetView,
   shiftWidget,
   widgetMeta,
@@ -882,6 +883,35 @@ describe("«Балансы счетов»: счета вне баланса — 
     const junk = normalizeLayout([{ key: "accounts", kind: "accounts", offBalance: "да" }, { key: "month", kind: "month", offBalance: true }]);
     expect(acc(junk)).not.toHaveProperty("offBalance");
     expect(junk.find((p) => p.kind === "month")).not.toHaveProperty("offBalance");
+  });
+});
+
+describe("«Балансы счетов»: режим «Свободные»", () => {
+  const acc = (l: readonly { kind: string; offBalance?: boolean; free?: boolean }[]) =>
+    l.find((p) => p.kind === "accounts");
+
+  it("«Свободные» не трогает выбор «В балансе / Все»", () => {
+    const all = setWidgetBalancesMode(DEFAULT_LAYOUT, "accounts", "all");
+    const free = setWidgetBalancesMode(all, "accounts", "free");
+    expect(acc(free)).toMatchObject({ free: true, offBalance: true });
+    const back = setWidgetBalancesMode(free, "accounts", "in");
+    expect(acc(back)).not.toHaveProperty("free");
+    expect(acc(back)?.offBalance).toBe(false);
+  });
+
+  it("другим виджетам поле не ставится", () => {
+    expect(setWidgetBalancesMode(DEFAULT_LAYOUT, "month", "free")).toEqual(DEFAULT_LAYOUT);
+  });
+
+  it("переживает чтение с диска, битое отсекается", () => {
+    const raw = JSON.parse(JSON.stringify(setWidgetBalancesMode(DEFAULT_LAYOUT, "accounts", "free")));
+    expect(acc(normalizeLayout(raw))?.free).toBe(true);
+    const junk = normalizeLayout([
+      { key: "accounts", kind: "accounts", free: "да" },
+      { key: "month", kind: "month", free: true },
+    ]);
+    expect(acc(junk)).not.toHaveProperty("free");
+    expect(junk.find((p) => p.kind === "month")).not.toHaveProperty("free");
   });
 });
 

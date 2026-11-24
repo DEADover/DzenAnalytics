@@ -10,7 +10,7 @@
  * Отправки (push) сервер записывает в `zen.pushes` — по ним тест проверяет,
  * что именно ушло бы в облако.
  */
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { NOW, fullDiff } from "./fixtures/zenAccount";
 import type { ZenDiffResponse, ZenTransaction } from "../src/lib/zenmoney";
 
@@ -257,6 +257,20 @@ export async function connectZen(page: Page, path = "/"): Promise<void> {
 }
 
 /** Режим отправки: «Выключено», «Вручную», «Авто», «При синке». */
+/**
+ * Кнопка выбора варианта (`ChoiceMenu`) в `scope`: её имя — «Подпись: вариант».
+ */
+export function choiceButton(scope: Locator | Page, label: string): Locator {
+  return scope.getByRole("button", { name: new RegExp(`^${label}:`) });
+}
+
+/** Выбрать вариант в кнопке выбора: открыть список и кликнуть пункт. */
+export async function choose(scope: Locator | Page, label: string, option: string): Promise<void> {
+  const page = "page" in scope && typeof scope.page === "function" ? scope.page() : (scope as Page);
+  await choiceButton(scope, label).click();
+  await page.getByRole("menu", { name: label }).getByRole("menuitemradio", { name: option, exact: true }).click();
+}
+
 export async function setPushMode(page: Page, mode: "off" | "manual" | "auto" | "on-sync"): Promise<void> {
   await page.evaluate(async (m) => {
     type ZenStore = { useZenmoneyStore: { getState: () => { setPushMode: (m: string) => Promise<void> } } };

@@ -1,17 +1,20 @@
-import { useMemo } from "react";
+import { ChoiceMenu } from "../../ChoiceMenu";
+import { usePlanActions } from "../../../hooks/usePlanActions";
+import { useMemo, useState } from "react";
 import { dayAndMonth } from "../../../lib/dayLabel";
 import { BlockTitle } from "./shared";
 import { pluralRu } from "../../../lib/plural";
-import { Segmented } from "../../Segmented";
-import { Target, TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma } from "lucide-react";
+import { Archive, ChevronDown, Target, TrendingUp, ArrowUpRight, Clock, Lightbulb, Sigma } from "lucide-react";
 import { CategoryDot } from "../../CategoryDot";
 import { AccountLogo } from "../../AccountLogo";
 import { accountKindLabel } from "../../../lib/accountType";
-import { formatMoney, formatPct, formatDate, monthLabel } from "../../../lib/format";
+import { formatMoney, formatNum, formatPct, formatDate, monthLabel } from "../../../lib/format";
 import { sumMoney } from "../../../lib/money";
 import type { DashboardAccount, DashboardModel } from "../../../hooks/useDashboardModel";
 import type { PlannedOp } from "../../../lib/plannedOps";
 import { SectionEmpty } from "../../SectionEmpty";
+import { FreeRow } from "./freeMoney";
+import type { BalancesMode } from "../../../lib/dashboardLayout";
 import { ProgressBar } from "../../ProgressBar";
 
 
@@ -24,11 +27,17 @@ import { ProgressBar } from "../../ProgressBar";
  * только этот виджет (#116: «все счета и так живут в "Капитале"», хочется
  * выбирать). Итоги и отчёты сервиса по-прежнему решает настройка «Счета вне
  * баланса» в «Расчётах»; пока в виджете ничего не выбрано, он следует ей.
+ *
+ * Третий режим — «Свободные»: баланс счетов минус остаток плана месяца и
+ * накопительные счета, то есть сколько можно тратить, не трогая ни
+ * запланированное, ни отложенное.
  */
 export function AccountsBlock({
   m,
   offBalance,
-  onOffBalanceChange,
+  free,
+  planLeft,
+  onModeChange,
   onAccount,
   picked = false,
 }: {
@@ -40,50 +49,96 @@ export function AccountsBlock({
   picked?: boolean;
   /** Выбор виджета; `undefined` — как в «Расчётах». */
   offBalance: boolean | undefined;
-  onOffBalanceChange: (next: boolean) => void;
+  /** Выбран режим «Свободные». */
+  free: boolean | undefined;
+  /**
+   * Остаток плана месяца — тот же, что в «Свободных деньгах». `null` — плана
+   * взять неоткуда (нет Дзен-мани), и режима «Свободные» нет.
+   */
+  planLeft: number | null;
+  onModeChange: (mode: BalancesMode) => void;
   onAccount?: (key: string, label: string) => void;
 }) {
   const show = offBalance ?? m.includeOffBalance;
   const hasOff = !picked && m.accountsAll.some((a) => a.offBalance);
+  const canFree = !picked && planLeft !== null;
+  const freeMode = canFree && free === true;
+  // «Свободные» считаются от счетов в балансе: вне баланса деньги не для
+  // повседневных трат, их и Дзен-мани в свободные не берёт.
   const accounts = picked
     ? m.accounts
-    : show
+    : show && !freeMode
       ? m.accountsAll
       : m.accountsAll.filter((a) => !a.offBalance);
   // Итог — сумма тех самых строк, что под ним, до копейки. Раньше он брался из
   // истории остатков и поправлялся на счета вне баланса: число то же по
   // смыслу, но сложенное другим путём, и копейки со строками не сходились.
   const total = sumMoney(accounts.map((a) => a.balanceBase));
+  const savingsAccounts = freeMode ? accounts.filter((a) => a.savings) : [];
+  const savings = sumMoney(savingsAccounts.map((a) => a.balanceBase));
+  const plan = planLeft ?? 0;
+  const freeTotal = sumMoney([total, -plan, -savings]);
+  const shown = freeMode ? freeTotal : total;
+
+  const options = [
+    ...(hasOff
+      ? [
+          { value: "in", label: "В балансе", title: "Только счета в балансе" },
+          { value: "all", label: "Все", title: "Со счетами вне баланса" },
+        ]
+      : [{ value: "in", label: "Счета", title: "Остаток на каждом счёте" }]),
+    ...(canFree
+      ? [
+          {
+            value: "free",
+            label: "Свободные",
+            title: "Баланс счетов минус запланированные траты и накопительные счета",
+          },
+        ]
+      : []),
+  ];
+  const mode: BalancesMode = freeMode ? "free" : hasOff && show ? "all" : "in";
   return (
     <>
       <BlockTitle
         title="Балансы счетов"
         info={
-          hasOff ? (
-            <p>
-              Счета вне баланса — накопительные, брокерские, всё, что в Дзен-мани
-              помечено «вне баланса». Переключатель в шапке решает, показывать
-              ли их здесь и прибавлять ли к сумме, — только в этом виджете. В
-              итоги и отчёты они входят по настройке «Счета вне баланса» в
-              «Расчётах».
-            </p>
+          hasOff || canFree ? (
+            <>
+              {hasOff && (
+                <p>
+                  Счета вне баланса — накопительные, брокерские, всё, что в
+                  Дзен-мани помечено «вне баланса». Переключатель в шапке решает,
+                  показывать ли их здесь и прибавлять ли к сумме, — только в этом
+                  виджете. В итоги и отчёты они входят по настройке «Счета вне
+                  баланса» в «Расчётах».
+                </p>
+              )}
+              {canFree && (
+                <p>
+                  «Свободные» — сколько можно тратить, не трогая ни
+                  запланированное, ни отложенное: баланс счетов в балансе минус
+                  запланированные траты и остаток на накопительных счетах.
+                  Запланированные траты — то же, что «Остаток плана» в
+                  «Свободных деньгах»: бюджет категорий и назначенные платежи
+                  месяца минус уже потраченное.
+                </p>
+              )}
+            </>
           ) : undefined
         }
         right={
-          hasOff ? (
-            <Segmented
-              tight
-              label="Какие счета показывать"
-              value={show ? "all" : "in"}
-              onChange={(v) => onOffBalanceChange(v === "all")}
-              options={[
-                { value: "in", label: "В балансе", title: "Только счета в балансе" },
-                { value: "all", label: "Все", title: "Со счетами вне баланса" },
-              ]}
+          options.length > 1 ? (
+            <ChoiceMenu
+              label="Что показывать"
+              value={mode}
+              onChange={(v) => onModeChange(v as BalancesMode)}
+              options={options}
               className="ml-auto"
             />
           ) : undefined
         }
+        rightSmall
         to="/accounts"
         linkLabel="Счета"
       />
@@ -91,12 +146,32 @@ export function AccountsBlock({
           крупное число и первая строка счёта читались как одно целое. */}
       <div
         className={`font-mono tabular-nums font-semibold text-2xl 3xl:text-3xl leading-none pb-3 mb-1 border-b border-border ${
-          total < 0 ? "text-expense" : ""
+          shown < 0 ? "text-expense" : ""
         }`}
         style={{ wordSpacing: "-0.22em" }}
       >
-        {formatMoney(total, m.base)}
+        {formatMoney(shown, m.base)}
       </div>
+      {freeMode && (
+        <div data-balances-free className="space-y-1 pt-1.5 pb-2.5 mb-1 border-b border-border">
+          <FreeRow
+            label="Баланс счетов"
+            value={total}
+            base={m.base}
+            sign={total < 0 ? "−" : undefined}
+          />
+          <FreeRow label="Запланированные траты" value={plan} base={m.base} sign="−" muted />
+          {savingsAccounts.length > 0 && (
+            <FreeRow
+              label={savingsAccounts.length === 1 ? "Накопительный счёт" : "Накопительные счета"}
+              value={savings}
+              base={m.base}
+              sign={savings < 0 ? "+" : "−"}
+              muted
+            />
+          )}
+        </div>
+      )}
       <AccountsList m={m} accounts={accounts} onAccount={onAccount} />
     </>
   );
@@ -112,62 +187,116 @@ export function AccountsList({
   accounts?: DashboardAccount[];
   onAccount?: (key: string, label: string) => void;
 }) {
+  const [archiveOpen, setArchiveOpen] = useState(false);
   if (accounts.length === 0) {
     return <SectionEmpty variant="compact">Счетов пока нет</SectionEmpty>;
   }
+  // Архивные с деньгами в итоге остаются (Дзен-мани их считает), но в списке
+  // свёрнуты в одну строку: закрытые счета мешали читать рабочие. Сумма
+  // строки — их общий остаток, так что итог по-прежнему складывается из
+  // видимых строк.
+  const active = accounts.filter((a) => !a.archive);
+  const archived = accounts.filter((a) => a.archive);
+  const archivedTotal = sumMoney(archived.map((a) => a.balanceBase));
+
+  const amount = (value: number, native?: { value: number; currency: string }) => (
+    <span className="text-right shrink-0">
+      <span
+        className={`block font-mono tabular-nums font-semibold text-[15px] ${
+          value < 0 ? "text-expense" : ""
+        }`}
+      >
+        {formatMoney(value, m.base)}
+      </span>
+      {native && native.currency !== m.base && (
+        <span className="block font-mono tabular-nums text-[12px] text-muted">
+          {formatMoney(native.value, native.currency)}
+        </span>
+      )}
+    </span>
+  );
+
+  const rowClass =
+    "flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+
+  const row = (a: DashboardAccount) => {
+    // Тип известен только из кэша Дзен-мани; в режиме CSV его нет.
+    // И не повторяем его, когда он слово в слово совпал с названием счёта
+    // («Наличные — Наличные»).
+    const label = a.type ? accountKindLabel(a.type, a.savings) : "";
+    const kind =
+      label && label !== "—" && label.toLowerCase() !== a.title.trim().toLowerCase()
+        ? label
+        : "";
+    return (
+      <button
+        key={a.key}
+        type="button"
+        onClick={() => onAccount?.(a.key, a.title)}
+        className={rowClass}
+      >
+        <span className="flex items-center gap-2.5 min-w-0">
+          <AccountLogo title={a.title} type={a.type} size={28} />
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] group-hover:text-accent">{a.title}</span>
+            {/* Тип известен только из кэша Дзен-мани. В режиме CSV его нет, и
+                строка-прочерк была бы шумом — тогда её просто не рисуем. */}
+            {kind && (
+              <span className="block text-[12px] text-muted truncate">
+                {kind}
+                {a.offBalance && " · Вне баланса"}
+                {a.archive && " · Архив"}
+              </span>
+            )}
+          </span>
+        </span>
+        {amount(a.balanceBase, { value: a.nativeBalance, currency: a.nativeCurrency })}
+      </button>
+    );
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Список прокручивается внутри карточки: счетов бывает и двенадцать, а
           обрезать их числом значило бы врать итогом внизу. */}
       <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
-      {accounts.map((a) => {
-        // Тип известен только из кэша Дзен-мани; в режиме CSV его нет.
-        // И не повторяем его, когда он слово в слово совпал с названием счёта
-        // («Наличные — Наличные»).
-        const label = a.type ? accountKindLabel(a.type, a.savings) : "";
-        const kind =
-          label && label !== "—" && label.toLowerCase() !== a.title.trim().toLowerCase()
-            ? label
-            : "";
-        return (
-        <button
-          key={a.key}
-          type="button"
-          onClick={() => onAccount?.(a.key, a.title)}
-          className="flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          <span className="flex items-center gap-2.5 min-w-0">
-            <AccountLogo title={a.title} type={a.type} size={28} />
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] group-hover:text-accent">{a.title}</span>
-              {/* Тип известен только из кэша Дзен-мани. В режиме CSV его нет, и
-                  строка-прочерк была бы шумом — тогда её просто не рисуем. */}
-              {kind && (
-                <span className="block text-[12px] text-muted truncate">
-                  {kind}
-                  {a.offBalance && " · Вне баланса"}
-                  {a.archive && " · Архив"}
-                </span>
-              )}
-            </span>
-          </span>
-          <span className="text-right shrink-0">
-            <span
-              className={`block font-mono tabular-nums font-semibold text-[15px] ${
-                a.balanceBase < 0 ? "text-expense" : ""
-              }`}
-            >
-              {formatMoney(a.balanceBase, m.base)}
-            </span>
-            {a.nativeCurrency !== m.base && (
-              <span className="block font-mono tabular-nums text-[12px] text-muted">
-                {formatMoney(a.nativeBalance, a.nativeCurrency)}
+        {active.map(row)}
+        {archived.length > 0 && (
+          <button
+            type="button"
+            data-archived-group
+            aria-expanded={archiveOpen}
+            onClick={() => setArchiveOpen((v) => !v)}
+            className={rowClass}
+          >
+            <span className="flex items-center gap-2.5 min-w-0">
+              <span className="grid place-items-center w-7 h-7 rounded-full bg-panel2 text-muted shrink-0">
+                <Archive className="w-3.5 h-3.5" aria-hidden />
               </span>
-            )}
-          </span>
-        </button>
-        );
-      })}
+              <span className="min-w-0">
+                <span className="flex items-center gap-1 text-[15px] group-hover:text-accent">
+                  <span className="truncate">Архивные счета</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 shrink-0 text-muted transition-transform duration-200 ${
+                      archiveOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden
+                  />
+                </span>
+                <span className="block text-[12px] text-muted truncate">
+                  {formatNum(archived.length)}{" "}
+                  {pluralRu(archived.length, ["счёт", "счёта", "счетов"])} с остатком
+                </span>
+              </span>
+            </span>
+            {amount(archivedTotal)}
+          </button>
+        )}
+        {archiveOpen && archived.length > 0 && (
+          <div data-archived-list className="flex flex-col pl-3 opacity-80">
+            {archived.map(row)}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -344,6 +473,9 @@ export function ZenPlannedList({
    *  нет» звучит как «нет вообще», хотя вперёд мы смотрим только до этой даты. */
   until: string;
 }) {
+  // Меню и окна живут выше списка: последний план, сохранённый как факт,
+  // сменяет список пустым состоянием, и окно при этом закрываться не должно.
+  const actions = usePlanActions();
   if (rows === null) {
     return (
       <SectionEmpty variant="compact">
@@ -353,17 +485,21 @@ export function ZenPlannedList({
   }
   if (rows.length === 0) {
     return (
-      <SectionEmpty variant="compact">
-        {/* Называем последний день окна, а не «конец месяца»: виджет смотрит
-            вперёд ровно до этой даты, и точное число не оставляет вопроса,
-            что именно проверили. Прежнее «ни впереди, ни просроченных»
-            читалось как «планов нет вообще». */}
-        Планов по {dayAndMonth(until)} нет — и ничего просроченного
-      </SectionEmpty>
+      <>
+        <SectionEmpty variant="compact">
+          {/* Называем последний день окна, а не «конец месяца»: виджет смотрит
+              вперёд ровно до этой даты, и точное число не оставляет вопроса,
+              что именно проверили. Прежнее «ни впереди, ни просроченных»
+              читалось как «планов нет вообще». */}
+          Планов по {dayAndMonth(until)} нет — и ничего просроченного
+        </SectionEmpty>
+        {actions.overlay}
+      </>
     );
   }
   return (
-    <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2 px-2">
+    <>
+    <div className="scroll-soft flex flex-col flex-1 min-h-0 -mx-2">
       {rows.map((p) => {
         const days = Math.round((Date.parse(p.date) - Date.parse(today)) / 86400000);
         // Просроченный план — тот, что человек поставил сам и никто не
@@ -371,10 +507,17 @@ export function ZenPlannedList({
         // красная, а не жёлтая (issue #87).
         const overdue = days < 0;
         const inDays = Math.max(0, days);
+        const active = actions.menuOpId === p.id;
         return (
-          <div
+          <button
             key={p.id}
-            className="flex h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0"
+            type="button"
+            data-plan-row={p.id}
+            aria-expanded={active}
+            onClick={(e) => actions.openMenu(p, e.currentTarget)}
+            className={`flex w-full h-[56px] shrink-0 items-center justify-between gap-3 border-b border-border last:border-0 text-left group rounded-lg px-2 transition-colors duration-200 hover:bg-panel2/70 active:bg-panel2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+              active ? "bg-panel2/70" : ""
+            }`}
           >
             <span className="flex items-center gap-2.5 min-w-0">
               <i
@@ -383,7 +526,7 @@ export function ZenPlannedList({
                 }`}
               />
               <span className="min-w-0">
-                <span className="block text-[14.5px] font-medium truncate">
+                <span className="block text-[14.5px] font-medium truncate group-hover:text-accent">
                   {p.payee || p.category || "Без названия"}
                 </span>
                 <span className="block text-[12px] text-muted truncate">
@@ -412,10 +555,12 @@ export function ZenPlannedList({
               {p.kind === "income" ? "+" : "−"}
               {formatMoney(p.amountBase, base)}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>
+    {actions.overlay}
+    </>
   );
 }
 

@@ -16,6 +16,7 @@
  * знать ни про хранилища, ни про то, как открывается drawer.
  */
 
+import { ChoiceMenu } from "../ChoiceMenu";
 import { MONTHS_IN } from "../../lib/months";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
@@ -27,8 +28,6 @@ import { SectionControls } from "../SectionControls";
 import { SectionEmpty } from "../SectionEmpty";
 import { GlobalFilters } from "../GlobalFilters";
 import { PeriodStepper } from "../PeriodStepper";
-import { KindSwitcher } from "../KindSwitcher";
-import { Segmented } from "../Segmented";
 import { CalendarClock, CloudUpload, Filter, LayoutDashboard, Sparkles, Tag } from "lucide-react";
 import { useHomeScope } from "../../hooks/useHomeScope";
 import { CashflowBars } from "./blocks/cashflow";
@@ -206,7 +205,7 @@ export function DashboardView() {
   const move = useDashboardLayoutStore((s) => s.move);
   const shift = useDashboardLayoutStore((s) => s.shift);
   const setLinks = useDashboardLayoutStore((s) => s.setLinks);
-  const setOffBalance = useDashboardLayoutStore((s) => s.setOffBalance);
+  const setBalancesMode = useDashboardLayoutStore((s) => s.setBalancesMode);
   const dropInGap = useDashboardLayoutStore((s) => s.dropInGap);
   const setCategory = useDashboardLayoutStore((s) => s.setCategory);
   const setTag = useDashboardLayoutStore((s) => s.setTag);
@@ -430,7 +429,9 @@ export function DashboardView() {
             m={m}
             picked={scope.capitalKeys !== null}
             offBalance={p.offBalance}
-            onOffBalanceChange={(v) => void setOffBalance(p.key, v)}
+            free={p.free}
+            planLeft={freeMoney.ready ? freeMoney.planLeft : null}
+            onModeChange={(v) => void setBalancesMode(p.key, v)}
             onAccount={onAccount}
           />
         );
@@ -554,9 +555,7 @@ export function DashboardView() {
               }
               right={
                 scope.on && m.ym !== m.nowYm ? (
-                  <Segmented
-                    tight
-                    size="sm"
+                  <ChoiceMenu
                     label="С каким месяцем сравнивать"
                     value={momAgainst}
                     onChange={setMomAgainst}
@@ -568,6 +567,7 @@ export function DashboardView() {
                   />
                 ) : undefined
               }
+              rightSmall
               to="/compare"
               linkLabel="Сравнение"
             />
@@ -595,7 +595,19 @@ export function DashboardView() {
                     операции статьи за этот месяц.
                   </p>
                 }
-                right={<KindSwitcher kind={catKind} onChange={setCatKind} />}
+                right={
+                  <ChoiceMenu
+                    label="Что показывать"
+                    value={catKind}
+                    onChange={setCatKind}
+                    options={[
+                      { value: "expense", label: "Расходы" },
+                      { value: "income", label: "Доходы" },
+                    ]}
+                    className="ml-auto"
+                  />
+                }
+                rightSmall
               />
               <CategoriesList
                 m={m}

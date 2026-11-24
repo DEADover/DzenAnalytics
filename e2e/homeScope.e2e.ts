@@ -3,7 +3,7 @@
  * «Настроить главную»; с ней главная считает за выбранный месяц и по общим
  * фильтрам, а без неё остаётся прежней.
  */
-import { test, expect, connectZen } from "./harness";
+import { test, expect, connectZen, choose } from "./harness";
 import type { Page } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
@@ -184,7 +184,7 @@ test("виджеты месяца следуют выбранному месяц
 
   // Сравнение прошедшего месяца: с предыдущим или с идущим.
   await expect(tile(page, "monthOverMonth")).toContainText("В июле");
-  await tile(page, "monthOverMonth").getByRole("button", { name: "С текущим" }).click();
+  await choose(tile(page, "monthOverMonth"), "С каким месяцем сравнивать", "С текущим");
   await expect(tile(page, "monthOverMonth")).toContainText(/В октябре за те же 15 дней/);
   await expect(tile(page, "monthOverMonth")).toContainText("Сейчас");
 

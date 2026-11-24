@@ -459,6 +459,11 @@ export interface WidgetPlacement {
    */
   offBalance?: boolean;
   /**
+   * Только у «Балансов счетов»: режим «Свободные» — баланс счетов минус
+   * остаток плана месяца и накопительные счета. Пусто — обычный список.
+   */
+  free?: boolean;
+  /**
    * Только у «Категории под наблюдением»: за какой статьёй следить. Пусто —
    * статья ещё не выбрана. Подкатегория без категории не хранится.
    */
@@ -551,6 +556,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
       links?: unknown;
       offset?: unknown;
       offBalance?: unknown;
+      free?: unknown;
       category?: unknown;
       subcategory?: unknown;
       income?: unknown;
@@ -579,6 +585,7 @@ export function normalizeLayout(raw: unknown): WidgetPlacement[] {
     if (kind.kind === "accounts" && typeof rec.offBalance === "boolean") {
       placement.offBalance = rec.offBalance;
     }
+    if (kind.kind === "accounts" && rec.free === true) placement.free = true;
     if (kind.kind === "watch" && typeof rec.category === "string" && rec.category) {
       placement.category = rec.category;
       if (typeof rec.subcategory === "string" && rec.subcategory) {
@@ -1273,6 +1280,26 @@ export function setWidgetOffBalance(
     if (p.key !== key || p.kind !== "accounts") return p;
     const { offBalance: _dropped, ...rest } = p;
     return value === undefined ? rest : { ...rest, offBalance: value };
+  });
+}
+
+/** Режим «Балансов счетов»: какие счета в списке или «Свободные». */
+export type BalancesMode = "in" | "all" | "free";
+
+/**
+ * Выбрать режим «Балансов счетов» одной записью. «Свободные» не трогает выбор
+ * «В балансе / Все»: вернувшись к списку, человек видит его прежним.
+ */
+export function setWidgetBalancesMode(
+  layout: readonly WidgetPlacement[],
+  key: string,
+  mode: BalancesMode
+): WidgetPlacement[] {
+  return layout.map((p) => {
+    if (p.key !== key || p.kind !== "accounts") return p;
+    if (mode === "free") return { ...p, free: true };
+    const { free: _dropped, ...rest } = p;
+    return { ...rest, offBalance: mode === "all" };
   });
 }
 
