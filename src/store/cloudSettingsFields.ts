@@ -206,6 +206,9 @@ export const SYNCED_FIELDS: readonly SyncedField[] = [
   field(useDisplayStore, "display.homeFilters", (s) => s.homeFilters, (v, s) =>
     isBool(v) ? s.setHomeFilters(v) : undefined
   ),
+  field(useDisplayStore, "display.homePeriodPicker", (s) => s.homePeriodPicker, (v, s) =>
+    isBool(v) ? s.setHomePeriodPicker(v) : undefined
+  ),
   field(useDisplayStore, "display.feedPlanned", (s) => s.feedPlanned, (v, s) =>
     isBool(v) ? s.setFeedPlanned(v) : undefined
   ),

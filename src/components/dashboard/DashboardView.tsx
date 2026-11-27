@@ -22,8 +22,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import { BlockTitle } from "./blocks/shared";
 import { MonthHero } from "./blocks/monthHero";
+import { freeAccountBalance } from "../../lib/freeMoney";
+import { sumMoney } from "../../lib/money";
 import { PageHeader } from "../PageHeader";
-import { InfoPopover, InfoTerm } from "../InfoPopover";
+import { InfoPopover } from "../InfoPopover";
 import { SectionControls } from "../SectionControls";
 import { SectionEmpty } from "../SectionEmpty";
 import { GlobalFilters } from "../GlobalFilters";
@@ -133,9 +135,8 @@ function netWorthAt(series: readonly { date: string; net: number }[], date: stri
 }
 
 export function DashboardView() {
-  // «Фильтры и выбор месяца»: когда настройка включена, главная считает за
-  // выбранный месяц и по общим фильтрам; выключена — `scope` ничего не меняет.
   const scope = useHomeScope();
+  const hasPageHeading = scope.filtersOn || scope.monthPickerOn;
   const m = useDashboardModel(scope.options);
   const transactions = scope.transactions;
   const [catKind, setCatKind] = useState<"expense" | "income">("expense");
@@ -152,7 +153,7 @@ export function DashboardView() {
   // С чем сравнивать выбранный прошедший месяц: с предыдущим или с идущим.
   // У идущего месяца выбора нет — сравнивать его с самим собой незачем.
   const [momAgainst, setMomAgainst] = useState<"prev" | "now">("prev");
-  const momVsNow = scope.on && m.ym !== m.nowYm && momAgainst === "now";
+  const momVsNow = scope.monthPickerOn && m.ym !== m.nowYm && momAgainst === "now";
   const momAgainstYm = momVsNow ? m.nowYm : shiftPeriod(m.ym, -1);
   const mom = useMemo(
     () =>
@@ -241,10 +242,7 @@ export function DashboardView() {
     [zenPlannedAll, plannedDeletions, todayIso]
   );
   const zenPlannedOut = useMemo(
-    () =>
-      (zenPlanned ?? [])
-        .filter((p) => p.kind === "expense")
-        .reduce((sum, p) => sum + p.amountBase, 0),
+    () => sumMoney((zenPlanned ?? []).filter((p) => p.kind === "expense").map((p) => p.amountBase)),
     [zenPlanned]
   );
   const zenPlannedIn = useMemo(
@@ -264,6 +262,11 @@ export function DashboardView() {
     [m.accountsAll, m.includeOffBalance]
   );
   const freeMoney = useFreeMoney(freeAccounts, todayIso);
+  // В балансах вычитаем платежи из списка «Запланированные операции»,
+  // включая просроченные. Остаток бюджета по категориям считается отдельно.
+  const accountFunds = freeMoney.ready && scope.capitalKeys === null
+    ? freeAccountBalance(m.accountsAll, zenPlannedOut)
+    : null;
 
   // Кольца статей: те же деревья, что на «Категориях», только за текущий месяц.
   const monthTx = useMemo(
@@ -385,27 +388,21 @@ export function DashboardView() {
         // «В рамке» — тот же «Открытый», только в поддоне и на серой
         // подложке: содержание одно, разная подача.
         const view = widgetView(widgetMeta("month"), p.view)?.id;
-        if (!scope.on) return <MonthHero m={m} view={view} />;
-        // План бюджета считается по всем счетам и статьям — с отфильтрованным
-        // фактом рядом он бы врал. Остаток на счетах у прошедшего месяца — на
-        // его последний день, а не сегодняшний.
-        const hero = {
-          ...m,
-          planIncome: scope.narrowed ? null : m.planIncome,
-          planExpense: scope.narrowed ? null : m.planExpense,
-          netWorth:
-            m.ym === m.nowYm
-              ? m.netWorth
-              : netWorthAt(m.netWorthSeries, periodRange(m.ym, m.monthStartDay).to),
-        };
+        // У прошедшего месяца показываем остаток счетов на последний день.
+        const hero = m.ym === m.nowYm
+          ? m
+          : { ...m, netWorth: netWorthAt(m.netWorthSeries, periodRange(m.ym, m.monthStartDay).to) };
         // Строка плана держит место, пока планы в «Бюджете» вообще есть: иначе
         // под фильтром колонки итогов становились ниже и текст над ними съезжал.
         return (
           <MonthHero
             m={hero}
             view={view}
-            fixed
-            reservePlan={m.planIncome !== null || m.planExpense !== null}
+            fixed={scope.monthPickerOn}
+            titleTag={hasPageHeading ? "h2" : "h1"}
+            hidePlan={scope.narrowed}
+            freeBalance={accountFunds?.free}
+            reservePlan={hasPageHeading && (m.planIncome !== null || m.planExpense !== null)}
           />
         );
       }
@@ -430,7 +427,7 @@ export function DashboardView() {
             picked={scope.capitalKeys !== null}
             offBalance={p.offBalance}
             free={p.free}
-            planLeft={freeMoney.ready ? freeMoney.planLeft : null}
+            accountFunds={accountFunds}
             onModeChange={(v) => void setBalancesMode(p.key, v)}
             onAccount={onAccount}
           />
@@ -504,7 +501,7 @@ export function DashboardView() {
               to="/cashflow"
               linkLabel="Cash-flow"
             />
-            {scope.on ? (
+            {scope.monthPickerOn ? (
               // Клик выбирает месяц — вся главная пересчитывается; по столбцу
               // заодно переключаются статьи: доходы или расходы.
               <CashflowBars
@@ -544,7 +541,7 @@ export function DashboardView() {
                   третьего числа любой месяц выглядел бы провалом рядом с целым
                   прошлым. Сколько дней взято, написано в шапке и под числом.
                   Норма сбережений — доля дохода, которая осталась.
-                  {scope.on && (
+                  {scope.monthPickerOn && (
                     <>
                       {" "}
                       Прошедший месяц можно сравнить и с идущим: от него тогда
@@ -554,7 +551,7 @@ export function DashboardView() {
                 </p>
               }
               right={
-                scope.on && m.ym !== m.nowYm ? (
+                scope.monthPickerOn && m.ym !== m.nowYm ? (
                   <ChoiceMenu
                     label="С каким месяцем сравнивать"
                     value={momAgainst}
@@ -583,7 +580,7 @@ export function DashboardView() {
       case "categories":
         // С выбором месяца у статей свой переключатель: клик по зелёному
         // столбцу графика показывает здесь доходы месяца.
-        if (scope.on) {
+        if (scope.monthPickerOn) {
           return (
             <>
               <BlockTitle
@@ -890,7 +887,7 @@ export function DashboardView() {
 
   return (
     <div className="flex flex-col gap-5 3xl:gap-6">
-      {scope.on && (
+      {hasPageHeading && (
         // Шапка и фильтры — с тем же зазором, что на остальных разделах
         // (`space-y-6`): у виджетов главной свой, на ширинах до 3xl он меньше,
         // и панель фильтров стояла здесь на 4 пикселя выше, чем везде.
@@ -900,43 +897,52 @@ export function DashboardView() {
             title="Главная"
             info={
               <InfoPopover>
-                <p>
-                  Включены <InfoTerm>фильтры и выбор месяца</InfoTerm>: главная
-                  считает за месяц, выбранный справа или кликом по графику
-                  доходов и расходов, и по общим фильтрам — всем, кроме
-                  периода. Отметьте свои счета или участника, и виджеты
-                  покажут только ваш бюджет, а капитал и остатки — эти счета.
-                </p>
+                {scope.monthPickerOn && (
+                  <p>Выберите месяц в шапке или нажмите на столбец графика доходов и расходов.</p>
+                )}
+                {scope.filtersOn && (
+                  <p>
+                    Отметьте свои счета или участника, чтобы отфильтровать операции на главной
+                    и увидеть капитал и остатки по выбранным счетам.
+                  </p>
+                )}
                 <p>
                   План из «Бюджета» стоит под доходом и расходом, пока фильтры
                   не заданы: он считается по всем счетам и статьям. «Свободные
                   деньги» и «Запланированные операции» всегда про идущий месяц.
                 </p>
                 <p>
-                  Выключается там же, где включалось: значок «Настроить
-                  главную» в шапке.
+                  Переключатели находятся в меню «Настроить главную».
                 </p>
               </InfoPopover>
             }
           />
-          <SectionControls>
-            <PeriodStepper
-              size="md"
-              monthYM={m.ym}
-              minYM={scope.firstYm}
-              maxYM={scope.nowYm}
-              hint={`${formatDate(scopeRange.from, "full")} — ${formatDate(scopeRange.to, "full")}`}
-              onStep={(dir) => scope.setYm(shiftPeriod(m.ym, dir))}
-              onCurrent={() => scope.setYm(scope.nowYm)}
-              atCurrent={m.ym === scope.nowYm}
-              onSelectMonth={scope.setYm}
-              onSelectYear={(y) => scope.setYm(`${y}-${m.ym.slice(5, 7)}`)}
+          {scope.monthPickerOn && (
+            <SectionControls>
+              <div role="group" aria-label="Выбор месяца на главной">
+                <PeriodStepper
+                  size="md"
+                  monthYM={m.ym}
+                  minYM={scope.firstYm}
+                  maxYM={scope.nowYm}
+                  hint={`${formatDate(scopeRange.from, "full")} — ${formatDate(scopeRange.to, "full")}`}
+                  onStep={(dir) => scope.setYm(shiftPeriod(m.ym, dir))}
+                  onCurrent={() => scope.setYm(scope.nowYm)}
+                  atCurrent={m.ym === scope.nowYm}
+                  onSelectMonth={scope.setYm}
+                  onSelectYear={(y) => scope.setYm(`${y}-${m.ym.slice(5, 7)}`)}
+                />
+              </div>
+            </SectionControls>
+          )}
+          {scope.filtersOn && (
+            <GlobalFilters
+              showDateRange={false}
+              dateRangeHint={scope.monthPickerOn
+                ? "Месяц выбирается на графике или в шапке главной"
+                : "Фильтры на главной применяются к текущему месяцу"}
             />
-          </SectionControls>
-          <GlobalFilters
-            showDateRange={false}
-            dateRangeHint="Месяц выбирается на графике или в шапке главной"
-          />
+          )}
         </div>
       )}
       <LayoutToolbar layout={layout} />

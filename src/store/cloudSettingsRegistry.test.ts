@@ -68,6 +68,8 @@ describe("реестр переносимых настроек", () => {
       "display.commentWrap",
       "display.columnResize",
       "display.feedHeadSticky",
+      "display.homeFilters",
+      "display.homePeriodPicker",
       "display.feedPlanned",
       "display.contentWidth",
       "duplicates.exclusions",

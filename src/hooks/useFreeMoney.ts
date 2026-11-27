@@ -258,7 +258,8 @@ export function zenPeriodPlan(
   // Значения `includeOpeningBalance` у `planBalanceMode` не бывает: входящий
   // баланс учитывается в режиме «Баланс vs Расходы» или по галочке в
   // `planSettings` (см. `zenPlanRules`).
-  const balanceMode: BalanceMode = zenPlanSettings(me).openingBalance
+  const settings = zenPlanSettings(me);
+  const balanceMode: BalanceMode = settings.openingBalance
     ? "includeOpeningBalance"
     : "excludeOpeningBalance";
 
@@ -338,16 +339,18 @@ export function zenPeriodPlan(
       const v = conv(inc, t.incomeInstrument, t.date);
       periodBalance += atToday(inc, t.incomeInstrument);
       balanceAtDayRates += v;
-      // ВОЗВРАТ УМЕНЬШАЕТ ФАКТ КАТЕГОРИИ. Поступление с расходным тегом —
-      // это вернувшиеся деньги, а не доход по статье: Дзен-мани вычитает их
-      // из потраченного. У доходных категорий строки бюджета-расхода нет, и
-      // вычитание там просто никуда не попадает. Проверено на «Еде дома»:
-      // 6,36 ₽ возврата Ozon дают 40 909 ₽ остатка вместо 40 902.
+      // Как в бюджете, возврат уменьшает расходный факт только в режиме
+      // «Доходы vs Расходы» и только в чисто расходной категории.
+      // В режиме «Баланс vs Расходы» он учитывается как поступление.
       const tag = firstTag(t.tag);
       if (tag) {
-        factByTag.set(tag, (factByTag.get(tag) ?? 0) - v);
-        if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) - v);
-        receivedByTag.set(tag, (receivedByTag.get(tag) ?? 0) + v);
+        const category = tagById.get(tag);
+        if (settings.refunds && category?.showOutcome && !category.showIncome) {
+          factByTag.set(tag, (factByTag.get(tag) ?? 0) - v);
+          if (!isToday) factYesterday.set(tag, (factYesterday.get(tag) ?? 0) - v);
+        } else {
+          receivedByTag.set(tag, (receivedByTag.get(tag) ?? 0) + v);
+        }
       }
     }
   }

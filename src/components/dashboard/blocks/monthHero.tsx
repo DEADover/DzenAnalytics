@@ -3,7 +3,7 @@
  * доход и расход с планом.
  *
  * Месяц либо выбирают в самой пилюле (идущий или прошлый), либо он приходит
- * снаружи — когда на главной включены «Фильтры и выбор месяца».
+ * снаружи — когда на главной включён «Выбор месяца».
  */
 
 import { useRef, useState, type ReactNode } from "react";
@@ -254,28 +254,43 @@ export function MonthHero({
   m,
   view,
   fixed = false,
+  titleTag = "h1",
+  hidePlan = false,
+  freeBalance,
   reservePlan,
 }: {
   /** План бывает скрыт фильтрами — место под его строку держим, чтобы блок не прыгал. */
   reservePlan?: boolean;
   m: DashboardModel;
   view: string | undefined;
+  freeBalance?: number;
   /**
-   * Месяц выбран снаружи — листанием в шапке главной («Фильтры и выбор
-   * месяца»). Своего выбора у пилюли тогда нет, а заголовок страницы — не она.
+   * Месяц выбран снаружи — листанием в шапке главной. Пилюля тогда без меню.
    */
   fixed?: boolean;
+  titleTag?: "h1" | "h2";
+  /** Бюджет считается по всем статьям и счетам. С отфильтрованным фактом его не сравниваем. */
+  hidePlan?: boolean;
 }) {
   const [which, setWhich] = useState<"current" | "prev">("current");
-  const shown: DashboardModel = !fixed && which === "prev" ? { ...m, ...m.prevMonth } : m;
+  const month: DashboardModel = !fixed && which === "prev" ? { ...m, ...m.prevMonth } : m;
+  const shown = hidePlan ? { ...month, planIncome: null, planExpense: null } : month;
   const pill = (size: "sm" | "md") =>
     fixed ? (
       <MonthPill m={m} size={size} />
     ) : (
       <MonthSwitch m={shown} current={m} which={which} onChange={setWhich} size={size} />
     );
-  const titleTag = fixed ? "h2" : "h1";
-  if (view === "split") return <HeroSplit m={shown} pill={pill("sm")} titleTag={titleTag} />;
+  if (view === "split") {
+    return (
+      <HeroSplit
+        m={shown}
+        pill={pill("sm")}
+        titleTag={titleTag}
+        freeBalance={shown.ym === m.nowYm ? freeBalance : undefined}
+      />
+    );
+  }
   return (
     <HeroOpen
       m={shown}
@@ -478,17 +493,19 @@ function RailRow({ label, value, tone }: { label: string; value: string; tone?: 
  * Вариант «Разворот»: то же число, но в поддоне и с рейкой чисел справа.
  *
  * Волосок делит карточку надвое: слева типографика и два действия, справа
- * три числа, растянутые на всю высоту. Внизу слева — сколько месяца
+ * доход, расход и остатки на счетах. Внизу слева — сколько месяца
  * пройдено: без неё низ колонки пустовал, а вопрос «много ли ещё впереди»
  * ровно тот, что задают, глядя на остаток.
  */
 function HeroSplit({
   m,
   pill,
+  freeBalance,
   titleTag: Title = "h1",
 }: {
   m: DashboardModel;
   pill: ReactNode;
+  freeBalance?: number;
   titleTag?: "h1" | "h2";
 }) {
   const over = m.pace === null ? null : m.pace - 1;
@@ -579,7 +596,19 @@ function HeroSplit({
           <div className="hidden xl:block h-px bg-border" />
           <RailRow label="Расход" value={formatMoney(m.factExpense, m.base)} tone="expense" />
           <div className="hidden xl:block h-px bg-border" />
-          <RailRow label={past ? "На счетах в конце" : "На счетах"} value={formatMoney(m.netWorth, m.base)} />
+          <div className="contents xl:flex xl:flex-col xl:gap-3">
+            <RailRow
+              label={past ? "На счетах в конце" : "На счетах"}
+              value={formatMoney(m.netWorth, m.base)}
+            />
+            {freeBalance !== undefined && (
+              <RailRow
+                label="Свободные"
+                value={formatMoney(freeBalance, m.base)}
+                tone={freeBalance < 0 ? "expense" : undefined}
+              />
+            )}
+          </div>
         </div>
       </div>
     </>

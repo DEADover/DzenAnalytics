@@ -398,20 +398,21 @@ export function BudgetsPage() {
   // Живые категории — чтобы статьи с именем, которого в справочнике больше
   // нет, и без единой траты за год не висели в отчёте (#77). В режиме CSV
   // справочника нет, хук вернёт null, и ничего не отсеивается.
-  const yearReport = useMemo(
-    () =>
+  const buildYearReport = useCallback(
+    (targetYear: number) =>
       buildBudgetYear(
         lines,
         transactions,
-        year,
+        targetYear,
         scope,
         rowOrder,
         plannedAsPlan,
         livePaths ?? undefined,
         monthStartDay
       ),
-    [lines, transactions, year, scope, rowOrder, plannedAsPlan, livePaths, monthStartDay]
+    [lines, transactions, scope, rowOrder, plannedAsPlan, livePaths, monthStartDay]
   );
+  const yearReport = useMemo(() => buildYearReport(year), [buildYearReport, year]);
   /** Сдвиг года сохраняет месяц: вернувшись в месячный вид, попадаешь в тот же. */
   const shiftYear = (d: number) => setYm((m) => addMonths(m, d * 12));
 
@@ -1155,6 +1156,7 @@ export function BudgetsPage() {
           editableFrom={cur}
           onSavePlans={savePlans}
           onCopyMonth={(from, targets) => savePlans(copyMonthPlans(lines, from, targets))}
+          buildYearReport={buildYearReport}
           onOpenCell={openCategory}
         />
       )}

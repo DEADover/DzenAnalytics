@@ -14,7 +14,7 @@ import type { ZenBudget, ZenDiffResponse, ZenTransaction } from "../src/lib/zenm
 
 type Zen = { patchFull: ((diff: ZenDiffResponse) => ZenDiffResponse) | null };
 
-function scenario(diff: ZenDiffResponse): ZenDiffResponse {
+function scenario(diff: ZenDiffResponse) {
   const base = diff.tag[0];
   const tag = (id: string, title: string, parent: string | null = null) => ({ ...base, id, title, parent });
   const user = diff.user[0].id;
@@ -49,7 +49,7 @@ function scenario(diff: ZenDiffResponse): ZenDiffResponse {
     tag: [
       { ...tag("t-job", "Работа"), showIncome: true, showOutcome: false, budgetIncome: true, budgetOutcome: false },
       tag("t-shop", "Покупки"),
-      tag("t-subs", "Подписки", "t-shop"),
+      { ...tag("t-subs", "Подписки", "t-shop"), showIncome: true, showOutcome: true },
       tag("t-car", "Машина"),
     ],
     budget: [
@@ -69,8 +69,8 @@ function scenario(diff: ZenDiffResponse): ZenDiffResponse {
   };
 }
 
-async function open(page: Page, zen: Zen) {
-  zen.patchFull = scenario;
+async function open(page: Page, zen: Zen, patchFull: (diff: ZenDiffResponse) => ZenDiffResponse = scenario) {
+  zen.patchFull = patchFull;
   await page.setViewportSize({ width: 1440, height: 1100 });
   await connectZen(page, "/");
   await page.evaluate(async () => {
@@ -119,3 +119,65 @@ test("«Бюджет месяца»: запас подкатегории под 
   await expect.poll(async () => plain(await summary.textContent())).toContain("Ещё 8 500 ₽ в планах");
   await expect.poll(async () => plain(await summary.textContent())).toContain("на 33 000 ₽");
 });
+
+test("доход подкатегории не увеличивает остаток расходного плана (#148)", async ({ page, zen }) => {
+  await open(page, zen, (diff) => {
+    const data = scenario(diff);
+    const income = {
+      ...data.transaction[0],
+      id: "tx-subs-income",
+      tag: ["t-subs"],
+      income: 136.21,
+    };
+    return { ...data, transaction: [...data.transaction, income] };
+  });
+
+  const widget = page.locator('[data-tour="widget-freeMoney"]');
+  await expect.poll(async () => plain(await widget.textContent())).toContain("Остаток плана− 8 500 ₽");
+  await expect.poll(async () => plain(await page.getByTestId("budget-summary").textContent())).toContain("Ещё 8 500 ₽ в планах");
+});
+
+for (const [mode, parentLeft] of [
+  ["balance", "3,50"],
+  ["excludeOpeningBalance", "133,00"],
+] as const) {
+  test(`остатки родителя и подкатегорий при возврате и смешанном доходе — ${mode} (#148)`, async ({ page, zen }) => {
+    await open(page, zen, (diff) => {
+      const data = scenario(diff);
+      const sample = data.transaction[0];
+      const parent = { ...data.tag[1], title: "Структуры" };
+      const mixed = { ...data.tag[2], title: "Финансы" };
+      const education = { ...mixed, id: "t-education", title: "Образование", showIncome: false };
+      return {
+        ...data,
+        user: data.user.map((user) => ({ ...user, planBalanceMode: mode })),
+        tag: [parent, mixed, education],
+        budget: [
+          { ...data.budget[1], outcome: 102 },
+          { ...data.budget[2], outcome: 2 },
+          { ...data.budget[2], tag: education.id, outcome: 100 },
+        ],
+        transaction: [
+          { ...sample, id: "finance-spend", tag: [mixed.id], income: 0, outcome: 1.1 },
+          { ...sample, id: "education-spend", tag: [education.id], income: 0, outcome: 97.4 },
+          { ...sample, id: "mixed-income", tag: [mixed.id], income: 136.21 },
+          { ...sample, id: "parent-refund", tag: [parent.id], income: 129.5 },
+        ],
+      };
+    });
+    await page.evaluate(async () => {
+      type Store = { useDisplayStore: { getState: () => { setFractionDigits: (value: number) => Promise<void> } } };
+      const lookup = (window as unknown as { __store: (name: string) => Promise<Store> }).__store;
+      await (await lookup("useDisplayStore")).useDisplayStore.getState().setFractionDigits(2);
+    });
+
+    const widget = page.locator('[data-tour="widget-freeMoney"]');
+    const row = (name: string) => widget.getByText(name, { exact: true }).locator("..");
+    await expect.poll(async () => plain(await row("Финансы").textContent())).toBe("Финансы0,90 ₽");
+    await expect.poll(async () => plain(await row("Образование").textContent())).toBe("Образование2,60 ₽");
+    await expect.poll(async () => plain(await row("Структуры").textContent())).toBe(`Структуры${parentLeft} ₽`);
+    await expect.poll(async () => plain(await widget.textContent())).toContain(`Остаток плана− ${parentLeft} ₽`);
+    const summary = page.getByTestId("budget-summary");
+    await expect.poll(async () => plain(await summary.textContent())).toContain(`Ещё ${parentLeft} ₽ в планах`);
+  });
+}

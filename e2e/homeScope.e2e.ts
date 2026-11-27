@@ -1,8 +1,4 @@
-/**
- * «Фильтры и выбор месяца» на главной (#130): настройка включается в режиме
- * «Настроить главную»; с ней главная считает за выбранный месяц и по общим
- * фильтрам, а без неё остаётся прежней.
- */
+/** Настройки фильтров и выбора месяца на главной (#130, #147). */
 import { test, expect, connectZen, choose } from "./harness";
 import type { Page } from "@playwright/test";
 
@@ -11,19 +7,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 const tile = (page: Page, name: string) => page.locator(`[data-tour="widget-${name}"]`);
+const monthPicker = (page: Page) => page.getByRole("group", { name: "Выбор месяца на главной" });
 
-/** Включить настройку так, как это делает человек: в режиме настройки главной. */
-async function turnOn(page: Page) {
+async function toggleSettings(page: Page, ...names: Array<"Выбор месяца" | "Фильтры">) {
   await expect(tile(page, "month")).toBeVisible();
   await page.getByRole("button", { name: "Настроить главную" }).first().click();
-  await page.getByRole("switch", { name: "Фильтры и выбор месяца" }).click();
+  for (const name of names) await page.getByRole("switch", { name, exact: true }).click();
   await page.getByRole("button", { name: "Готово" }).click();
 }
+
+const toggleBoth = (page: Page) => toggleSettings(page, "Выбор месяца", "Фильтры");
 
 test("по умолчанию главная прежняя: ни фильтров, ни листания месяца", async ({ page }) => {
   await connectZen(page, "/");
   await expect(tile(page, "month")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Предыдущий период" })).toHaveCount(0);
+  await expect(monthPicker(page)).toHaveCount(0);
   await expect(page.getByPlaceholder(/Фильтр: получатель/)).toHaveCount(0);
   // Месяц из ссылки без настройки не действует.
   await page.goto("/?month=2026-08");
@@ -32,7 +30,7 @@ test("по умолчанию главная прежняя: ни фильтро
 
 test("настройка включает фильтры и листание; столбец графика выбирает месяц", async ({ page }) => {
   await connectZen(page, "/");
-  await turnOn(page);
+  await toggleBoth(page);
   await expect(page.getByPlaceholder(/Фильтр: получатель/)).toBeVisible();
   await expect(tile(page, "month")).toContainText("Октябрь");
   await expect(tile(page, "month")).toContainText(/План\D*25\s000/);
@@ -58,9 +56,66 @@ test("настройка включает фильтры и листание; с
   await expect(page.getByRole("button", { name: "Дальше операций нет" }).first()).toBeDisabled();
 });
 
+test("можно листать месяцы без панели и без применения сохранённых фильтров (#147)", async ({ page }) => {
+  await connectZen(page, "/");
+  await setFilter(page, "accounts", ["acc-cash"]);
+  await toggleSettings(page, "Выбор месяца");
+  await expect(page.getByPlaceholder(/Фильтр: получатель/)).toHaveCount(0);
+  await expect(tile(page, "accounts")).toContainText("Т-Банк");
+  await monthPicker(page).getByRole("button", { name: "Предыдущий период" }).click();
+  await expect(page).toHaveURL(/month=2026-09$/);
+  await expect(tile(page, "month")).toContainText("Сентябрь");
+  await page.reload();
+  await expect(tile(page, "month")).toContainText("Сентябрь");
+  await expect(page.getByPlaceholder(/Фильтр: получатель/)).toHaveCount(0);
+});
+
+test("фильтры работают без общего выбора месяца (#147)", async ({ page }) => {
+  await connectZen(page, "/?month=2026-09");
+  await toggleSettings(page, "Фильтры");
+  await expect(page.getByPlaceholder(/Фильтр: получатель/)).toBeVisible();
+  await expect(monthPicker(page)).toHaveCount(0);
+  await setFilter(page, "accounts", ["acc-cash"]);
+  await expect(tile(page, "month")).toContainText("Октябрь");
+  await expect(tile(page, "month").getByText(/^План/).filter({ visible: true })).toHaveCount(0);
+  await expect(tile(page, "accounts")).toContainText("Наличные");
+  await expect(tile(page, "accounts")).not.toContainText("Т-Банк");
+  await page.reload();
+  await expect(page.getByPlaceholder(/Фильтр: получатель/)).toBeVisible();
+  await expect(monthPicker(page)).toHaveCount(0);
+});
+
+test("старая настройка включает оба переключателя, затем они сохраняются отдельно (#147)", async ({ page }) => {
+  await connectZen(page, "/");
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const open = indexedDB.open("dzenanalytics");
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction("meta", "readwrite");
+      tx.objectStore("meta").put({ homeFilters: true }, "displaySettings");
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+    };
+  }));
+  await page.reload();
+  await expect(monthPicker(page)).toBeVisible();
+  await expect(page.getByPlaceholder(/Фильтр: получатель/)).toBeVisible();
+  await toggleSettings(page, "Выбор месяца");
+  await page.reload();
+  await expect(page.getByPlaceholder(/Фильтр: получатель/)).toBeVisible();
+  await expect(monthPicker(page)).toHaveCount(0);
+});
+
 test("фильтр счетов пересчитывает статьи, итоги и остатки; план не показывается", async ({ page }) => {
   await connectZen(page, "/");
-  await turnOn(page);
+  await toggleBoth(page);
   const rows = tile(page, "categories").locator("[data-categories-list] button");
   await expect.poll(() => rows.count()).toBeGreaterThan(1);
   await expect(tile(page, "accounts")).toContainText("Т-Банк");
@@ -90,10 +145,10 @@ test("фильтр счетов пересчитывает статьи, ито�
 
 test("выключенная настройка возвращает главную к идущему месяцу и всем счетам", async ({ page }) => {
   await connectZen(page, "/");
-  await turnOn(page);
+  await toggleBoth(page);
   await page.goto("/?month=2026-09");
   await expect(tile(page, "month")).toContainText("Сентябрь");
-  await turnOn(page);
+  await toggleBoth(page);
   await expect(tile(page, "month")).toContainText("Октябрь");
   await expect(page.getByPlaceholder(/Фильтр: получатель/)).toHaveCount(0);
 });
@@ -129,7 +184,7 @@ test("фильтр статей меняет график и итоги, но н
   await connectZen(page, "/");
   // Часть виджетов стандартно снята — ставим, чтобы сверить их с фильтром.
   await showWidgets(page, ["freeMoney", "capital"]);
-  await turnOn(page);
+  await toggleBoth(page);
   await expect(tile(page, "freeMoney")).toBeVisible();
   const before = {
     month: await bigNumber(page, "month"),
@@ -160,7 +215,7 @@ test("фильтр статей меняет график и итоги, но н
 test("виджеты месяца следуют выбранному месяцу; статья открывает его операции", async ({ page }) => {
   await connectZen(page, "/");
   await showWidgets(page, ["donutExpense", "donutIncome", "capital", "monthOverMonth", "activity"]);
-  await turnOn(page);
+  await toggleBoth(page);
   const october = {
     month: await bigNumber(page, "month"),
     mom: await tile(page, "monthOverMonth").innerText(),

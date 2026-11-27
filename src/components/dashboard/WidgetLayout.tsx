@@ -662,6 +662,8 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
   const reset = useDashboardLayoutStore((s) => s.reset);
   const homeFilters = useDisplayStore((s) => s.homeFilters);
   const setHomeFilters = useDisplayStore((s) => s.setHomeFilters);
+  const homePeriodPicker = useDisplayStore((s) => s.homePeriodPicker);
+  const setHomePeriodPicker = useDisplayStore((s) => s.setHomePeriodPicker);
 
   if (!editing) return null;
 
@@ -673,15 +675,16 @@ export function LayoutToolbar({ layout }: { layout: readonly WidgetPlacement[] }
         Перетащите виджет на место другого, сдвиньте стрелками на клетку или
         поставьте новый плюсом в пустой клетке.
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Настройка самой главной, а не раскладки, — но живёт здесь же: это
             единственное место, где главную настраивают. */}
-        <label
-          className="flex items-center gap-2 text-[13px] mr-2 cursor-pointer"
-          title={"Фильтры и выбор месяца\nНад виджетами появятся общие фильтры и листание месяца: главная считает за выбранный месяц и по фильтрам"}
-        >
-          <Switch checked={homeFilters} onChange={(v) => void setHomeFilters(v)} label="Фильтры и выбор месяца" />
-          <span>Фильтры и выбор месяца</span>
+        <label className="flex items-center gap-2 text-[13px] mr-2 cursor-pointer">
+          <Switch checked={homePeriodPicker} onChange={(v) => void setHomePeriodPicker(v)} label="Выбор месяца" />
+          <span>Выбор месяца</span>
+        </label>
+        <label className="flex items-center gap-2 text-[13px] mr-2 cursor-pointer">
+          <Switch checked={homeFilters} onChange={(v) => void setHomeFilters(v)} label="Фильтры" />
+          <span>Фильтры</span>
         </label>
         <button
           type="button"

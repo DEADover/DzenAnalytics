@@ -135,12 +135,10 @@ interface DisplayState {
    * вместе с лентой, как раньше.
    */
   feedHeadSticky: boolean;
-  /**
-   * «Фильтры и выбор месяца» на главной: над виджетами появляется панель общих
-   * фильтров и листание месяца, и главная считает за выбранный месяц и по
-   * фильтрам. По умолчанию выключено — главная про идущий месяц и все счета.
-   */
+  /** Общие фильтры на главной. */
   homeFilters: boolean;
+  /** Выбор периода для всей главной в её шапке и на графике. */
+  homePeriodPicker: boolean;
   /**
    * Строка «Запланировано» над лентой «Операций»: сколько планов Дзен-мани
    * просрочено и осталось до конца месяца, года и всего; клик открывает
@@ -231,6 +229,7 @@ interface DisplayState {
   setColumnResize: (on: boolean) => Promise<void>;
   setFeedHeadSticky: (on: boolean) => Promise<void>;
   setHomeFilters: (on: boolean) => Promise<void>;
+  setHomePeriodPicker: (on: boolean) => Promise<void>;
   setFeedPlanned: (on: boolean) => Promise<void>;
   setFeedPlannedMode: (mode: FeedPlannedMode) => Promise<void>;
   setSyncLogOpen: (on: boolean) => Promise<void>;
@@ -260,6 +259,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   columnResize: false,
   feedHeadSticky: false,
   homeFilters: false,
+  homePeriodPicker: false,
   feedPlanned: true,
   feedPlannedMode: "bar",
   syncLogOpen: false,
@@ -289,6 +289,7 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       columnResize?: boolean;
       feedHeadSticky?: boolean;
       homeFilters?: boolean;
+      homePeriodPicker?: boolean;
       feedPlanned?: boolean;
       feedPlannedMode?: unknown;
       syncLogOpen?: boolean;
@@ -319,6 +320,8 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
       columnResize: stored?.columnResize === true,
       feedHeadSticky: stored?.feedHeadSticky === true,
       homeFilters: stored?.homeFilters === true,
+      // До отдельных переключателей homeFilters включал также выбор месяца.
+      homePeriodPicker: (stored?.homePeriodPicker ?? stored?.homeFilters) === true,
       feedPlanned: stored?.feedPlanned !== false,
       feedPlannedMode: isFeedPlannedMode(stored?.feedPlannedMode) ? stored.feedPlannedMode : "bar",
       syncLogOpen: stored?.syncLogOpen === true,
@@ -387,6 +390,11 @@ export const useDisplayStore = create<DisplayState>((set, get) => ({
   setHomeFilters: async (on) => {
     set({ homeFilters: on });
     await db.saveJSON(KEY, { ...persisted(get()), homeFilters: on });
+  },
+
+  setHomePeriodPicker: async (on) => {
+    set({ homePeriodPicker: on });
+    await db.saveJSON(KEY, persisted(get()));
   },
 
   setFeedPlanned: async (on) => {
@@ -468,6 +476,7 @@ function persisted(s: DisplayState) {
     columnResize: s.columnResize,
     feedHeadSticky: s.feedHeadSticky,
     homeFilters: s.homeFilters,
+    homePeriodPicker: s.homePeriodPicker,
     feedPlanned: s.feedPlanned,
     feedPlannedMode: s.feedPlannedMode,
     syncLogOpen: s.syncLogOpen,

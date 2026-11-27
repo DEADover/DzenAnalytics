@@ -1,14 +1,5 @@
 /**
- * «Фильтры и выбор месяца» на главной (#130).
- *
- * Обычно главная про идущий месяц и про все счета. С этой настройкой над
- * виджетами появляются панель общих фильтров и листание месяца, и главная
- * считает за выбранный месяц и по фильтрам: так личный бюджет отделяется от
- * семейного, а год проходится месяц за месяцем с одной страницы.
- *
- * Хук отдаёт всё, что для этого нужно модели главной (`useDashboardModel`) и
- * самой странице. Когда настройка выключена, он ничего не меняет: модель
- * получает пустые параметры и считает как раньше.
+ * Общие фильтры и выбор месяца на главной включаются независимо.
  */
 
 import { useCallback, useMemo } from "react";
@@ -27,8 +18,8 @@ import { currentPeriod, periodKey } from "../lib/period";
 import type { Transaction } from "../types";
 
 export interface HomeScope {
-  /** Настройка включена: главная слушает фильтры и выбранный месяц. */
-  on: boolean;
+  filtersOn: boolean;
+  monthPickerOn: boolean;
   /** Выбранный месяц, YYYY-MM; при выключенной настройке — идущий. */
   ym: string;
   setYm: (ym: string) => void;
@@ -52,7 +43,8 @@ export interface HomeScope {
 const NO_OPTIONS: DashboardModelOptions = {};
 
 export function useHomeScope(): HomeScope {
-  const on = useDisplayStore((s) => s.homeFilters);
+  const filtersOn = useDisplayStore((s) => s.homeFilters);
+  const monthPickerOn = useDisplayStore((s) => s.homePeriodPicker);
   const analytics = useAnalyticsTransactions();
   const allTransactions = useDataStore((s) => s.transactions);
   const monthStartDay = useReportPeriodStore((s) => s.monthStartDay);
@@ -65,17 +57,17 @@ export function useHomeScope(): HomeScope {
     [filters]
   );
   const transactions = useMemo(
-    () => (on ? applyFilters(analytics, pageFilters, monthStartDay) : analytics),
-    [on, analytics, pageFilters, monthStartDay]
+    () => (filtersOn ? applyFilters(analytics, pageFilters, monthStartDay) : analytics),
+    [filtersOn, analytics, pageFilters, monthStartDay]
   );
-  const narrowed = on && isNarrowed(filters);
+  const narrowed = filtersOn && isNarrowed(filters);
 
   // Капитал и остатки — по счетам из фильтра; без фильтра — как обычно.
   const liveAccounts = useLiveAccounts();
   const valuation = useBalanceValuation();
   const capitalKeys = useMemo(
     () =>
-      on && liveAccounts && valuation?.universe
+      filtersOn && liveAccounts && valuation?.universe
         ? capitalAccountKeys({
             accounts: liveAccounts.map((a) => ({ key: accountKeyOf(a), member: a.member })),
             universe: valuation.universe,
@@ -83,10 +75,10 @@ export function useHomeScope(): HomeScope {
             pickedUsers: filters.users,
           })
         : null,
-    [on, liveAccounts, valuation, filters.accounts, filters.users]
+    [filtersOn, liveAccounts, valuation, filters.accounts, filters.users]
   );
   const capitalKnown =
-    !on || !!liveAccounts || (filters.accounts.size === 0 && filters.users.size === 0);
+    !filtersOn || !!liveAccounts || (filters.accounts.size === 0 && filters.users.size === 0);
 
   // Выбранный месяц живёт в ссылке: её можно сохранить и вернуться к ней
   // кнопкой «назад». Идущий месяц — без параметра, поэтому главная без
@@ -100,7 +92,7 @@ export function useHomeScope(): HomeScope {
   const [searchParams, setSearchParams] = useSearchParams();
   const param = searchParams.get("month");
   const ym =
-    on && param && /^\d{4}-\d{2}$/.test(param) && param >= firstYm && param <= nowYm ? param : nowYm;
+    monthPickerOn && param && /^\d{4}-\d{2}$/.test(param) && param >= firstYm && param <= nowYm ? param : nowYm;
   const setYm = useCallback(
     (next: string) => {
       const clamped = next < firstYm ? firstYm : next > nowYm ? nowYm : next;
@@ -111,7 +103,7 @@ export function useHomeScope(): HomeScope {
 
   const options = useMemo<DashboardModelOptions>(
     () =>
-      on
+      filtersOn || monthPickerOn
         ? {
             ym,
             transactions,
@@ -122,18 +114,19 @@ export function useHomeScope(): HomeScope {
             capitalTransactions: capitalKeys ? allTransactions : analytics,
           }
         : NO_OPTIONS,
-    [on, ym, transactions, capitalKeys, allTransactions, analytics]
+    [filtersOn, monthPickerOn, ym, transactions, capitalKeys, allTransactions, analytics]
   );
 
   return {
-    on,
+    filtersOn,
+    monthPickerOn,
     ym,
     setYm,
     nowYm,
     firstYm,
     transactions,
     narrowed,
-    filteredOut: on && analytics.length > 0 && transactions.length === 0,
+    filteredOut: filtersOn && analytics.length > 0 && transactions.length === 0,
     capitalKeys,
     capitalKnown,
     options,

@@ -10,6 +10,7 @@ import { AccountLogo } from "../../AccountLogo";
 import { accountKindLabel } from "../../../lib/accountType";
 import { formatMoney, formatNum, formatPct, formatDate, monthLabel } from "../../../lib/format";
 import { sumMoney } from "../../../lib/money";
+import type { freeAccountBalance } from "../../../lib/freeMoney";
 import type { DashboardAccount, DashboardModel } from "../../../hooks/useDashboardModel";
 import type { PlannedOp } from "../../../lib/plannedOps";
 import { SectionEmpty } from "../../SectionEmpty";
@@ -28,7 +29,7 @@ import { ProgressBar } from "../../ProgressBar";
  * выбирать). Итоги и отчёты сервиса по-прежнему решает настройка «Счета вне
  * баланса» в «Расчётах»; пока в виджете ничего не выбрано, он следует ей.
  *
- * Третий режим — «Свободные»: баланс счетов минус остаток плана месяца и
+ * Третий режим — «Свободные»: баланс счетов минус запланированные платежи и
  * накопительные счета, то есть сколько можно тратить, не трогая ни
  * запланированное, ни отложенное.
  */
@@ -36,7 +37,7 @@ export function AccountsBlock({
   m,
   offBalance,
   free,
-  planLeft,
+  accountFunds,
   onModeChange,
   onAccount,
   picked = false,
@@ -51,34 +52,27 @@ export function AccountsBlock({
   offBalance: boolean | undefined;
   /** Выбран режим «Свободные». */
   free: boolean | undefined;
-  /**
-   * Остаток плана месяца — тот же, что в «Свободных деньгах». `null` — плана
-   * взять неоткуда (нет Дзен-мани), и режима «Свободные» нет.
-   */
-  planLeft: number | null;
+  /** Расчёт для режима «Свободные», когда есть план и показаны все счета. */
+  accountFunds: ReturnType<typeof freeAccountBalance> | null;
   onModeChange: (mode: BalancesMode) => void;
   onAccount?: (key: string, label: string) => void;
 }) {
   const show = offBalance ?? m.includeOffBalance;
   const hasOff = !picked && m.accountsAll.some((a) => a.offBalance);
-  const canFree = !picked && planLeft !== null;
-  const freeMode = canFree && free === true;
+  const canFree = accountFunds !== null;
+  const breakdown = free === true ? accountFunds : null;
   // «Свободные» считаются от счетов в балансе: вне баланса деньги не для
   // повседневных трат, их и Дзен-мани в свободные не берёт.
   const accounts = picked
     ? m.accounts
-    : show && !freeMode
+    : show && !breakdown
       ? m.accountsAll
       : m.accountsAll.filter((a) => !a.offBalance);
   // Итог — сумма тех самых строк, что под ним, до копейки. Раньше он брался из
   // истории остатков и поправлялся на счета вне баланса: число то же по
   // смыслу, но сложенное другим путём, и копейки со строками не сходились.
-  const total = sumMoney(accounts.map((a) => a.balanceBase));
-  const savingsAccounts = freeMode ? accounts.filter((a) => a.savings) : [];
-  const savings = sumMoney(savingsAccounts.map((a) => a.balanceBase));
-  const plan = planLeft ?? 0;
-  const freeTotal = sumMoney([total, -plan, -savings]);
-  const shown = freeMode ? freeTotal : total;
+  const shown = breakdown?.free ?? sumMoney(accounts.map((a) => a.balanceBase));
+  const savingsAccounts = breakdown ? accounts.filter((a) => a.savings) : [];
 
   const options = [
     ...(hasOff
@@ -97,7 +91,7 @@ export function AccountsBlock({
         ]
       : []),
   ];
-  const mode: BalancesMode = freeMode ? "free" : hasOff && show ? "all" : "in";
+  const mode: BalancesMode = breakdown ? "free" : hasOff && show ? "all" : "in";
   return (
     <>
       <BlockTitle
@@ -119,9 +113,8 @@ export function AccountsBlock({
                   «Свободные» — сколько можно тратить, не трогая ни
                   запланированное, ни отложенное: баланс счетов в балансе минус
                   запланированные траты и остаток на накопительных счетах.
-                  Запланированные траты — то же, что «Остаток плана» в
-                  «Свободных деньгах»: бюджет категорий и назначенные платежи
-                  месяца минус уже потраченное.
+                  Здесь вычитаются предстоящие и просроченные расходы из
+                  «Запланированных операций» в режиме «Дзен-мани».
                 </p>
               )}
             </>
@@ -152,21 +145,21 @@ export function AccountsBlock({
       >
         {formatMoney(shown, m.base)}
       </div>
-      {freeMode && (
+      {breakdown && (
         <div data-balances-free className="space-y-1 pt-1.5 pb-2.5 mb-1 border-b border-border">
           <FreeRow
             label="Баланс счетов"
-            value={total}
+            value={breakdown.balance}
             base={m.base}
-            sign={total < 0 ? "−" : undefined}
+            sign={breakdown.balance < 0 ? "−" : undefined}
           />
-          <FreeRow label="Запланированные траты" value={plan} base={m.base} sign="−" muted />
+          <FreeRow label="Запланированные траты" value={breakdown.plannedExpense} base={m.base} sign="−" muted />
           {savingsAccounts.length > 0 && (
             <FreeRow
               label={savingsAccounts.length === 1 ? "Накопительный счёт" : "Накопительные счета"}
-              value={savings}
+              value={breakdown.savings}
               base={m.base}
-              sign={savings < 0 ? "+" : "−"}
+              sign={breakdown.savings < 0 ? "+" : "−"}
               muted
             />
           )}

@@ -394,8 +394,7 @@ export interface PlanCellEdit {
 }
 
 /**
- * Правки плана строки свода: сумма `amount` в каждом из месяцев `targets`
- * (индексы 0…11).
+ * Правки плана строки свода: сумма `amount` в каждом из месяцев `targets`.
  *
  * Строка категории показывает СВОЙ план плюс планы подкатегорий — как в
  * месячном виде и в самом Дзен-мани. Правится при этом свой план: из
@@ -404,20 +403,26 @@ export interface PlanCellEdit {
  * разные месяцы разный план, а в месяцах с замком их доля и вовсе ноль.
  */
 export function rowPlanEdits(
-  report: BudgetYearReport,
+  reports: readonly BudgetYearReport[],
   group: YearGroup,
   row: YearRow,
   amount: number,
-  targets: number[]
+  targets: readonly string[]
 ): PlanCellEdit[] {
   const isTotal = row === group.total;
-  return targets.map((i) => {
-    const subs = isTotal ? group.total.cells[i].plan - group.parent.cells[i].plan : 0;
+  return targets.flatMap((ym) => {
+    const report = reports.find((candidate) => candidate.months.includes(ym));
+    if (!report) return [];
+    const i = report.months.indexOf(ym);
+    const targetGroup = isTotal
+      ? report[row.kind].groups.find((candidate) => normalizeTagName(candidate.category) === normalizeTagName(group.category))
+      : undefined;
+    const subs = targetGroup ? targetGroup.total.cells[i].plan - targetGroup.parent.cells[i].plan : 0;
     return {
       kind: row.kind,
       category: row.category,
       subcategory: isTotal ? null : row.subcategory,
-      ym: report.months[i],
+      ym,
       amount: Math.max(0, amount - subs),
     };
   });

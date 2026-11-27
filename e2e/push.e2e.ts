@@ -15,16 +15,46 @@ async function editFoodPlan(page: Page, amount: string) {
 
 test.describe("правка одних только планов", () => {
   test("в «Вручную» видна в очереди и уходит по кнопке (#113)", async ({ page, zen }) => {
+    zen.patchFull = (diff) => {
+      const firstFoodExpense = diff.transaction.find(
+        (t) => t.tag?.[0] === "tag-food" && t.date.startsWith("2026-10") && t.outcome > 0 && t.income === 0
+      );
+      return {
+        ...diff,
+        transaction: diff.transaction.map((t) =>
+          t === firstFoodExpense ? { ...t, outcome: t.outcome + 0.6 } : t
+        ),
+      };
+    };
     await connectZen(page);
     await setPushMode(page, "manual");
-    await editFoodPlan(page, "31000");
+    await editFoodPlan(page, "31000,25");
+    const plan = page.getByRole("button", { name: /^Изменить план: Продукты · / }).first();
+    await expect(plan).toHaveText("31 000");
+    const planCell = plan.locator("..");
+    const factCell = planCell.locator("xpath=following-sibling::td[1]");
+    const diffCell = planCell.locator("xpath=following-sibling::td[2]");
+    const cellAmount = async (cell: typeof factCell) =>
+      Number((await cell.innerText()).replace(/\s/g, "").replace(",", "."));
+    await expect.poll(async () => cellAmount(diffCell)).toBe(31_000 - (await cellAmount(factCell)));
+    await page.evaluate(async () => {
+      type DisplayStore = { useDisplayStore: { getState: () => { setFractionDigits: (value: number) => Promise<void> } } };
+      const store = (window as unknown as { __store: (name: string) => Promise<DisplayStore> }).__store;
+      await (await store("useDisplayStore")).useDisplayStore.getState().setFractionDigits(2);
+    });
+    await expect(plan).toHaveText("31 000,25");
+    await expect(factCell).toHaveText(/,60$/);
+    await expect.poll(async () => cellAmount(diffCell)).toBeCloseTo(31_000.25 - (await cellAmount(factCell)), 2);
+    await plan.click();
+    await expect(page.getByLabel(/^План на октябрь/)).toHaveValue("31000,25");
+    await page.keyboard.press("Escape");
 
     const review = page.locator('button[title^="Просмотреть изменения перед отправкой"]');
     await expect(review).toHaveText("1");
     await review.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Бюджет", { exact: true })).toBeVisible();
-    await expect(dialog.getByText(/Расходы · Октябрь 2026 · План \u2060?31\s000/)).toBeVisible();
+    await expect(dialog.getByText(/Расходы · Октябрь 2026 · План \u2060?31\s000,25/)).toBeVisible();
     await page.keyboard.press("Escape");
 
     await page.locator('button[title="Отправить изменения в Дзен-мани"]').click();
@@ -32,7 +62,7 @@ test.describe("правка одних только планов", () => {
 
     await expect.poll(() => zen.pushes.length).toBe(1);
     expect(zen.pushes[0].budget).toEqual([
-      expect.objectContaining({ tag: "tag-food", date: "2026-10-01", outcome: 31_000, outcomeLock: true }),
+      expect.objectContaining({ tag: "tag-food", date: "2026-10-01", outcome: 31_000.25, outcomeLock: true }),
     ]);
     await expect(page.locator('button[title="Нет изменений, ожидающих отправки"]')).toHaveText("0");
   });

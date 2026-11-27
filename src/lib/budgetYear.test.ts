@@ -710,7 +710,7 @@ describe("правка плана в режиме «Год» (#106)", () => {
   it("строка подкатегории правит свой план в каждом выбранном месяце", () => {
     const report = year([line({ subcategory: "Кафе", amount: 5000 })]);
     const group = report.expense.groups[0];
-    const edits = rowPlanEdits(report, group, group.subs[0], 7000, [9, 10, 11]);
+    const edits = rowPlanEdits([report], group, group.subs[0], 7000, ["2026-10", "2026-11", "2026-12"]);
     expect(edits.map((e) => [e.subcategory, e.ym, e.amount])).toEqual([
       ["Кафе", "2026-10", 7000],
       ["Кафе", "2026-11", 7000],
@@ -725,7 +725,7 @@ describe("правка плана в режиме «Год» (#106)", () => {
     ];
     const report = year(lines);
     const group = food(lines);
-    const edits = rowPlanEdits(report, group, group.total, 30_000, [9, 10, 11]);
+    const edits = rowPlanEdits([report], group, group.total, 30_000, ["2026-10", "2026-11", "2026-12"]);
     expect(edits.map((e) => [e.subcategory, e.ym, e.amount])).toEqual([
       [null, "2026-10", 25_000],
       [null, "2026-11", 22_000],
@@ -740,14 +740,26 @@ describe("правка плана в режиме «Год» (#106)", () => {
     ];
     const report = year(lines);
     const group = food(lines);
-    expect(rowPlanEdits(report, group, group.total, 40_000, [9])[0].amount).toBe(40_000);
+    expect(rowPlanEdits([report], group, group.total, 40_000, ["2026-10"])[0].amount).toBe(40_000);
   });
 
   it("свой план не уходит в минус, если подкатегории дают больше введённого", () => {
     const lines = [line({ amount: 0 }), line({ subcategory: "Кафе", amount: 8000 })];
     const report = year(lines);
     const group = food(lines);
-    expect(rowPlanEdits(report, group, group.total, 5000, [9])[0].amount).toBe(0);
+    expect(rowPlanEdits([report], group, group.total, 5000, ["2026-10"])[0].amount).toBe(0);
+  });
+
+  it("копия категории учитывает планы подкатегорий в целевых месяцах следующего года", () => {
+    const lines = [
+      line({ overrides: { "2026-12": 30_000, "2027-11": 10_000 }, locks: { "2027-11": true } }),
+      line({ subcategory: "Кафе", amount: 0, overrides: { "2027-03": 5000, "2027-11": 7000 } }),
+    ];
+    const report = year(lines);
+    const group = report.expense.groups[0];
+    const next = buildBudgetYear(lines, [], 2027);
+    const edits = rowPlanEdits([report, next], group, group.total, 30_000, ["2027-03", "2027-11"]);
+    expect(edits.map((e) => [e.ym, e.amount])).toEqual([["2027-03", 25_000], ["2027-11", 30_000]]);
   });
 
   it("копия месяца повторяет свои планы всех статей и снимает лишние", () => {

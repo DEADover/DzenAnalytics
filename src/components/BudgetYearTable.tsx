@@ -13,7 +13,10 @@ import {
   type PlanCellEdit,
 } from "../lib/budgetYear";
 import type { BudgetKind } from "../lib/budgets";
-import { currencySymbol, formatMoney, formatNum, monthLabel, monthLabelFull } from "../lib/format";
+import { currencySymbol, formatMoney, monthLabel, monthLabelFull } from "../lib/format";
+import { roundMoney } from "../lib/money";
+import { shiftPeriod } from "../lib/period";
+import { useDisplayStore } from "../store/useDisplayStore";
 import { AccountLogo } from "./AccountLogo";
 import { CategoryDot } from "./CategoryDot";
 import { TRANSFER_CATEGORY } from "../lib/budgetScope";
@@ -41,12 +44,6 @@ type Slot = "year" | "first";
 const edgeOf = (slot: Slot | undefined) =>
   slot === "first" ? "pl-4 pr-2" : GROUP_EDGE;
 
-/** Ноль показываем прочерком: в сетке из тридцати шести колонок сплошные нули
- *  читаются хуже пустоты, а отличать «ноль» от «нет данных» здесь не нужно. */
-function num(v: number): React.ReactNode {
-  return v === 0 ? <span className="text-muted">—</span> : formatNum(v);
-}
-
 /**
  * Годовой свод: по каждому месяцу план, факт и разница между ними, плюс итог за
  * год. Классический вид бюджета — тот, к которому привыкли по Дзен-мани и по
@@ -66,6 +63,7 @@ export function BudgetYearTable({
   editableFrom,
   onSavePlans,
   onCopyMonth,
+  buildYearReport,
   onOpenCell,
 }: {
   report: BudgetYearReport;
@@ -87,6 +85,7 @@ export function BudgetYearTable({
   onSavePlans?: (edits: PlanCellEdit[]) => void;
   /** Скопировать план месяца `from` целиком на месяцы `targets`. */
   onCopyMonth?: (from: string, targets: string[]) => void;
+  buildYearReport: (year: number) => BudgetYearReport;
   /** Клик по факту — операции этой статьи за этот месяц. */
   onOpenCell: (
     category: string,
@@ -95,6 +94,20 @@ export function BudgetYearTable({
     kind: BudgetKind
   ) => void;
 }) {
+  const fractionDigits = useDisplayStore((s) => s.fractionDigits);
+  const numberFormat = new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+  const displayAmount = (value: number) =>
+    fractionDigits === 2 ? roundMoney(value) : Math.sign(value) * Math.round(Math.abs(value));
+  const displayDiff = (c: YearCell, kind: BudgetKind) =>
+    roundMoney(yearDiff({ plan: displayAmount(c.plan), fact: displayAmount(c.fact) }, kind));
+  // Прочерк оставляем для пустой суммы. Записанная сумма, округлившаяся до
+  // нуля, остаётся числом.
+  const num = (value: number) =>
+    value === 0 ? <span className="text-muted">—</span> : numberFormat.format(displayAmount(value) || 0);
+
   // Подкатегории раскрываются по категории, как в месячном виде.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // Раскрытые нажатием строки проявляются, а не возникают рывком.
@@ -179,7 +192,17 @@ export function BudgetYearTable({
     setPopoverAnchor(anchor);
     setCopying(ym);
   };
-  const copyTargets = (ym: string) => (onCopyMonth ? editableMonths.filter((m) => m !== ym) : []);
+  const copyTargets = (ym: string) => {
+    if (!editableFrom) return [];
+    const targets = editableMonths.filter((m) => m !== ym);
+    if (ym.endsWith("-12")) {
+      for (let offset = 1; offset <= 12; offset++) {
+        const target = shiftPeriod(ym, offset);
+        if (target >= editableFrom) targets.push(target);
+      }
+    }
+    return targets;
+  };
 
   /** Всего колонок — для заголовков разделов на всю ширину. */
   const COLS = 1 + (report.months.length + 1) * SUB_COLUMNS.length;
@@ -444,7 +467,7 @@ export function BudgetYearTable({
     } = {}
   ) => {
     const { strong = false, note, slot, onEditPlan } = opts;
-    const diff = yearDiff(c, kind);
+    const diff = displayDiff(c, kind);
     const empty = c.plan === 0 && c.fact === 0;
     const cls = `py-1.5 text-right tabular-nums whitespace-nowrap ${
       strong ? "font-medium" : ""
@@ -526,7 +549,7 @@ export function BudgetYearTable({
                 : "text-expense"
           }`}
         >
-          {empty ? <span className="text-muted">—</span> : formatNum(diff)}
+          {empty ? <span className="text-muted">—</span> : numberFormat.format(diff || 0)}
         </td>
       </Fragment>
     );
@@ -796,7 +819,7 @@ export function BudgetYearTable({
               yearPlan:
                 emptyPlan(section) > 0 ? (
                   <Tooltip content="План статей без операций — он учтён в итоге">
-                    <span>{formatNum(emptyPlan(section))}</span>
+                    <span>{num(emptyPlan(section))}</span>
                   </Tooltip>
                 ) : null,
               rest: <div className="h-px bg-border" />,
@@ -889,7 +912,7 @@ export function BudgetYearTable({
           {num(c.fact)}
         </td>
         <td {...pin(2)} className={`${cls} pl-2 pr-4 text-muted ${pin(2).className}`}>
-          {empty ? num(0) : formatNum(c.fact - c.plan)}
+          {empty ? num(0) : numberFormat.format(displayDiff(c, "income") || 0)}
         </td>
       </Fragment>
     );
@@ -968,7 +991,7 @@ export function BudgetYearTable({
               {/* Копия плана месяца — значком под курсором: двенадцать
                   постоянных значков в шапке читались бы рябью. Сбоку от
                   названия и вне потока, чтобы название не сдвигалось. */}
-              {copyTargets(m).length > 0 && (
+              {onCopyMonth && copyTargets(m).length > 0 && (
                 <span className="absolute left-full ml-1 opacity-0 group-hover/month:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
                   <Tooltip content="Копировать план месяца на другие месяцы">
                     <button
@@ -1109,15 +1132,16 @@ export function BudgetYearTable({
               : 0
           }
           base={base}
-          targets={editableMonths.filter((m) => m !== report.months[editing.month])}
-          onSave={(amount, copyTo) =>
-            onSavePlans(
-              rowPlanEdits(report, editing.group, editing.row, amount, [
-                editing.month,
-                ...copyTo.map((m) => report.months.indexOf(m)),
-              ])
-            )
-          }
+          targets={copyTargets(report.months[editing.month])}
+          onSave={(amount, copyTo) => {
+            const targets = amount === editing.row.cells[editing.month].plan
+              ? copyTo
+              : [report.months[editing.month], ...copyTo];
+            const reports = copyTo.some((month) => !report.months.includes(month))
+              ? [report, buildYearReport(report.year + 1)]
+              : [report];
+            onSavePlans(rowPlanEdits(reports, editing.group, editing.row, amount, targets));
+          }}
           onClose={() => setEditing(null)}
         />
       )}

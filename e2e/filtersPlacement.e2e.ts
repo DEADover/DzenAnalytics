@@ -11,7 +11,12 @@ test("панель фильтров на главной там же, где на
   await connectZen(page, "/");
   await page.evaluate(async () => {
     const { useDisplayStore } = await (window as unknown as Win).__store("useDisplayStore");
-    await (useDisplayStore.getState() as { setHomeFilters: (b: boolean) => Promise<void> }).setHomeFilters(true);
+    const display = useDisplayStore.getState() as {
+      setHomeFilters: (b: boolean) => Promise<void>;
+      setHomePeriodPicker: (b: boolean) => Promise<void>;
+    };
+    await display.setHomeFilters(true);
+    await display.setHomePeriodPicker(true);
   });
   const tops: number[] = [];
   for (const path of ["/", "/transactions", "/accounts"]) {

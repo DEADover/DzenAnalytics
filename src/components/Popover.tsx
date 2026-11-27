@@ -31,6 +31,8 @@ interface Props {
   align?: "left" | "right";
   /** Force the popover width to equal the anchor's width (dropdowns/selects). */
   matchWidth?: boolean;
+  /** Reposition when the contents expand or shrink while open. */
+  repositionOnResize?: boolean;
   /** Styling for the popover surface (e.g. "card p-1"). */
   className?: string;
   children: ReactNode;
@@ -50,6 +52,7 @@ export function Popover({
   onClose,
   align = "left",
   matchWidth,
+  repositionOnResize,
   className,
   children,
 }: Props) {
@@ -69,20 +72,26 @@ export function Popover({
     const anchor = anchorRef.current;
     const menu = menuRef.current;
     if (!anchor || !menu) return;
-    const a = anchor.getBoundingClientRect();
-    const width = matchWidth ? a.width : menu.offsetWidth;
-    const height = menu.offsetHeight;
-    const openUp = window.innerHeight - a.bottom < height + 12;
-    const left = align === "right" ? a.right - width : a.left;
-    setPos({
-      left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
-      top: openUp ? Math.max(8, a.top - height - 4) : a.bottom + 4,
-      width: matchWidth ? width : undefined,
-      up: openUp,
-    });
-    // Content is static while open; recompute only on open/align/width changes.
+    const update = () => {
+      const a = anchor.getBoundingClientRect();
+      const width = matchWidth ? a.width : menu.offsetWidth;
+      const height = menu.offsetHeight;
+      const openUp = window.innerHeight - a.bottom < height + 12;
+      const left = align === "right" ? a.right - width : a.left;
+      setPos({
+        left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+        top: openUp ? Math.max(8, a.top - height - 4) : a.bottom + 4,
+        width: matchWidth ? width : undefined,
+        up: openUp,
+      });
+    };
+    update();
+    if (!repositionOnResize) return;
+    const observer = new ResizeObserver(update);
+    observer.observe(menu);
+    return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, align, matchWidth]);
+  }, [open, align, matchWidth, repositionOnResize]);
 
   useEffect(() => {
     if (!open) return;

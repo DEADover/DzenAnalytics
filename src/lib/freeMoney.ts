@@ -59,6 +59,7 @@
  */
 
 import { LIABILITY_TYPES } from "./accountType";
+import { sumMoney } from "./money";
 
 /** Как делить свободные деньги по дням. */
 export type DailyMethod = "cumulative" | "daily";
@@ -102,6 +103,17 @@ export function spendableAccounts<T extends SpendableAccount>(accounts: T[]): T[
   return accounts.filter(
     (a) => !a.archive && !a.offBalance && !a.savings && !LIABILITY_TYPES.has(a.type)
   );
+}
+
+/** Разбивка режима «Свободные» в «Балансах счетов». */
+export function freeAccountBalance(
+  accounts: readonly Pick<SpendableAccount, "balanceBase" | "savings" | "offBalance">[],
+  plannedExpense: number
+) {
+  const inBalance = accounts.filter((a) => !a.offBalance);
+  const balance = sumMoney(inBalance.map((a) => a.balanceBase));
+  const savings = sumMoney(inBalance.filter((a) => a.savings).map((a) => a.balanceBase));
+  return { balance, savings, plannedExpense, free: sumMoney([balance, -plannedExpense, -savings]) };
 }
 
 /* ─────────────────────────────  остаток плана  ───────────────────────────── */

@@ -3,7 +3,7 @@ import { Copy } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { Popover } from "./Popover";
 import { MONTHS, MONTHS_IN, MONTHS_SHORT } from "../lib/months";
-import { formatMoney } from "../lib/format";
+import { formatMoney, monthTitle } from "../lib/format";
 import { Collapse } from "./Collapse";
 
 /** Название месяца по ключу `YYYY-MM`: полное или короткое. */
@@ -31,7 +31,10 @@ function MonthTargets({
   onChange: (next: Set<string>) => void;
   label?: string;
 }) {
-  const following = months.filter((m) => m > source);
+  const sourceYear = source.slice(0, 4);
+  const sameYear = months.filter((m) => m.startsWith(sourceYear));
+  const nextYear = months.filter((m) => !m.startsWith(sourceYear));
+  const following = sameYear.filter((m) => m > source);
   const allFollowing = following.length > 0 && following.every((m) => picked.has(m));
   const toggle = (m: string) => {
     const next = new Set(picked);
@@ -42,23 +45,6 @@ function MonthTargets({
   return (
     <div className="space-y-1.5">
       <div className="text-xs text-muted">{label}</div>
-      {/* Сеткой по три: все названия в три буквы, но разной ширины («Май» уже
-          «Фев»), и переносом по ширине правый край выходил рваным. В сетке
-          чипы одинаковые и вместе ровно в ширину поля — до четырёх рядов
-          при одиннадцати месяцах. */}
-      <div className="grid grid-cols-3 gap-1">
-        {months.map((m) => (
-          <button
-            key={m}
-            type="button"
-            aria-pressed={picked.has(m)}
-            onClick={() => toggle(m)}
-            className={`chip chip-sm !px-2 justify-center ${picked.has(m) ? "chip-on" : ""}`}
-          >
-            {monthName(m, true)}
-          </button>
-        ))}
-      </div>
       {following.length > 0 && (
         <button
           type="button"
@@ -75,6 +61,28 @@ function MonthTargets({
           {allFollowing ? "Снять выбор" : "До конца года"}
         </button>
       )}
+      {[sameYear, nextYear].filter((group) => group.length > 0).map((group) => {
+        const year = group[0].slice(0, 4);
+        return (
+          <fieldset key={year} className="min-w-0">
+            {nextYear.length > 0 && <legend className="mb-1 text-xs text-muted">{year}</legend>}
+            <div className="grid grid-cols-3 gap-1">
+              {group.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-label={monthTitle(m)}
+                  aria-pressed={picked.has(m)}
+                  onClick={() => toggle(m)}
+                  className={`chip chip-sm !px-2 justify-center ${picked.has(m) ? "chip-on" : ""}`}
+                >
+                  {monthName(m, true)}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        );
+      })}
     </div>
   );
 }
@@ -111,7 +119,7 @@ export function PlanCellPopover({
   onSave: (amount: number, copyTo: string[]) => void;
   onClose: () => void;
 }) {
-  const [value, setValue] = useState(initial > 0 ? String(Math.round(initial)) : "");
+  const [value, setValue] = useState(initial > 0 ? String(initial).replace(".", ",") : "");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [copyOpen, setCopyOpen] = useState(false);
   // Фокус — кадром позже, а не `autoFocus`: окно сначала рисуется невидимым,
@@ -121,11 +129,12 @@ export function PlanCellPopover({
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, []);
-  const amount = Number(value || 0);
+  const amount = Number(value.replace(",", "."));
   const copyTo = targets.filter((m) => picked.has(m));
-  const unchanged = amount === Math.round(initial) && copyTo.length === 0;
+  const unchanged = amount === initial && copyTo.length === 0;
 
   const save = () => {
+    if (!Number.isFinite(amount) || amount < 0) return;
     if (unchanged) return onClose();
     onSave(amount, copyTo);
     onClose();
@@ -138,7 +147,13 @@ export function PlanCellPopover({
     // исключения. Ширина — по ряду кнопок: поле кончается там же, где
     // «Сохранить», без пустой полосы справа; девять знаков суммы влезают.
     // Отмены нет — окно закрывается по Esc и клику мимо.
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-40 card p-2.5 shadow-lg">
+    <Popover
+      open
+      anchorRef={anchorRef}
+      onClose={onClose}
+      repositionOnResize
+      className="w-40 max-h-[calc(100dvh-16px)] overflow-y-auto card p-2.5 shadow-lg"
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -154,13 +169,14 @@ export function PlanCellPopover({
         <div>
           <input
             type="text"
-            inputMode="numeric"
+            inputMode="decimal"
+            pattern="[0-9]*([.,][0-9]+)?"
             ref={inputRef}
             aria-label={`План на ${monthName(ym).toLowerCase()}, ${base}`}
             value={value}
             placeholder="0"
             onFocus={(e) => e.target.select()}
-            onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => setValue(e.target.value)}
             className="input !py-1.5 text-sm tabular-nums"
           />
         </div>
@@ -227,14 +243,14 @@ export function MonthCopyPopover({
   onClose: () => void;
 }) {
   const [picked, setPicked] = useState<Set<string>>(
-    () => new Set(targets.filter((m) => m > source))
+    () => new Set(targets.filter((m) => m > source && m.slice(0, 4) === source.slice(0, 4)))
   );
   const copyTo = targets.filter((m) => picked.has(m));
   return (
     // Тем же видом, что окно плана ячейки: подпись и месяц двумя строками,
     // чипы сеткой по три, кнопка на всю ширину. Пояснение — одной фразой о
     // результате: что станет с планом, а не как это устроено.
-    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-40 card p-2.5 shadow-lg">
+    <Popover open anchorRef={anchorRef} onClose={onClose} className="w-40 max-h-[calc(100dvh-16px)] overflow-y-auto card p-2.5 shadow-lg">
       <div className="mb-2">
         <div className="text-xs font-medium">Копировать план</div>
         <div className="text-xs text-muted">{monthName(source)}</div>

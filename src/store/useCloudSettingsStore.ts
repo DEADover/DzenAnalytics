@@ -353,6 +353,13 @@ export const useCloudSettingsStore = create<State>((set, get) => ({
         const doc = sanitizeSettingsDoc(d.env.data);
         cloudSettings = cloudSettings ? combineSettingsDocs(cloudSettings, doc) : doc;
       }
+      if (cloudSettings) {
+        const combined = cloudSettings.fields["display.homeFilters"];
+        if (!cloudSettings.fields["display.homePeriodPicker"] && typeof combined?.v === "boolean") {
+          // Старые облачные копии хранят один переключатель для обоих действий.
+          cloudSettings.fields["display.homePeriodPicker"] = combined;
+        }
+      }
       const person = personOf(cache);
       // Сменили «Это я» — личные метки прежнего человека к новому не относятся:
       // его выбор должен прийти из облака, а не затереться здешним.
